@@ -1,34 +1,45 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:lr_scheduler/models/task_holder.dart';
-import 'package:lr_scheduler/utils/algorithm.dart';
+import 'package:lr_scheduler/models/schedule_manager.dart';
 import 'package:lr_scheduler/screens/swipe_navigation_screen.dart';
+import 'themes/theme_data.dart';
+import 'package:provider/provider.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  final scheduleManager = ScheduleManager();
   runApp(
     MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => ScheduleProvider())],
+      providers: [
+        Provider<ScheduleManager>.value(value: scheduleManager),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+      ],
       child: MyApp(),
     ),
   );
 }
 
-class ScheduleProvider with ChangeNotifier {
-  List<List<Task>> schedule = generateSchedule([]);
+class ThemeNotifier with ChangeNotifier {
+  ThemeData _currentTheme = appThemes['Light']!;
 
-  void addTask(Task task) {
-    scheduleTask(schedule, task, 5);
-    notifyListeners();
+  ThemeData get currentTheme => _currentTheme;
+
+  void setTheme(String themeKey) {
+    if (appThemes.containsKey(themeKey)) {
+      _currentTheme = appThemes[themeKey]!;
+      notifyListeners();
+    }
   }
 }
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
+
     return MaterialApp(
-      title: 'Review App',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: SwipeNavigationScreen(), // Set HomeScreen as the initial screen
+      title: 'LR Scheduler',
+      theme: themeNotifier.currentTheme,
+      home: SwipeNavigationScreen(),
     );
   }
 }

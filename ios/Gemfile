@@ -1,0 +1,14 @@
+    # frozen_string_literal: true
+    source 'https://rubygems.org'
+
+    # You can uncomment the following line if you need Git LFS
+    # git_source(:github) { |repo_name| "https://github.com/#{repo_name}.git" }
+
+    # Specify the CocoaPods version. Using '~> 1.11' is common,
+    # but you can adjust if needed. Using a recent version is good.
+    # Let's try with a recent stable one compatible with newer Ruby.
+    gem 'cocoapods', '~> 1.15'
+
+    # If you use specific cocoapods plugins, add them here too, e.g.:
+    # gem 'cocoapods-plugins', '~> 1.0'
+    # gem 'cocoapods-keys', '~> 2.2'

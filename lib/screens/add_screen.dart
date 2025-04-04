@@ -28,10 +28,10 @@ class _AdderScreenState extends State<AdderScreen> {
             SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
-                // Create a new Task object
+                // Create a new Task object using named arguments
                 final newTask = Task(
-                  _taskController.text,
-                  0, // daysSinceInit starts at 0 for new tasks
+                  task: _taskController.text, // Use the 'task:' named argument
+                  // daysSinceInit defaults to 0, so it's optional here
                 );
 
                 // Pass the task to the parent widget

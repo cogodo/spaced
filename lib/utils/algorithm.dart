@@ -16,9 +16,12 @@ List<List<Task>> addTask(
   int maxDaysSinceInit,
 ) {
   Task newTask = Task(
-    task.task,
-    task.daysSinceInit + index,
-  ); // Create a new instance to avoid mutating the original task
+    task: task.task,
+    daysSinceInit: task.daysSinceInit + index,
+    repetition: task.repetition,
+    previousInterval: task.previousInterval,
+    eFactor: task.eFactor,
+  );
   if (index < schedule.length && task.daysSinceInit <= maxDaysSinceInit) {
     // Ensure the index is within the bounds of the schedule
     schedule[index].add(newTask); // Add to the specified indices as well
@@ -55,11 +58,7 @@ int calculateNextInterval(Task task, int quality) {
   return interval;
 }
 
-void scheduleTask(
-  List<List<Task>> schedule,
-  Task task,
-  int quality,
-) {
+void scheduleTask(List<List<Task>> schedule, Task task, int quality) {
   // Calculate the next interval
   int nextInterval = calculateNextInterval(task, quality);
 

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../themes/theme_data.dart';
+import '../main.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -6,87 +9,39 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool isDarkMode = false;
-  double reviewInterval = 24.0; // in hours
+  String? _selectedTheme;
 
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
+
+    _selectedTheme ??=
+        appThemes.entries
+            .firstWhere(
+              (entry) => entry.value == themeNotifier.currentTheme,
+              orElse: () => appThemes.entries.first,
+            )
+            .key;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Settings"),
-      ),
-      body: ListView(
-        children: [
-          SwitchListTile(
-            title: Text("Dark Mode"),
-            value: isDarkMode,
-            onChanged: (bool newValue) {
+      appBar: AppBar(title: Text('Settings')),
+      body: Center(
+        child: DropdownButton<String>(
+          value: _selectedTheme,
+          items:
+              appThemes.keys.map((String key) {
+                return DropdownMenuItem<String>(value: key, child: Text(key));
+              }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
               setState(() {
-                isDarkMode = newValue;
+                _selectedTheme = newValue;
+                themeNotifier.setTheme(newValue);
               });
-            },
-          ),
-          ListTile(
-            title: Text("Review Interval (Hours)"),
-            subtitle: Text("${reviewInterval.toStringAsFixed(1)} hours"),
-            trailing: Icon(Icons.timer),
-            onTap: () {
-              _selectReviewInterval(context);
-            },
-          ),
-        ],
+            }
+          },
+        ),
       ),
     );
-  }
-
-  Future<void> _selectReviewInterval(BuildContext context) async {
-    // Open a dialog with a slider to select the review interval.
-    double? newInterval = await showDialog<double>(
-      context: context,
-      builder: (context) {
-        double tempInterval = reviewInterval;
-        return AlertDialog(
-          title: Text("Set Review Interval (Hours)"),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text("Interval: ${tempInterval.toStringAsFixed(1)} hours"),
-                  Slider(
-                    min: 1,
-                    max: 48,
-                    divisions: 47,
-                    value: tempInterval,
-                    label: tempInterval.toStringAsFixed(1),
-                    onChanged: (double value) {
-                      setState(() {
-                        tempInterval = value;
-                      });
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () => Navigator.of(context).pop(null),
-            ),
-            TextButton(
-              child: Text("Set"),
-              onPressed: () => Navigator.of(context).pop(tempInterval),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (newInterval != null) {
-      setState(() {
-        reviewInterval = newInterval;
-      });
-    }
   }
 }

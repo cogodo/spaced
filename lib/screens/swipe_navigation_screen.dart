@@ -3,7 +3,9 @@ import 'package:lr_scheduler/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
 import 'package:lr_scheduler/models/task_holder.dart';
+import 'package:lr_scheduler/models/schedule_manager.dart';
 import 'package:lr_scheduler/utils/algorithm.dart';
+import 'package:provider/provider.dart';
 
 class SwipeNavigationScreen extends StatefulWidget {
   @override
@@ -13,51 +15,33 @@ class SwipeNavigationScreen extends StatefulWidget {
 class _SwipeNavigationScreenState extends State<SwipeNavigationScreen> {
   final PageController _pageController = PageController(initialPage: 0);
 
-  // Shared schedule for tasks
-  List<List<Task>> schedule = generateSchedule([]);
-
-  // Shared list of review items for display
-  List<String> reviewItems = [
-    'Review Chapter 1',
-    'Review Lecture Notes',
-    'Practice Problems',
-  ];
-
-  void _addTask(Task task) {
-    setState(() {
-      // Add the task to the schedule
-      scheduleTask(
-        schedule,
-        task,
-        5,
-      ); // Assume perfect response for the first addition
-
-      // Add the task description to the reviewItems for display
-      reviewItems.add(task.task);
-
-      // Navigate back to the home screen
-      _pageController.jumpToPage(0);
-    });
-  }
-
-  void _advanceDay() {
-    setState(() {
-    });
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheduleManager = Provider.of<ScheduleManager>(context);
+
+    List<String> currentReviewItems = [];
+    if (scheduleManager.schedule.isNotEmpty) {
+      currentReviewItems =
+          scheduleManager.schedule[0].map((task) => task.task).toList();
+    }
+
     return PageView(
       controller: _pageController,
       children: [
-        HomeScreen(reviewItems: reviewItems),
+        HomeScreen(reviewItems: currentReviewItems),
         AdderScreen(
           onAddTask: (task) {
-            _addTask(task);
-            // Use jumpToPage instead of animateToPage to avoid navigation stack issues
+            scheduleManager.addTask(task);
+            _pageController.jumpToPage(0);
           },
         ),
-        AllReviewItemsScreen(schedule: schedule),
+        AllReviewItemsScreen(schedule: scheduleManager.schedule),
       ],
     );
   }
