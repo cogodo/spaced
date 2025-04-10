@@ -4,13 +4,30 @@ import 'package:lr_scheduler/screens/swipe_navigation_screen.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final scheduleManager = ScheduleManager();
+  ScheduleManager? scheduleManager;
+  try {
+    print("Creating ScheduleManager instance...");
+    scheduleManager = ScheduleManager();
+    print("ScheduleManager instance created. Initializing...");
+    await scheduleManager.init();
+    print("ScheduleManager initialized successfully.");
+  } catch (e, s) {
+    print("Error during ScheduleManager creation or initialization: $e\n$s");
+    print("ScheduleManager failed to initialize. Showing error screen.");
+    runApp(
+      MaterialApp(
+        home: Scaffold(body: Center(child: Text("Initialization Error: $e"))),
+      ),
+    );
+    return;
+  }
+
   runApp(
     MultiProvider(
       providers: [
-        Provider<ScheduleManager>.value(value: scheduleManager),
+        ChangeNotifierProvider<ScheduleManager>.value(value: scheduleManager),
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
       ],
       child: MyApp(),

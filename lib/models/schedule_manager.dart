@@ -1,8 +1,9 @@
 import 'dart:convert'; // For JSON encoding/decoding
 import 'package:flutter/foundation.dart'; // For ChangeNotifier
 import 'package:lr_scheduler/models/task_holder.dart'; // Assuming Task is here
-import 'package:lr_scheduler/utils/algorithm.dart'; // Assuming generateSchedule, scheduleTask are here
+// Removed algorithm import as SM-2 logic is now in Task
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math'; // For max()
 
 // Make ScheduleManager a ChangeNotifier to notify listeners of updates
 class ScheduleManager with ChangeNotifier {
@@ -12,148 +13,161 @@ class ScheduleManager with ChangeNotifier {
     return _instance;
   }
 
-  List<List<Task>> _schedule = [];
-  DateTime? _lastOpenedDate;
+  List<Task> _allTasks = []; // Changed from List<List<Task>> _schedule
+  // Removed _lastOpenedDate as day advancement logic changes
 
-  static const String _scheduleKey = 'schedule';
-  static const String _lastOpenedKey = 'lastOpenedDate';
+  static const String _tasksKey = 'allTasks'; // Renamed key
 
-  List<List<Task>> get schedule => _schedule;
+  // Getter for all tasks (optional, maybe only expose today's tasks?)
+  List<Task> get allTasks => _allTasks;
 
   // Private constructor for singleton
   ScheduleManager._internal() {
+    print("[ScheduleManager._internal] Constructor called.");
     // Load data when the instance is created
-    _loadData();
+    // _loadData(); // DO NOT CALL ASYNC from constructor
   }
 
   // --- Core Logic Methods ---
 
-  void addTask(Task task) {
-    // Add the task using your scheduling algorithm
-    scheduleTask(
-      _schedule,
-      task,
-      5, // Example quality score
-    );
-    _saveSchedule(); // Save after modification
+  // Gets tasks due today or earlier
+  List<Task> getTodaysTasks() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    print("[getTodaysTasks] Getting tasks for date: $today");
+
+    return _allTasks.where((task) {
+      // Include tasks never reviewed (nextReviewDate is null)
+      // or tasks scheduled for today or earlier.
+      return task.nextReviewDate == null ||
+          task.nextReviewDate!.isBefore(today) ||
+          task.nextReviewDate!.isAtSameMomentAs(today);
+    }).toList();
+  }
+
+  void addTask(String taskDescription) {
+    // Create a new task. It will be due immediately (nextReviewDate = null initially).
+    final newTask = Task(task: taskDescription);
+    _allTasks.add(newTask);
+    print("[addTask] Added task: ${newTask.task}");
+    _saveTasks(); // Save after modification
     notifyListeners(); // Notify UI
   }
 
-  void advanceSchedule() {
-    if (_schedule.isNotEmpty) {
-      _schedule.removeAt(0);
-      // Increment daysSinceInit or handle task rescheduling based on your algorithm
-      for (var dayTasks in _schedule) {
-        for (var task in dayTasks) {
-          // Update task properties as needed for the next day
-          task.daysSinceInit += 1; // Example increment
-        }
-      }
-      _saveSchedule(); // Save after modification
-      notifyListeners(); // Notify UI
+  // Method to update task after review
+  Future<void> updateTaskReview(Task taskToUpdate, int quality) async {
+    print(
+      "[updateTaskReview] Updating task: ${taskToUpdate.task} with quality: $quality",
+    );
+    // Find the task instance in our list
+    final taskIndex = _allTasks.indexWhere(
+      (t) => t.task == taskToUpdate.task,
+    ); // Assuming task string is unique ID for now
+    if (taskIndex != -1) {
+      // Calculate the next interval and update nextReviewDate within the task object
+      _allTasks[taskIndex].calculateNextInterval(quality);
+      print(
+        "[updateTaskReview] Task ${taskToUpdate.task} next review date: ${_allTasks[taskIndex].nextReviewDate}",
+      );
+
+      await _saveTasks(); // Save the updated list of all tasks
+      notifyListeners(); // Notify listeners that data has changed
+    } else {
+      print(
+        "[updateTaskReview] Warning: Task ${taskToUpdate.task} not found in _allTasks list.",
+      );
+      // Handle error or log appropriately
     }
   }
 
   // --- Persistence Methods ---
 
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
+  /// Initializes the ScheduleManager by loading data from storage.
+  /// Must be called awaited after creating the instance and before using it.
+  Future<void> init() async {
+    print("[init] Starting data load...");
+    try {
+      print("[init] Getting SharedPreferences instance...");
+      final prefs = await SharedPreferences.getInstance();
+      print("[init] SharedPreferences instance obtained.");
 
-    // Load last opened date
-    final lastOpenedMillis = prefs.getInt(_lastOpenedKey);
-    if (lastOpenedMillis != null) {
-      _lastOpenedDate = DateTime.fromMillisecondsSinceEpoch(lastOpenedMillis);
-    }
-
-    // Load schedule
-    final String? scheduleJson = prefs.getString(_scheduleKey);
-    if (scheduleJson != null) {
-      try {
-        final List<dynamic> decodedOuterList = jsonDecode(scheduleJson);
-        _schedule =
-            decodedOuterList.map((dayList) {
-              final List<dynamic> decodedInnerList = dayList;
-              return decodedInnerList
+      // Load all tasks
+      print("[init] Loading tasks...");
+      final String? tasksJson = prefs.getString(_tasksKey);
+      if (tasksJson != null) {
+        print("[init] Found saved tasks JSON. Decoding...");
+        try {
+          final List<dynamic> decodedList = jsonDecode(tasksJson);
+          _allTasks =
+              decodedList
                   .map(
                     (taskMap) => Task.fromJson(taskMap as Map<String, dynamic>),
-                  ) // Assuming Task has fromJson
+                  )
                   .toList();
-            }).toList();
-      } catch (e) {
-        print("Error decoding schedule: $e");
-        _schedule = generateSchedule([]); // Fallback to default
-      }
-    } else {
-      _schedule = generateSchedule([]); // Default if nothing saved
-    }
-
-    // --- Handle Day Advancement ---
-    _handleDayChange();
-
-    notifyListeners(); // Notify after loading and potential advancement
-  }
-
-  Future<void> _saveSchedule() async {
-    final prefs = await SharedPreferences.getInstance();
-    try {
-      // Assuming Task has toJson method
-      final String scheduleJson = jsonEncode(
-        _schedule
-            .map((dayList) => dayList.map((task) => task.toJson()).toList())
-            .toList(),
-      );
-      await prefs.setString(_scheduleKey, scheduleJson);
-    } catch (e) {
-      print("Error encoding schedule: $e");
-    }
-  }
-
-  Future<void> _saveLastOpenedDate(DateTime date) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastOpenedKey, date.millisecondsSinceEpoch);
-    _lastOpenedDate = date; // Update local state
-  }
-
-  // --- Date Handling ---
-
-  void _handleDayChange() {
-    final now = DateTime.now();
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ); // Normalize to midnight
-
-    if (_lastOpenedDate != null) {
-      final lastOpenedDay = DateTime(
-        _lastOpenedDate!.year,
-        _lastOpenedDate!.month,
-        _lastOpenedDate!.day,
-      );
-      final difference = today.difference(lastOpenedDay).inDays;
-
-      if (difference > 0) {
-        print("Advancing schedule by $difference days.");
-        for (int i = 0; i < difference; i++) {
-          if (_schedule.isEmpty) break; // Stop if schedule becomes empty
-          // Call the core logic to advance one day
-          // This internal call avoids extra saves/notifications if advanceSchedule handles them
-          if (_schedule.isNotEmpty) {
-            _schedule.removeAt(0);
-            for (var dayTasks in _schedule) {
-              for (var task in dayTasks) {
-                task.daysSinceInit += 1;
-              }
-            }
-          }
+          print(
+            "[init] Tasks decoded successfully. Count: ${_allTasks.length}",
+          );
+        } catch (e, s) {
+          print("Error decoding tasks JSON: $e\n$s");
+          print("[init] Falling back to default empty task list.");
+          _allTasks = []; // Fallback to empty list
         }
-        // Save schedule only once after all advancements
-        _saveSchedule();
+      } else {
+        print("[init] No saved tasks found. Starting with empty list.");
+        _allTasks = []; // Default if nothing saved
       }
-    }
 
-    // Update last opened date to today
-    _saveLastOpenedDate(today);
+      // Removed day change handling logic as it's implicitly handled by getTodaysTasks filter
+
+      print("[init] Notifying listeners...");
+      notifyListeners(); // Notify after loading
+      print("[init] Data load completed successfully.");
+    } catch (e, s) {
+      print("[init] CRITICAL ERROR during data load: $e\n$s");
+      _allTasks = []; // Ensure task list is empty on critical failure
+      // Consider re-throwing or notifying error state
+    }
+  }
+
+  Future<void> _saveTasks() async {
+    // Renamed from _saveSchedule
+    print("[_saveTasks] Saving tasks...");
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Ensure all tasks have necessary fields for toJson
+      final String tasksJson = jsonEncode(
+        _allTasks.map((task) => task.toJson()).toList(),
+      );
+      await prefs.setString(_tasksKey, tasksJson);
+      print(
+        "[_saveTasks] Tasks saved successfully. Count: ${_allTasks.length}",
+      );
+    } catch (e, s) {
+      print("Error encoding/saving tasks: $e\n$s");
+    }
+  }
+
+  // Removed _saveLastOpenedDate
+  // Removed _handleDayChange
+
+  // Add a method to remove a task (useful for testing/management)
+  Future<void> removeTask(Task taskToRemove) async {
+    print("[removeTask] Removing task: ${taskToRemove.task}");
+    _allTasks.removeWhere(
+      (t) => t.task == taskToRemove.task,
+    ); // Assumes task string is unique ID
+    await _saveTasks();
+    notifyListeners();
+    print("[removeTask] Task removed.");
+  }
+
+  // Add a method to clear all tasks (useful for testing/reset)
+  Future<void> clearAllTasks() async {
+    print("[clearAllTasks] Clearing all tasks.");
+    _allTasks.clear();
+    await _saveTasks();
+    notifyListeners();
+    print("[clearAllTasks] All tasks cleared.");
   }
 }
 
