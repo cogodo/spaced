@@ -14,9 +14,16 @@ class ScheduleManager with ChangeNotifier {
   }
 
   List<Task> _allTasks = []; // Changed from List<List<Task>> _schedule
+  int maxRepetitions = 10; // Default max repetitions
+
+  // TODO: Implement actual pro user check (e.g., via in-app purchase status)
+  bool userIsPro = true; // Default to true for now
+
   // Removed _lastOpenedDate as day advancement logic changes
 
   static const String _tasksKey = 'allTasks'; // Renamed key
+  static const String _maxRepetitionsKey =
+      'maxRepetitions'; // Key for persistence
 
   // Getter for all tasks (optional, maybe only expose today's tasks?)
   List<Task> get allTasks => _allTasks;
@@ -45,13 +52,30 @@ class ScheduleManager with ChangeNotifier {
     }).toList();
   }
 
-  void addTask(String taskDescription) {
-    // Create a new task. It will be due immediately (nextReviewDate = null initially).
-    final newTask = Task(task: taskDescription);
+  // Adds a new task if no task with the same description exists.
+  // Returns true if the task was added successfully, false otherwise.
+  Future<bool> addTask(String taskDescription) async {
+    // Check for duplicates (case-insensitive comparison)
+    final descriptionLower = taskDescription.toLowerCase().trim();
+    if (descriptionLower.isEmpty) {
+      print("[addTask] Attempted to add an empty task.");
+      return false; // Don't add empty tasks
+    }
+
+    final exists = _allTasks.any(
+      (task) => task.task.toLowerCase().trim() == descriptionLower,
+    );
+
+    if (exists) {
+      return false; // Indicate task was not added
+    }
+
+    // Create and add the new task
+    final newTask = Task(task: taskDescription.trim()); // Trim whitespace
     _allTasks.add(newTask);
-    print("[addTask] Added task: ${newTask.task}");
-    _saveTasks(); // Save after modification
+    await _saveTasks(); // Save after modification
     notifyListeners(); // Notify UI
+    return true; // Indicate task was added successfully
   }
 
   // Method to update task after review
@@ -90,6 +114,11 @@ class ScheduleManager with ChangeNotifier {
       print("[init] Getting SharedPreferences instance...");
       final prefs = await SharedPreferences.getInstance();
       print("[init] SharedPreferences instance obtained.");
+
+      // Load max repetitions setting
+      maxRepetitions =
+          prefs.getInt(_maxRepetitionsKey) ?? 10; // Load with default
+      print("[init] Max repetitions loaded: $maxRepetitions");
 
       // Load all tasks
       print("[init] Loading tasks...");
@@ -168,6 +197,51 @@ class ScheduleManager with ChangeNotifier {
     await _saveTasks();
     notifyListeners();
     print("[clearAllTasks] All tasks cleared.");
+  }
+
+  // Method to set the maximum repetitions and save it
+  Future<void> setMaxRepetitions(int newValue) async {
+    if (newValue < 1) newValue = 1; // Ensure at least 1 repetition
+
+    // Check if the value actually changed
+    if (newValue == maxRepetitions) {
+      print("[setMaxRepetitions] Value unchanged ($newValue).");
+      return; // No need to update or check tasks
+    }
+
+    maxRepetitions = newValue;
+    print("[setMaxRepetitions] Setting max repetitions to: $maxRepetitions");
+    bool tasksRemoved = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_maxRepetitionsKey, maxRepetitions);
+      print("[setMaxRepetitions] Max repetitions saved successfully.");
+
+      // Now check existing tasks against the new threshold
+      final initialTaskCount = _allTasks.length;
+      _allTasks.removeWhere((task) {
+        final shouldRemove = task.repetition >= maxRepetitions;
+        if (shouldRemove) {
+          print(
+            "[setMaxRepetitions] Removing task '${task.task}' (reps: ${task.repetition} >= max: $maxRepetitions)",
+          );
+        }
+        return shouldRemove;
+      });
+
+      if (_allTasks.length < initialTaskCount) {
+        tasksRemoved = true;
+        print(
+          "[setMaxRepetitions] Removed ${initialTaskCount - _allTasks.length} tasks exceeding the new max repetition threshold.",
+        );
+        await _saveTasks(); // Save the modified task list
+      }
+    } catch (e, s) {
+      print("Error saving max repetitions or removing tasks: $e\n$s");
+    } finally {
+      // Notify listeners if the setting changed or tasks were removed
+      notifyListeners();
+    }
   }
 }
 

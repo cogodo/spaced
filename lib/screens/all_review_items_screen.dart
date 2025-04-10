@@ -4,8 +4,13 @@ import 'package:intl/intl.dart'; // For date formatting
 
 class AllReviewItemsScreen extends StatefulWidget {
   final List<Task> allTasks;
+  final Function(Task) onDeleteTask;
 
-  const AllReviewItemsScreen({super.key, required this.allTasks});
+  const AllReviewItemsScreen({
+    super.key,
+    required this.allTasks,
+    required this.onDeleteTask,
+  });
 
   @override
   _AllReviewItemsScreenState createState() => _AllReviewItemsScreenState();
@@ -40,6 +45,28 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                       'Next Review: ${_formatDate(task.nextReviewDate)}\nE-Factor: ${task.eFactor.toStringAsFixed(2)} | Reps: ${task.repetition}',
                     ),
                     leading: Icon(Icons.assignment),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        final taskToDelete = task; // Capture task variable
+                        // Call the callback passed from the parent
+                        widget.onDeleteTask(taskToDelete);
+
+                        // Remove any existing snackbar first
+                        ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                        // Then show the new one immediately
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Task "${taskToDelete.task}" deleted.',
+                            ),
+                            duration: Duration(
+                              seconds: 2,
+                            ), // Keep duration, but it gets replaced
+                          ),
+                        );
+                      },
+                    ),
                     isThreeLine: true, // Allow more space for subtitle
                   );
                 },

@@ -4,6 +4,10 @@ import 'package:lr_scheduler/screens/swipe_navigation_screen.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
 
+// Define a global key for the root ScaffoldMessenger
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   ScheduleManager? scheduleManager;
@@ -36,14 +40,22 @@ void main() async {
 }
 
 class ThemeNotifier with ChangeNotifier {
-  ThemeData _currentTheme = appThemes['Light']!;
+  // Store the whole ThemeMetadata object
+  ThemeMetadata _currentThemeMeta = appThemes['Light']!;
 
-  ThemeData get currentTheme => _currentTheme;
+  // Getter returns the actual ThemeData from the metadata
+  ThemeData get currentTheme => _currentThemeMeta.data;
+  // Optional: Getter for the current theme name (key)
+  String get currentThemeKey => _currentThemeMeta.name;
 
   void setTheme(String themeKey) {
     if (appThemes.containsKey(themeKey)) {
-      _currentTheme = appThemes[themeKey]!;
-      notifyListeners();
+      final newMeta = appThemes[themeKey]!;
+      if (newMeta != _currentThemeMeta) {
+        // Only update if it changed
+        _currentThemeMeta = newMeta;
+        notifyListeners();
+      }
     }
   }
 }
@@ -56,6 +68,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'LR Scheduler',
       theme: themeNotifier.currentTheme,
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       home: SwipeNavigationScreen(),
     );
   }

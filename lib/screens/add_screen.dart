@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 // import 'package:lr_scheduler/models/task_holder.dart'; // No longer needed here
 
 class AdderScreen extends StatefulWidget {
-  final Function(String)
-  onAddTask; // Changed callback signature to accept String
+  // Change callback signature to expect Future<bool>
+  final Future<bool> Function(String) onAddTask;
 
   AdderScreen({required this.onAddTask});
 
@@ -13,6 +13,7 @@ class AdderScreen extends StatefulWidget {
 
 class _AdderScreenState extends State<AdderScreen> {
   final _taskController = TextEditingController();
+  bool _isAdding = false; // Prevent double submission
 
   @override
   void dispose() {
@@ -23,41 +24,67 @@ class _AdderScreenState extends State<AdderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Add Task')),
+      appBar: AppBar(title: Text('Add Review')
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _taskController,
-              decoration: InputDecoration(labelText: 'Task Description'),
+              decoration: InputDecoration(labelText: 'Review Description'),
               onSubmitted:
-                  (_) => _submitTask(), // Allow submitting with keyboard action
+                  (_) =>
+                      _isAdding
+                          ? null
+                          : _submitTask(), // Submit on keyboard action
             ),
             SizedBox(height: 16),
-            ElevatedButton(onPressed: _submitTask, child: Text('Add Task')),
+            // Disable button while adding
+            ElevatedButton(
+              onPressed: _isAdding ? null : _submitTask,
+              child: _isAdding ? CircularProgressIndicator() : Text('Add Review'),
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _submitTask() {
+  // Make _submitTask async to await the callback result
+  Future<void> _submitTask() async {
     final taskDescription = _taskController.text.trim();
-    if (taskDescription.isNotEmpty) {
-      // Pass the task description string directly
-      widget.onAddTask(taskDescription);
-      _taskController.clear();
-      // Optional: Show feedback like a Snackbar
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Task "$taskDescription" added!')));
-      // Navigation is handled by the parent (SwipeNavigationScreen)
-    } else {
-      // Optional: Show feedback if field is empty
+    if (taskDescription.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter a task description.')),
+        SnackBar(content: Text('Please enter a review description.')),
       );
+      return;
+    }
+
+    // Prevent multiple submissions while waiting
+    setState(() {
+      _isAdding = true;
+    });
+
+    try {
+      final bool success = await widget.onAddTask(taskDescription);
+
+      // Check the result from the callback
+      if (success) {
+        _taskController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Review "$taskDescription" added!')),
+        );
+        // Navigation is handled by the parent (SwipeNavigationScreen)
+      }
+    } finally {
+      // Always re-enable the button
+      if (mounted) {
+        // Check if the widget is still in the tree
+        setState(() {
+          _isAdding = false;
+        });
+      }
     }
   }
 }
