@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   bool _isPasswordVisible = false; // State for visibility
+  bool _isLoginMode = true; // State to toggle between Login and Sign Up
 
   @override
   void dispose() {
@@ -47,9 +48,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- Authentication Handlers using AuthService ---
-
-  Future<void> _loginWithEmailPassword() async {
+  // --- Combined Auth Form Submission ---
+  Future<void> _submitAuthForm() async {
     // Basic validation
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       _showError("Please enter both email and password.");
@@ -58,53 +58,65 @@ class _LoginScreenState extends State<LoginScreen> {
 
     _setLoading(true);
     final authService = Provider.of<AuthService>(context, listen: false);
-    try {
-      final userCredential = await authService.signInWithEmailAndPassword(
-        _emailController.text,
-        _passwordController.text,
-      );
 
-      // Error handled within the catch block now
-      // if (userCredential == null) {
-      //   _showError("Login failed. Please check credentials.");
-      // }
-      // Successful login is handled by AuthWrapper navigation
+    try {
+      if (_isLoginMode) {
+        // --- Login Logic ---
+        await authService.signInWithEmailAndPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
+        // Successful login handled by AuthWrapper
+      } else {
+        // --- Sign Up Logic ---
+        await authService.signUpWithEmailAndPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
+        // Successful sign-up auto-logins, handled by AuthWrapper
+      }
+      // Clear errors on success (though navigation usually happens first)
+      if (mounted) _errorMessage = null;
     } on FirebaseAuthException catch (e) {
-      // Catch specific exceptions
-      // Map common error codes to user-friendly messages
       String message = "An error occurred. Please try again.";
-      if (e.code == 'user-not-found' ||
-          e.code == 'wrong-password' ||
-          e.code == 'invalid-credential') {
-        message = "Incorrect email or password.";
-      } else if (e.code == 'invalid-email') {
-        message = "Please enter a valid email address.";
-      } else if (e.code == 'user-disabled') {
-        message = "This account has been disabled.";
+      if (_isLoginMode) {
+        // Login specific errors
+        if (e.code == 'user-not-found' ||
+            e.code == 'wrong-password' ||
+            e.code == 'invalid-credential') {
+          message = "Incorrect email or password.";
+        } else if (e.code == 'invalid-email') {
+          message = "Please enter a valid email address.";
+        } else if (e.code == 'user-disabled') {
+          message = "This account has been disabled.";
+        }
+      } else {
+        // Sign Up specific errors
+        if (e.code == 'weak-password') {
+          message = 'The password provided is too weak.';
+        } else if (e.code == 'email-already-in-use') {
+          message = 'An account already exists for that email.';
+        } else if (e.code == 'invalid-email') {
+          message = 'Please enter a valid email address.';
+        }
       }
       _showError(message);
     } catch (e) {
-      // Catch generic errors
-      _showError("An unexpected error occurred. Please try again.");
+      _showError("An unexpected error occurred: ${e.toString()}");
     } finally {
-      _setLoading(false); // Ensure loading state is reset
+      _setLoading(false);
     }
   }
 
+  // --- Other Sign-in Handlers ---
   Future<void> _signInWithGoogle() async {
     _setLoading(true);
     final authService = Provider.of<AuthService>(context, listen: false);
-    await authService.signInWithGoogle(); // Call placeholder
+    final userCredential = await authService.signInWithGoogle();
     _setLoading(false);
-    // TODO: Handle Google sign-in result/errors
-  }
-
-  Future<void> _signInWithApple() async {
-    _setLoading(true);
-    final authService = Provider.of<AuthService>(context, listen: false);
-    await authService.signInWithApple(); // Call placeholder
-    _setLoading(false);
-    // TODO: Handle Apple sign-in result/errors
+    if (userCredential == null) {
+      _showError("Google Sign-In failed or cancelled.");
+    }
   }
 
   Future<void> _continueAsGuest() async {
@@ -114,7 +126,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _setLoading(false);
 
     if (userCredential == null) {
-      // Handle error (AuthService already prints)
       _showError("Could not sign in as guest. Please try again.");
     }
     // No navigation here - AuthWrapper will handle it
@@ -200,13 +211,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               const SizedBox(height: 8),
 
-              // --- Login Button ---
+              // --- Main Submit Button ---
               _isLoading
                   ? Center(child: CircularProgressIndicator())
                   : ElevatedButton(
-                    onPressed: _loginWithEmailPassword,
-                    // Uses theme's elevatedButtonTheme
-                    child: Text('Login'),
+                    onPressed: _submitAuthForm, // Use combined handler
+                    child: Text(
+                      _isLoginMode ? 'Login' : 'Sign Up',
+                    ), // Dynamic text
                     style: theme.elevatedButtonTheme.style?.copyWith(
                       padding: MaterialStateProperty.all(
                         EdgeInsets.symmetric(
@@ -215,9 +227,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-              const SizedBox(height: 24),
-
-              // --- Social & Guest Options ---
+              const SizedBox(height: 12), // Reduced spacing
+              // --- Toggle Login/Sign Up Mode ---
+              TextButton(
+                onPressed:
+                    _isLoading
+                        ? null
+                        : () {
+                          setState(() {
+                            _isLoginMode = !_isLoginMode;
+                            _errorMessage =
+                                null; // Clear error when switching mode
+                          });
+                        },
+                child: Text(
+                  _isLoginMode
+                      ? "Don't have an account? Sign Up"
+                      : "Already have an account? Login",
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.primary,
+                  ), // Use primary color for link
+                ),
+              ),
+              const SizedBox(height: 12), // Reduced spacing
+              // --- OR Divider --- (remains the same) ...
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -236,43 +269,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
 
-              // --- Google Sign-In Button ---
+              // --- Google Sign-In Button --- (remains the same)
               OutlinedButton.icon(
-                icon: Image.asset(
-                  'assets/google_logo.png',
-                  height: 20,
-                ), // ASSUMES you have a google logo asset
+                icon: Image.asset('assets/google_logo.png', height: 20),
                 label: Text('Sign in with Google'),
                 onPressed: _isLoading ? null : _signInWithGoogle,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor:
-                      theme.textTheme.bodyLarge?.color, // Use theme text color
-                  side: BorderSide(color: theme.dividerColor),
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // --- Apple Sign-In Button ---
-              OutlinedButton.icon(
-                icon: Icon(
-                  Icons.apple,
-                  color:
-                      theme.brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black,
-                ),
-                label: Text('Sign in with Apple'),
-                onPressed: _isLoading ? null : _signInWithApple,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: theme.textTheme.bodyLarge?.color,
                   side: BorderSide(color: theme.dividerColor),
                   padding: EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
-              // --- Guest Option ---
+              // --- Guest Option --- (remains the same)
               TextButton(
                 onPressed: _isLoading ? null : _continueAsGuest,
                 child: Text(

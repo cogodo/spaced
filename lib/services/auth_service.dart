@@ -62,6 +62,30 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  /// Creates a new user with email and password.
+  /// Returns UserCredential on success, null on failure.
+  Future<UserCredential?> signUpWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    try {
+      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      print("Signed up and signed in with email: ${userCredential.user?.uid}");
+      // NOTE: User is automatically signed in after creation
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      print("Firebase Email/Pass SignUp Error: ${e.code} - ${e.message}");
+      // Re-throw the exception so the UI can handle specific codes
+      throw e;
+    } catch (e) {
+      print("Email/Pass SignUp Error: $e");
+      return null; // Or re-throw a generic exception
+    }
+  }
+
   /// Signs in a user with Google.
   Future<UserCredential?> signInWithGoogle() async {
     print("Attempting Google Sign-In...");
