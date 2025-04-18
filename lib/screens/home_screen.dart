@@ -34,14 +34,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Today's Reviews (${todaysTasks.length})"),
+        title: Text("today"),
         actions: [
           IconButton(
             icon: Icon(Icons.settings),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SettingsScreen()),
+              Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder:
+                      (context, animation, secondaryAnimation) =>
+                          SettingsScreen(),
+                  transitionsBuilder: (
+                    context,
+                    animation,
+                    secondaryAnimation,
+                    child,
+                  ) {
+                    // Example: Scale and Fade from center
+                    return ScaleTransition(
+                      scale: CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.fastOutSlowIn,
+                      ),
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+                  transitionDuration: Duration(
+                    milliseconds: 400,
+                  ), // Adjust duration
+                ),
               );
             },
           ),
@@ -49,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body:
           todaysTasks.isEmpty
-              ? Center(child: Text("No reviews due, check back tomorrow!"))
+              ? Center(child: Text("NO REVIEWS DUE"))
               : ListView.builder(
                 itemCount: todaysTasks.length,
                 itemBuilder: (context, index) {

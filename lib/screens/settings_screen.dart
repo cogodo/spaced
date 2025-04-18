@@ -67,7 +67,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
+          // Keep outer ListView for overall scrolling if needed
           children: [
+            // --- Max Repetitions Section (Moved Up) ---
             ListTile(
               title: Text('Max Repetitions Before Completion'),
               subtitle: Text(
@@ -94,7 +96,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (newValue != null) {
                       print("Submitting max reps: $newValue");
                       scheduleManager.setMaxRepetitions(newValue);
-                      // Optional: Show confirmation
                       rootScaffoldMessengerKey.currentState?.showSnackBar(
                         SnackBar(
                           content: Text('Max Repetitions updated to $newValue'),
@@ -112,27 +113,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            Divider(height: 32), // Divider moved up
+            // --- App Theme Section ---
             Text('App Theme', style: Theme.of(context).textTheme.titleLarge),
-            SizedBox(height: 8),
-            // GridView for Themes
-            GridView.count(
-              crossAxisCount: 2, // Adjust columns as needed
-              shrinkWrap: true, // Important inside ListView
-              physics:
-                  NeverScrollableScrollPhysics(), // Disable GridView's scrolling
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              children:
-                  appThemes.values.map((themeMeta) {
-                    // Determine if the current theme in the loop is the selected one
-                    final bool isSelected =
-                        themeNotifier.currentTheme == themeMeta.data;
-                    return GestureDetector(
+            SizedBox(height: 12),
+            // Horizontal ListView for Themes
+            SizedBox(
+              height: 150, // Define a height for the horizontal list
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: appThemes.length,
+                itemBuilder: (context, index) {
+                  final themeKey = appThemes.keys.elementAt(index);
+                  final themeMeta = appThemes[themeKey]!;
+                  final bool isSelected =
+                      themeNotifier.currentTheme == themeMeta.data;
+
+                  return Container(
+                    width: 130, // Define a width for each theme card
+                    margin: EdgeInsets.only(right: 10), // Spacing between cards
+                    child: GestureDetector(
                       onTap: () {
                         if (themeMeta.isPremium && !scheduleManager.userIsPro) {
                           _showUpgradeDialog();
                         } else {
-                          // Use the theme NAME (key) to set the theme
                           themeNotifier.setTheme(themeMeta.name);
                         }
                       },
@@ -158,12 +162,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                         ],
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  );
+                },
+              ),
             ),
-            Divider(height: 32),
-
-            // Max Repetitions Input
+            // Divider removed from here
           ],
         ),
       ),

@@ -58,7 +58,7 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Task "${taskToDelete.task}" deleted.',
+                              'Task removed.',
                             ),
                             duration: Duration(
                               seconds: 2,

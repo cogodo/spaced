@@ -47,7 +47,6 @@ class _SwipeNavigationScreenState extends State<SwipeNavigationScreen> {
       _showBottomConfirmation(
         'Task "$taskDescription" added!',
       ); // Use confirmation
-      _pageController.jumpToPage(0);
     } else {
       // Add a small shake animation to indicate error
       // Consider showing the error via _showBottomConfirmation too
