@@ -31,19 +31,37 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.3'
           channel: 'stable'
+          
+      - name: Report Flutter & Dart versions
+        run: |
+          flutter --version
+          dart --version
+          
       - name: Get dependencies
         run: flutter pub get
+        
       - name: Enable web
         run: flutter config --enable-web
-      - name: Build web
-        # Build directly to the root, not under /spaced/ subpath
-        run: flutter build web --release
-      - name: Setup SPA routing
+        
+      - name: Build web with verbose output
+        run: |
+          # Build with base-href set to work with GitHub Pages
+          flutter build web --release --verbose
+          
+      - name: Verify build output
+        run: |
+          echo "Checking build directory contents:"
+          ls -la build/web/
+          echo "Checking main.dart.js exists:"
+          ls -la build/web/main.dart.js || echo "main.dart.js is missing!"
+        
+      - name: Prepare web files
         run: |
           # Create 404.html file for SPA routing
           cat > build/web/404.html << 'EOL'
@@ -51,34 +69,53 @@ jobs:
           <html>
           <head>
             <meta charset="utf-8">
-            <title>Single Page Apps for GitHub Pages</title>
+            <title>Spaced Repetition App</title>
             <script type="text/javascript">
               // Single Page Apps for GitHub Pages
-              // MIT License
               // https://github.com/rafgraph/spa-github-pages
-              var pathSegmentsToKeep = 0;
               var l = window.location;
               l.replace(
                 l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-                l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
-                l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-                (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+                l.pathname.split('/').slice(0, 1).join('/') + '/' +
+                l.pathname.slice(1).split('/').slice(0).join('/') +
+                (l.search || '') +
                 l.hash
               );
             </script>
           </head>
-          <body></body>
+          <body>
+            <p>Redirecting...</p>
+          </body>
           </html>
           EOL
           
+          # Use alternative index.html if it exists
+          if [ -f "alt-index.html" ]; then
+            echo "Using alternative index.html"
+            cp alt-index.html build/web/index.html
+          fi
+          
+          # Replace the serviceWorkerVersion in index.html
+          if [ -f "build/web/index.html" ]; then
+            echo "Updating serviceWorkerVersion in index.html"
+            # Create a timestamp-based version
+            VERSION=$(date +%s)
+            # Replace null or undefined serviceWorkerVersion with our timestamp
+            sed -i "s/serviceWorkerVersion: null/serviceWorkerVersion: '$VERSION'/g" build/web/index.html
+            sed -i "s/serviceWorkerVersion: undefined/serviceWorkerVersion: '$VERSION'/g" build/web/index.html
+          fi
+          
           # Create .nojekyll file to bypass Jekyll processing
           touch build/web/.nojekyll
+          
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './build/web'
+          
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4 
