@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../themes/theme_data.dart'; // To access ThemeMetadata and ThemeNotifier
+import '../themes/theme_data.dart'; // To access ThemeMetadata
 
 class ThemePreviewCard extends StatelessWidget {
   final ThemeMetadata themeMeta;
@@ -21,54 +21,82 @@ class ThemePreviewCard extends StatelessWidget {
       child: Card(
         // Use card's background color from the theme
         color: theme.cardColor,
-        elevation: isSelected ? 8 : 2,
+        elevation: isSelected ? 4 : 1,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           side:
               isSelected
-                  ? BorderSide(color: theme.colorScheme.primary, width: 3)
+                  ? BorderSide(color: theme.colorScheme.primary, width: 2)
                   : BorderSide.none,
         ),
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(10.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Fake Text Input preview
+              // Color Sample Row
               Container(
-                height: 25,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+
+              SizedBox(height: 8),
+
+              // Button Preview
+              Container(
+                height: 24,
                 decoration: BoxDecoration(
                   color:
-                      theme.inputDecorationTheme.fillColor ?? theme.canvasColor,
-                  border: Border.all(color: theme.dividerColor),
-                  borderRadius: BorderRadius.circular(4),
+                      theme.elevatedButtonTheme.style?.backgroundColor?.resolve(
+                        {},
+                      ) ??
+                      theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Text Input',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Button',
+                  style: TextStyle(fontSize: 10, color: Colors.white),
+                ),
+              ),
+
+              SizedBox(height: 8),
+
+              // Input Field Preview
+              Container(
+                height: 24,
+                decoration: BoxDecoration(
+                  color: theme.inputDecorationTheme.fillColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.outline,
+                    width: 0.5,
                   ),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'input',
+                  style: TextStyle(fontSize: 10, color: theme.hintColor),
+                ),
               ),
-              // Button Preview
-              ElevatedButton(
-                onPressed: () {},
-                style: theme.elevatedButtonTheme.style, // Dummy button
-                // Button style comes from the theme
-                child: Text('Button'),
-              ),
+
+              SizedBox(height: 10),
+
               // Theme Name
               Text(
                 themeMeta.name,
-                style: theme.textTheme.titleSmall, // Use theme's text style
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

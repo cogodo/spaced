@@ -122,27 +122,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () {
                       themeNotifier.setTheme(themeMeta.name);
                     },
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        ThemePreviewCard(
-                          themeMeta: themeMeta,
-                          isSelected: isSelected,
-                        ),
-
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Icon(
-                            Icons.lock,
-                            color:
-                                themeMeta.data.brightness == Brightness.dark
-                                    ? Colors.white70
-                                    : Colors.black54,
-                            size: 18,
-                          ),
-                        ),
-                      ],
+                    child: ThemePreviewCard(
+                      themeMeta: themeMeta,
+                      isSelected: isSelected,
                     ),
                   ),
                 );
