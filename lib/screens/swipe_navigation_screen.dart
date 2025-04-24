@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:lr_scheduler/screens/all_review_items_screen.dart';
+import 'package:spaced/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
-// import 'package:lr_scheduler/models/task_holder.dart'; // No longer needed directly here
-import 'package:lr_scheduler/models/schedule_manager.dart';
-// import 'package:lr_scheduler/utils/algorithm.dart'; // No longer used
+// import 'package:spaced/models/task_holder.dart'; // No longer needed directly here
+import 'package:spaced/models/schedule_manager.dart';
+// import 'package:spaced/utils/algorithm.dart'; // No longer used
 import 'package:provider/provider.dart';
 import '../main.dart'; // Import main.dart to access the global key
 

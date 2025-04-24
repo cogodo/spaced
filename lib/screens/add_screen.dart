@@ -3,7 +3,7 @@ import 'package:flutter/services.dart'; // Import for MaxLengthEnforcement
 // import 'package:lr_scheduler/models/task_holder.dart'; // No longer needed here
 
 class AdderScreen extends StatefulWidget {
-  // Change callback signature to expect Future<bool>
+  // Callback signature to expect Future<bool>
   final Future<bool> Function(String) onAddTask;
 
   AdderScreen({required this.onAddTask});
@@ -17,6 +17,7 @@ class _AdderScreenState extends State<AdderScreen>
     with TickerProviderStateMixin {
   final _taskController = TextEditingController();
   bool _isAdding = false; // Prevent double submission
+  final FocusNode _focusNode = FocusNode();
 
   // Animation controller and tween for shake animation
   late AnimationController _shakeController;
@@ -27,7 +28,7 @@ class _AdderScreenState extends State<AdderScreen>
     super.initState();
     _shakeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400), // Adjust duration
+      duration: const Duration(milliseconds: 400),
     );
     // Define the shake sequence (left -> right -> center)
     _shakeAnimation = TweenSequence<Offset>([
@@ -50,148 +51,161 @@ class _AdderScreenState extends State<AdderScreen>
     ]).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut),
     );
+
+    // Focus on the text field when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _taskController.dispose();
-    _shakeController.dispose(); // Dispose animation controller
+    _shakeController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: GestureDetector(
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        // Wrap with SingleChildScrollView to prevent overflow
-        child: SingleChildScrollView(
-          physics:
-              const ClampingScrollPhysics(), // Prevent bouncing effect when content fits
-          child: Container(
-            // Ensure the scrollable area takes at least the screen height
-            // for proper centering when content is small
-            height:
-                MediaQuery.of(context).size.height -
-                MediaQuery.of(context).padding.top -
-                MediaQuery.of(context).padding.bottom,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SlideTransition(
-                      position: _shakeAnimation,
-                      child: TextField(
-                        controller: _taskController,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        maxLength: 400,
-                        maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                        buildCounter:
-                            (
-                              context, {
-                              required currentLength,
-                              required isFocused,
-                              maxLength,
-                            }) => null,
-                        // Set explicit larger font size
-                        style: TextStyle(fontSize: 36.0),
-                        decoration: InputDecoration(
-                          hintText: 'input',
-                          // Adjust hint style to match input size
-                          hintStyle: TextStyle(
-                            fontSize: 36.0,
-                            color: Theme.of(context).hintColor,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 600;
+    final maxWidth = isDesktop ? 600.0 : screenWidth * 0.9;
+
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Center(
+        child: Container(
+          width: maxWidth,
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Title
+              Text(
+                'Add New Item',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 32),
+
+              // Text field with shake animation
+              SlideTransition(
+                position: _shakeAnimation,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.5),
+                      width: 2,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _taskController,
+                    focusNode: _focusNode,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.done,
+                    maxLength: 400,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter:
+                        (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          maxLength,
+                        }) => Padding(
+                          padding: const EdgeInsets.only(right: 16.0),
+                          child: Text(
+                            '$currentLength / 400',
+                            style: TextStyle(
+                              color:
+                                  currentLength >= 400
+                                      ? Colors.red
+                                      : Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.color,
+                            ),
                           ),
                         ),
-                        onChanged: (value) {
-                          // Check if the last character is a newline
-                          if (value.endsWith('\n')) {
-                            // Remove the newline character itself
-                            final textWithoutNewline = value.substring(
-                              0,
-                              value.length - 1,
-                            );
-                            // Update the controller without triggering onChanged again
-                            // and place cursor at the end
-                            _taskController.value = _taskController.value
-                                .copyWith(
-                                  text: textWithoutNewline,
-                                  selection: TextSelection.collapsed(
-                                    offset: textWithoutNewline.length,
-                                  ),
-                                );
-
-                            // Trigger submission if not already adding
-                            if (!_isAdding) {
-                              _submitTask();
-                              FocusScope.of(
-                                context,
-                              ).unfocus(); // Dismiss keyboard
-                            }
-                            return; // Don't process length check if newline submitted
-                          }
-
-                          // --- Character Limit Check ---
-                          if (value.length >= 400) {
-                            // Trigger shake animation
-                            _shakeController.forward(from: 0.0);
-                            // Show local SnackBar when limit is hit
-                            ScaffoldMessenger.of(
-                              context,
-                            ).removeCurrentSnackBar(); // Remove previous messages
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('ERROR: len() > 400'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        },
-                        onSubmitted: (value) {
-                          // Keep onSubmitted as a fallback for keyboards
-                          // with a distinct submit action
-                          if (!_isAdding) {
-                            _submitTask();
-                          }
-                          FocusScope.of(context).unfocus();
-                        },
+                    // Larger font size for better readability
+                    style: TextStyle(fontSize: isDesktop ? 24.0 : 20.0),
+                    decoration: InputDecoration(
+                      hintText: 'Enter item to remember...',
+                      hintStyle: TextStyle(
+                        fontSize: isDesktop ? 24.0 : 20.0,
+                        color: Theme.of(context).hintColor,
                       ),
+                      contentPadding: EdgeInsets.all(20),
+                      border: InputBorder.none,
                     ),
-                    SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed:
-                          _isAdding
-                              ? null
-                              : () {
-                                _submitTask();
-                                FocusScope.of(context).unfocus();
-                              },
-                      child:
-                          _isAdding
-                              ? SizedBox(
-                                height: 20.0,
-                                width: 20.0,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.0,
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).progressIndicatorTheme.color ??
-                                      Theme.of(context).colorScheme.onPrimary,
-                                ),
-                              )
-                              : Text('Add'),
-                    ),
-                  ],
+                    onSubmitted: (value) {
+                      // Handle keyboard submission
+                      if (!_isAdding) {
+                        _submitTask();
+                      }
+                    },
+                  ),
                 ),
               ),
-            ),
+              SizedBox(height: 32),
+
+              // Submit button
+              SizedBox(
+                width: isDesktop ? 300 : double.infinity,
+                height: 60, // Taller button for easier clicking
+                child: ElevatedButton(
+                  onPressed: _isAdding ? null : _submitTask,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child:
+                      _isAdding
+                          ? SizedBox(
+                            height: 24.0,
+                            width: 24.0,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                          : Text(
+                            'Add Item',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                ),
+              ),
+
+              SizedBox(height: 16),
+
+              // Clear button
+              SizedBox(
+                width: isDesktop ? 300 : double.infinity,
+                height: 60,
+                child: OutlinedButton(
+                  onPressed: () {
+                    _taskController.clear();
+                    _focusNode.requestFocus();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text('Clear', style: TextStyle(fontSize: 18)),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -202,9 +216,9 @@ class _AdderScreenState extends State<AdderScreen>
   Future<void> _submitTask() async {
     final taskDescription = _taskController.text.trim();
     if (taskDescription.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('ERROR: no input.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter something to remember')),
+      );
       return;
     }
 
@@ -216,30 +230,17 @@ class _AdderScreenState extends State<AdderScreen>
     try {
       final bool success = await widget.onAddTask(taskDescription);
 
-      // Check the result from the callback
+      // Clear field on success
       if (success) {
         _taskController.clear();
-        // Confirmation is handled by SwipeNavigationScreen's bottom sheet now
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text('Task "$taskDescription" added!')),
-        // );
-      } else {
-        // Error (duplicate) is handled by SwipeNavigationScreen's bottom sheet now
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(
-        //     content: Text(
-        //       'Task "$taskDescription" already exists or could not be added.',
-        //     ),
-        //   ),
-        // );
       }
     } finally {
       // Always re-enable the button
       if (mounted) {
-        // Check if the widget is still in the tree
         setState(() {
           _isAdding = false;
         });
+        _focusNode.requestFocus(); // Re-focus the input field
       }
     }
   }

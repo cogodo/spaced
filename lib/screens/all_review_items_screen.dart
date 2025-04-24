@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lr_scheduler/models/task_holder.dart';
+import 'package:spaced/models/task_holder.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
 class AllReviewItemsScreen extends StatefulWidget {
@@ -21,56 +21,205 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
     if (date == null) {
       return 'Not reviewed yet';
     }
-    return DateFormat.yMd().format(date); // Example format: 7/10/2024
+    return DateFormat.yMMMd().format(date); // Example format: Jul 10, 2024
   }
 
   @override
   Widget build(BuildContext context) {
-    final allItems = widget.allTasks;
+    final allItems = List<Task>.from(widget.allTasks);
+    final isDesktop = MediaQuery.of(context).size.width > 600;
 
-    allItems.sort((a, b) => a.task.compareTo(b.task));
+    // Sort by next review date, null dates at the bottom
+    allItems.sort((a, b) {
+      if (a.nextReviewDate == null && b.nextReviewDate == null) {
+        return a.task.compareTo(b.task); // If both null, sort by name
+      } else if (a.nextReviewDate == null) {
+        return 1; // a goes after b
+      } else if (b.nextReviewDate == null) {
+        return -1; // a goes before b
+      } else {
+        return a.nextReviewDate!.compareTo(b.nextReviewDate!);
+      }
+    });
 
-    return Scaffold(
-      appBar: AppBar(title: Text('All Review Items (${allItems.length})')),
-      body:
-          allItems.isEmpty
-              ? Center(child: Text("No tasks added yet."))
-              : ListView.builder(
-                itemCount: allItems.length,
-                itemBuilder: (context, index) {
-                  final task = allItems[index];
-                  return ListTile(
-                    title: Text(task.task),
-                    subtitle: Text(
-                      'Next Review: ${_formatDate(task.nextReviewDate)}\nE-Factor: ${task.eFactor.toStringAsFixed(2)} | Reps: ${task.repetition}',
-                    ),
-                    leading: Icon(Icons.assignment),
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        final taskToDelete = task; // Capture task variable
-                        // Call the callback passed from the parent
-                        widget.onDeleteTask(taskToDelete);
-
-                        // Remove any existing snackbar first
-                        ScaffoldMessenger.of(context).removeCurrentSnackBar();
-                        // Then show the new one immediately
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Task removed.',
-                            ),
-                            duration: Duration(
-                              seconds: 2,
-                            ), // Keep duration, but it gets replaced
-                          ),
-                        );
-                      },
-                    ),
-                    isThreeLine: true, // Allow more space for subtitle
-                  );
-                },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title section with stats
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          child: Row(
+            children: [
+              Text(
+                'All Review Items',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
+              SizedBox(width: 16),
+              Chip(
+                label: Text(
+                  '${allItems.length} items',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                padding: EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ],
+          ),
+        ),
+
+        // Empty state
+        if (allItems.isEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 86,
+                    color: Colors.grey.shade400,
+                  ),
+                  SizedBox(height: 24),
+                  Text(
+                    'No items added yet',
+                    style: TextStyle(fontSize: 24, color: Colors.grey.shade700),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Add new items from the "Add" tab',
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // List of tasks
+        if (allItems.isNotEmpty)
+          Expanded(
+            child: ListView.builder(
+              itemCount: allItems.length,
+              itemBuilder: (context, index) {
+                final task = allItems[index];
+
+                return Card(
+                  margin: EdgeInsets.symmetric(vertical: 8),
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(isDesktop ? 20.0 : 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Task title
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                task.task,
+                                style: TextStyle(
+                                  fontSize: isDesktop ? 20 : 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                                size: isDesktop ? 28 : 24,
+                              ),
+                              splashRadius: 28,
+                              onPressed: () {
+                                _showDeleteConfirmation(context, task);
+                              },
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 12),
+
+                        // Task details in a more readable format
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          children: [
+                            // Next review date chip
+                            Chip(
+                              label: Text(
+                                'Next: ${_formatDate(task.nextReviewDate)}',
+                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                              ),
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.surfaceVariant,
+                              visualDensity: VisualDensity.compact,
+                            ),
+
+                            // E-Factor chip
+                            Chip(
+                              label: Text(
+                                'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
+                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                              ),
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.surfaceVariant,
+                              visualDensity: VisualDensity.compact,
+                            ),
+
+                            // Repetition count chip
+                            Chip(
+                              label: Text(
+                                'Reps: ${task.repetition}',
+                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                              ),
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.surfaceVariant,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
+  }
+
+  Future<void> _showDeleteConfirmation(BuildContext context, Task task) async {
+    final bool? confirmDelete = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Delete Item'),
+            content: Text('Are you sure you want to delete "${task.task}"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmDelete == true) {
+      widget.onDeleteTask(task);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Item deleted'), duration: Duration(seconds: 2)),
+      );
+    }
   }
 }

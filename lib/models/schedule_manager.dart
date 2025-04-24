@@ -1,37 +1,35 @@
 import 'dart:convert'; // For JSON encoding/decoding
 import 'package:flutter/foundation.dart'; // For ChangeNotifier
-import 'package:lr_scheduler/models/task_holder.dart'; // Assuming Task is here
+import 'package:spaced/models/task_holder.dart'; // Assuming Task is here
 // Removed algorithm import as SM-2 logic is now in Task
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math'; // For max()
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import '../services/local_storage_service.dart'; // Import local storage instead of Firestore
 
 // Make ScheduleManager a ChangeNotifier to notify listeners of updates
 class ScheduleManager with ChangeNotifier {
   final String userId; // Each instance is tied to a user
-  final FirebaseFirestore _firestore; // Firestore instance
+  final LocalStorageService _storage; // Local storage instead of Firestore
 
   List<Task> _allTasks = []; // Changed from List<List<Task>> _schedule
-  int maxRepetitions = 10; // Default, loaded from Firestore
+  int maxRepetitions = 10; // Default value
 
-  // TODO: Add theme preference loading/saving
-  // TODO: Load actual pro status from user document in Firestore
-  bool userIsPro = true; // Default to true for now
+  // Local Storage Paths references
+  late final LocalDocumentReference _userDocRef;
+  late final LocalCollectionReference _tasksCollectionRef;
 
-  // Firestore Paths
-  late final DocumentReference _userDocRef;
-  late final CollectionReference _tasksCollectionRef;
-
-  // Constructor now requires UID and Firestore instance
-  ScheduleManager({required this.userId, required FirebaseFirestore firestore})
-    : _firestore = firestore {
+  // Constructor now requires UID and LocalStorageService instance
+  ScheduleManager({required this.userId, required LocalStorageService storage})
+    : _storage = storage {
+    print("[ScheduleManager] Constructor called with userId: $userId");
     if (userId.isEmpty) {
       throw ArgumentError("User ID cannot be empty for ScheduleManager");
     }
-    _userDocRef = _firestore.collection("users").doc(userId);
-    _tasksCollectionRef = _userDocRef.collection("tasks");
+    _userDocRef = _storage.getUserDocument(userId);
+    _tasksCollectionRef = _storage.getUserTasksCollection(userId);
     print("[ScheduleManager] Initialized for user: $userId");
-    _loadUserData(); // Load data upon creation
+    // Don't block constructor with async call
+    Future.microtask(() => _loadUserData());
   }
 
   // Getter for all tasks (optional, maybe only expose today's tasks?)
@@ -44,7 +42,7 @@ class ScheduleManager with ChangeNotifier {
       // Load user settings (maxRepetitions, etc.)
       final userDoc = await _userDocRef.get();
       if (userDoc.exists && userDoc.data() != null) {
-        final data = userDoc.data() as Map<String, dynamic>;
+        final data = userDoc.data()!;
         maxRepetitions = data['maxRepetitions'] as int? ?? 10;
         print("[_loadUserData] Loaded maxRepetitions: $maxRepetitions");
         // Load other settings like theme, pro status if stored here
@@ -59,13 +57,20 @@ class ScheduleManager with ChangeNotifier {
       final tasksSnapshot = await _tasksCollectionRef.get();
       _allTasks =
           tasksSnapshot.docs
-              .map((doc) => Task.fromJson(doc.data() as Map<String, dynamic>))
+              .map((doc) {
+                final data = doc.data();
+                if (data != null) {
+                  return Task.fromJson(data);
+                }
+                return null;
+              })
+              .whereType<Task>() // Filter out nulls
               .toList();
       print("[_loadUserData] Loaded ${_allTasks.length} tasks.");
 
       notifyListeners(); // Notify after loading all data
     } catch (e, s) {
-      print("[_loadUserData] CRITICAL ERROR loading user data: $e\n$s");
+      print("[_loadUserData] ERROR loading user data: $e\n$s");
       _allTasks = []; // Reset state on critical failure
       maxRepetitions = 10;
       notifyListeners(); // Notify about the error state
@@ -76,44 +81,39 @@ class ScheduleManager with ChangeNotifier {
   Future<void> _saveUserSettings() async {
     print("[_saveUserSettings] Saving settings for user: $userId");
     try {
-      // Use set with merge: true to create or update
+      // Use set with merge option to create or update
       await _userDocRef.set({
         'maxRepetitions': maxRepetitions,
         // Add other settings like theme preference, pro status etc.
-      }, SetOptions(merge: true));
+      }, options: LocalSetOptions(merge: true));
       print("[_saveUserSettings] Settings saved.");
     } catch (e, s) {
       print("Error saving user settings: $e\n$s");
     }
   }
 
-  // --- Persistence for Tasks (Now uses Firestore) ---
+  // --- Persistence for Tasks (Uses local storage) ---
   Future<void> _saveTasks() async {
-    // This becomes less critical if we update tasks individually in Firestore
-    // For simplicity now, we'll overwrite the whole collection on major changes.
-    // A more robust solution uses individual doc updates/deletes.
-    print(
-      "[_saveTasks] NOTE: Overwriting tasks collection for user $userId - Consider optimizing.",
-    );
+    print("[_saveTasks] Saving all tasks for user $userId");
     try {
-      // Batch write for efficiency (delete all then add all)
-      final batch = _firestore.batch();
+      // Delete all existing tasks
       final currentDocs = await _tasksCollectionRef.get();
       for (var doc in currentDocs.docs) {
-        batch.delete(doc.reference);
+        await _tasksCollectionRef.doc(doc.id).delete();
       }
+
+      // Add all current tasks
       for (var task in _allTasks) {
-        // Assuming task.toJson() exists and Task ID is task description for now
-        batch.set(_tasksCollectionRef.doc(task.task), task.toJson());
+        await _tasksCollectionRef.doc(task.task).set(task.toJson());
       }
-      await batch.commit();
-      print("[_saveTasks] Tasks batch committed for user $userId.");
+
+      print("[_saveTasks] Tasks saved for user $userId.");
     } catch (e, s) {
-      print("Error batch saving tasks: $e\n$s");
+      print("Error saving tasks: $e\n$s");
     }
   }
 
-  // --- Core Logic Methods (Modified for Firestore) ---
+  // --- Core Logic Methods (Modified for local storage) ---
 
   // Gets tasks due today or earlier
   List<Task> getTodaysTasks() {
@@ -159,13 +159,13 @@ class ScheduleManager with ChangeNotifier {
     notifyListeners(); // Notify UI immediately
 
     try {
-      // Save specifically this task to Firestore
+      // Save specifically this task to local storage
       await _tasksCollectionRef.doc(newTask.task).set(newTask.toJson());
-      print("[addTask] Saved new task to Firestore for user $userId.");
+      print("[addTask] Saved new task to local storage for user $userId.");
       return true;
     } catch (e, s) {
-      print("Error saving new task to Firestore: $e\n$s");
-      // Revert local change if save fails?
+      print("Error saving new task to local storage: $e\n$s");
+      // Revert local change if save fails
       _allTasks.removeWhere((t) => t.task == newTask.task);
       notifyListeners();
       return false;
@@ -184,14 +184,15 @@ class ScheduleManager with ChangeNotifier {
       notifyListeners(); // Update UI immediately
 
       try {
-        // Update the specific task document in Firestore
+        // Update the specific task document in local storage
         await _tasksCollectionRef
             .doc(updatedTask.task)
             .update(updatedTask.toJson());
-        print("[updateTaskReview] Updated task in Firestore for user $userId.");
+        print(
+          "[updateTaskReview] Updated task in local storage for user $userId.",
+        );
       } catch (e, s) {
-        print("Error updating task in Firestore: $e\n$s");
-        // TODO: Handle potential inconsistency - maybe reload data?
+        print("Error updating task in local storage: $e\n$s");
       }
     } else {
       print(
@@ -211,12 +212,11 @@ class ScheduleManager with ChangeNotifier {
       notifyListeners(); // Update UI immediately
 
       try {
-        // Delete the specific task document from Firestore
+        // Delete the specific task document from local storage
         await _tasksCollectionRef.doc(taskToRemove.task).delete();
-        print("[removeTask] Deleted task from Firestore for user $userId.");
+        print("[removeTask] Deleted task from local storage for user $userId.");
       } catch (e, s) {
-        print("Error deleting task from Firestore: $e\n$s");
-        // TODO: Handle potential inconsistency - maybe add back locally or reload?
+        print("Error deleting task from local storage: $e\n$s");
       }
     } else {
       print(
@@ -231,18 +231,17 @@ class ScheduleManager with ChangeNotifier {
     _allTasks.clear();
     notifyListeners();
 
-    // Delete all tasks from Firestore subcollection
+    // Delete all tasks from local storage
     try {
-      final batch = _firestore.batch();
       final currentDocs = await _tasksCollectionRef.get();
       for (var doc in currentDocs.docs) {
-        batch.delete(doc.reference);
+        await _tasksCollectionRef.doc(doc.id).delete();
       }
-      await batch.commit();
-      print("[clearAllTasks] Cleared tasks from Firestore for user $userId.");
+      print(
+        "[clearAllTasks] Cleared tasks from local storage for user $userId.",
+      );
     } catch (e, s) {
-      print("Error clearing tasks from Firestore: $e\n$s");
-      // TODO: Handle inconsistency
+      print("Error clearing tasks from local storage: $e\n$s");
     }
   }
 
@@ -266,7 +265,7 @@ class ScheduleManager with ChangeNotifier {
       final shouldRemove = task.repetition >= maxRepetitions;
       if (shouldRemove) {
         print("[setMaxRepetitions] Marking task for removal: '${task.task}'");
-        tasksToDelete.add(task); // Keep track for Firestore deletion
+        tasksToDelete.add(task); // Keep track for local storage deletion
       }
       return shouldRemove;
     });
@@ -277,19 +276,16 @@ class ScheduleManager with ChangeNotifier {
       );
       notifyListeners(); // Update UI for task removal
 
-      // Delete tasks from Firestore in a batch
+      // Delete tasks from local storage
       try {
-        final batch = _firestore.batch();
         for (var task in tasksToDelete) {
-          batch.delete(_tasksCollectionRef.doc(task.task));
+          await _tasksCollectionRef.doc(task.task).delete();
         }
-        await batch.commit();
         print(
-          "[setMaxRepetitions] Deleted tasks from Firestore for user $userId.",
+          "[setMaxRepetitions] Deleted tasks from local storage for user $userId.",
         );
       } catch (e, s) {
-        print("Error batch deleting tasks in Firestore: $e\n$s");
-        // TODO: Handle inconsistency
+        print("Error deleting tasks in local storage: $e\n$s");
       }
     }
   }

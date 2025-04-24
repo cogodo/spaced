@@ -134,11 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     margin: EdgeInsets.only(right: 10), // Spacing between cards
                     child: GestureDetector(
                       onTap: () {
-                        if (themeMeta.isPremium && !scheduleManager.userIsPro) {
-                          _showUpgradeDialog();
-                        } else {
-                          themeNotifier.setTheme(themeMeta.name);
-                        }
+                        themeNotifier.setTheme(themeMeta.name);
                       },
                       child: Stack(
                         alignment: Alignment.center,
@@ -147,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             themeMeta: themeMeta,
                             isSelected: isSelected,
                           ),
-                          if (themeMeta.isPremium && !scheduleManager.userIsPro)
+                        
                             Positioned(
                               top: 8,
                               right: 8,
@@ -159,6 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         : Colors.black54,
                                 size: 18,
                               ),
+                            
                             ),
                         ],
                       ),

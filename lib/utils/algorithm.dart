@@ -1,4 +1,4 @@
-import 'package:lr_scheduler/models/task_holder.dart';
+import 'package:spaced/models/task_holder.dart';
 import 'dart:math';
 
 List<List<Task>> generateSchedule(List<Task> tasks) {

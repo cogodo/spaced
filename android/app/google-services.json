@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "605253712819",
+    "project_id": "spaced-b571d",
+    "storage_bucket": "spaced-b571d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605253712819:android:bf25057bd6ff02eb16e9c6",
+        "android_client_info": {
+          "package_name": "com.example.lr_scheduler"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "605253712819-hfltvhivviuu07kf79oa7i1qpfg1vn28.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4-LWHUGOWUtkyFrphc6310q2oj8hPxVo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "605253712819-hfltvhivviuu07kf79oa7i1qpfg1vn28.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.lrScheduler"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
