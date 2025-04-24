@@ -41,7 +41,8 @@ jobs:
       - name: Enable web
         run: flutter config --enable-web
       - name: Build web
-        run: flutter build web --release --base-href "/spaced/"
+        # Build directly to the root, not under /spaced/ subpath
+        run: flutter build web --release
       - name: Setup SPA routing
         run: |
           # Create 404.html file for SPA routing
@@ -55,7 +56,7 @@ jobs:
               // Single Page Apps for GitHub Pages
               // MIT License
               // https://github.com/rafgraph/spa-github-pages
-              var pathSegmentsToKeep = 1;
+              var pathSegmentsToKeep = 0;
               var l = window.location;
               l.replace(
                 l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
