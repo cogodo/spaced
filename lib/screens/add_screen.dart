@@ -6,10 +6,10 @@ class AdderScreen extends StatefulWidget {
   // Callback signature to expect Future<bool>
   final Future<bool> Function(String) onAddTask;
 
-  AdderScreen({required this.onAddTask});
+  const AdderScreen({super.key, required this.onAddTask});
 
   @override
-  _AdderScreenState createState() => _AdderScreenState();
+  State<AdderScreen> createState() => _AdderScreenState();
 }
 
 // Add TickerProviderStateMixin for animation controller
@@ -83,13 +83,6 @@ class _AdderScreenState extends State<AdderScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Title
-              Text(
-                'Add New Item',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 32),
-
               // Text field with shake animation
               SlideTransition(
                 position: _shakeAnimation,
@@ -99,7 +92,7 @@ class _AdderScreenState extends State<AdderScreen>
                     border: Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.primary.withOpacity(0.5),
+                      ).colorScheme.primary.withAlpha(128),
                       width: 2,
                     ),
                   ),
@@ -141,6 +134,15 @@ class _AdderScreenState extends State<AdderScreen>
                       ),
                       contentPadding: EdgeInsets.all(20),
                       border: InputBorder.none,
+                      // Add rounded border that matches container
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                     onSubmitted: (value) {
                       // Handle keyboard submission
@@ -240,7 +242,6 @@ class _AdderScreenState extends State<AdderScreen>
         setState(() {
           _isAdding = false;
         });
-        _focusNode.requestFocus(); // Re-focus the input field
       }
     }
   }

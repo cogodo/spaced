@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:spaced/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
+import 'settings_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
 
 class TabNavigationScreen extends StatefulWidget {
+  const TabNavigationScreen({super.key});
+
   @override
-  _TabNavigationScreenState createState() => _TabNavigationScreenState();
+  State<TabNavigationScreen> createState() => _TabNavigationScreenState();
 }
 
 class _TabNavigationScreenState extends State<TabNavigationScreen> {
@@ -64,6 +67,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         allTasks: scheduleManager.allTasks,
         onDeleteTask: scheduleManager.removeTask,
       ),
+      SettingsScreen(),
     ];
 
     return Scaffold(
@@ -73,7 +77,9 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
               ? 'Today\'s Reviews'
               : _currentIndex == 1
               ? 'Add New Item'
-              : 'All Items',
+              : _currentIndex == 2
+              ? 'All Items'
+              : 'Settings',
         ),
         centerTitle: true,
       ),
@@ -101,6 +107,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 NavigationRailDestination(
                   icon: Icon(Icons.list),
                   label: Text('All Items'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.settings),
+                  label: Text('Settings'),
                 ),
               ],
               // Make the rail wider for better visibility
@@ -179,10 +189,15 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     icon: Icon(Icons.list),
                     label: 'All Items',
                   ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.settings),
+                    label: 'Settings',
+                  ),
                 ],
                 // Ensure it's large enough for easy touch
                 selectedFontSize: 14,
                 iconSize: 28,
+                type: BottomNavigationBarType.fixed, // Ensure all items fit
               )
               : null,
     );

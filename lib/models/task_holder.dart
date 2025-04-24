@@ -36,7 +36,7 @@ class Task {
       throw ArgumentError("Quality must be between 0 and 5.");
     }
 
-    this.responseQuality = quality;
+    responseQuality = quality;
     int nextInterval;
 
     if (quality < 3) {

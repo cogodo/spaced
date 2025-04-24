@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
 
 // Class to hold theme data along with metadata
@@ -180,7 +179,7 @@ final Map<String, ThemeMetadata> appThemes = {
       brightness: Brightness.dark,
       primarySwatch: Colors.green,
       // Define other Forest Green theme properties...
-      cardColor: Colors.green[900]?.withOpacity(0.8),
+      cardColor: Colors.green[900]?.withAlpha(204),
       scaffoldBackgroundColor: const Color.fromARGB(255, 3, 63, 24),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -190,7 +189,7 @@ final Map<String, ThemeMetadata> appThemes = {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.green[800]?.withOpacity(0.5),
+        fillColor: Colors.green[800]?.withAlpha(128),
         border: OutlineInputBorder(
           borderSide: BorderSide.none,
           borderRadius: BorderRadius.circular(8),

@@ -22,7 +22,7 @@
   <meta name="description" content="Spaced Repetition App - Remember what matters">
 
   <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Spaced">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -85,6 +85,12 @@
       }
     }(window.location))
   </script>
+
+  <script>
+    // The value below is injected by flutter build, do not touch.
+    var serviceWorkerVersion = null;
+  </script>
+  <script src="flutter.js" defer></script>
 </head>
 
 <body>
@@ -93,32 +99,58 @@
   </div>
 
   <script>
-    window.addEventListener('load', function () {
-      // Hide loader when page is fully loaded
-      setTimeout(function () {
-        document.querySelector('.loading').style.opacity = '0';
-        document.querySelector('.loading').style.transition = 'opacity 0.5s ease';
+    function displayError(message, error) {
+      var loading = document.querySelector('.loading');
+      console.error(message, error);
 
-        setTimeout(function () {
-          document.querySelector('.loading').style.display = 'none';
-        }, 500);
-      }, 500);
-    });
-  </script>
+      loading.innerHTML = `
+        <div style="text-align: center; width: 80%; max-width: 500px; margin: 0 auto; color: #d32f2f;">
+          <h2>Unable to start the app</h2>
+          <p>${message}</p>
+          <pre style="background: #f5f5f5; padding: 20px; overflow: auto; text-align: left; font-size: 14px;">${error ? error.toString() : 'Unknown error'}</pre>
+          <button onclick="location.reload()" style="padding: 12px 24px; background: #7f51d6; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer;">Refresh Page</button>
+          <p style="margin-top: 20px;">Try clearing your browser cache and cookies if the issue persists.</p>
+        </div>
+      `;
+    }
 
-  <script src="flutter.js" defer></script>
-  <script>
-    window.addEventListener('load', function () {
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: function (engineInitializer) {
-          engineInitializer.initializeEngine().then(function (appRunner) {
-            appRunner.runApp();
-          });
-        }
-      });
+    window.addEventListener('load', function (ev) {
+      var loading = document.querySelector('.loading');
+
+      // Verify Flutter.js is loaded
+      if (typeof _flutter === 'undefined') {
+        displayError('Flutter.js failed to load. Check your network connection.', new Error('_flutter is undefined'));
+        return;
+      }
+
+      try {
+        // Download main.dart.js
+        _flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: serviceWorkerVersion,
+          },
+          onEntrypointLoaded: function (engineInitializer) {
+            engineInitializer.initializeEngine().then(function (appRunner) {
+              appRunner.runApp();
+
+              // Wait a bit before hiding the loading indicator
+              setTimeout(function () {
+                loading.style.opacity = '0';
+                loading.style.transition = 'opacity 0.5s ease';
+                setTimeout(function () {
+                  loading.style.display = 'none';
+                }, 500);
+              }, 500);
+            }).catch(function (error) {
+              displayError('Error initializing Flutter engine', error);
+            });
+          }
+        }).catch(function (error) {
+          displayError('Error loading Flutter application', error);
+        });
+      } catch (e) {
+        displayError('Critical error during Flutter initialization', e);
+      }
     });
   </script>
 </body>

@@ -1,304 +1,174 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/models/schedule_manager.dart';
-import 'package:spaced/models/task_holder.dart';
 import 'package:provider/provider.dart';
-import 'settings_screen.dart';
+import '../services/logger_service.dart';
+import '../models/schedule_manager.dart';
+import '../models/task_holder.dart';
+import 'quality_selector_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Map<String, bool> _checkedState = {};
+  final _logger = getLogger('HomeScreen');
+  List<Task> _todaysTasks = [];
+  bool _isRefreshing = false;
 
-  final Map<int, String> _qualityDescriptions = {
-    5: 'Perfect response',
-    4: 'Correct response after hesitation',
-    3: 'Correct response with difficulty',
-    2: 'Incorrect response, seemed easy',
-    1: 'Incorrect response, remembered correct',
-    0: 'Complete blackout',
-  };
 
   @override
-  Widget build(BuildContext context) {
-    final scheduleManager = Provider.of<ScheduleManager>(context);
-    final List<Task> todaysTasks = scheduleManager.getTodaysTasks();
-    final isDesktop = MediaQuery.of(context).size.width > 600;
-
-    todaysTasks.forEach((task) {
-      _checkedState.putIfAbsent(task.task, () => false);
+  void initState() {
+    super.initState();
+    // Fetch tasks after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshTasks();
     });
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title section with stats
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Row(
-            children: [
-              Text(
-                'Today\'s Reviews',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(width: 16),
-              Chip(
-                label: Text(
-                  '${todaysTasks.length} items',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                padding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-              Spacer(),
-              IconButton(
-                icon: Icon(Icons.settings, size: 28),
-                splashRadius: 28,
-                onPressed: () {
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder:
-                          (context, animation, secondaryAnimation) =>
-                              SettingsScreen(),
-                      transitionsBuilder: (
-                        context,
-                        animation,
-                        secondaryAnimation,
-                        child,
-                      ) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-
-        // Empty state
-        if (todaysTasks.isEmpty)
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 86,
-                    color: Colors.grey.shade400,
-                  ),
-                  SizedBox(height: 24),
-                  Text(
-                    'No reviews due today',
-                    style: TextStyle(fontSize: 24, color: Colors.grey.shade700),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Add new items from the "Add" tab',
-                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        // List of tasks
-        if (todaysTasks.isNotEmpty)
-          Expanded(
-            child: ListView.builder(
-              itemCount: todaysTasks.length,
-              itemBuilder: (context, index) {
-                final task = todaysTasks[index];
-                final bool isChecked = _checkedState[task.task] ?? false;
-
-                return Card(
-                  margin: EdgeInsets.symmetric(vertical: 8),
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      if (!isChecked) {
-                        setState(() {
-                          _checkedState[task.task] = true;
-                        });
-                        _showQualityPopup(context, task);
-                      }
-                    },
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: isDesktop ? 24.0 : 16.0,
-                        horizontal: 16.0,
-                      ),
-                      child: Row(
-                        children: [
-                          // Checkbox - larger and more visible
-                          Transform.scale(
-                            scale: isDesktop ? 1.5 : 1.2,
-                            child: Checkbox(
-                              value: isChecked,
-                              onChanged: (bool? newValue) {
-                                if (newValue == true) {
-                                  setState(() {
-                                    _checkedState[task.task] = true;
-                                  });
-                                  _showQualityPopup(context, task);
-                                }
-                              },
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: isDesktop ? 16 : 8),
-
-                          // Task text
-                          Expanded(
-                            child: Text(
-                              task.task,
-                              style: TextStyle(
-                                fontSize: isDesktop ? 20 : 18,
-                                decoration:
-                                    isChecked
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                color: isChecked ? Colors.grey : null,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
-    );
   }
 
-  Future<void> _showQualityPopup(BuildContext context, Task task) async {
-    final isDesktop = MediaQuery.of(context).size.width > 600;
-    int? selectedQuality = await showDialog<int>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        int? groupValue;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Rate Response Quality'),
-                  SizedBox(height: 8),
-                  Text(
-                    '"${task.task}"',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.normal,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-              content: Container(
-                width: isDesktop ? 500 : 300,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children:
-                        _qualityDescriptions.entries
-                            .map(
-                              (entry) => RadioListTile<int>(
-                                title: Text(
-                                  '${entry.key}: ${entry.value}',
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 18 : 16,
-                                  ),
-                                ),
-                                value: entry.key,
-                                groupValue: groupValue,
-                                onChanged: (int? value) {
-                                  setDialogState(() {
-                                    groupValue = value;
-                                  });
-                                },
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: isDesktop ? 12 : 8,
-                                  horizontal: 16,
-                                ),
-                              ),
-                            )
-                            .toList()
-                            .reversed
-                            .toList(),
-                  ),
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: isDesktop ? 16 : 14),
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                ElevatedButton(
-                  child: Text(
-                    'Submit',
-                    style: TextStyle(fontSize: isDesktop ? 16 : 14),
-                  ),
-                  onPressed: () {
-                    if (groupValue != null) {
-                      Navigator.of(context).pop(groupValue);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text("Please select a quality score."),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
-              actionsPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            );
-          },
-        );
-      },
-    );
-
+  void _refreshTasks() {
     final scheduleManager = Provider.of<ScheduleManager>(
       context,
       listen: false,
     );
-    if (selectedQuality != null) {
-      print("Selected quality: $selectedQuality for task: ${task.task}");
-      await scheduleManager.updateTaskReview(task, selectedQuality);
-      setState(() {
-        _checkedState.remove(task.task);
-      });
-      print("Task update called. List should refresh.");
+    setState(() {
+      _todaysTasks = scheduleManager.getTodaysTasks();
+      _isRefreshing = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Listen to ScheduleManager changes to update the UI
+    Provider.of<ScheduleManager>(context);
+
+    if (_isRefreshing) {
+      _refreshTasks();
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {
+          _isRefreshing = true;
+        });
+      },
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    if (_todaysTasks.isEmpty) {
+      return _buildEmptyState(context);
     } else {
-      print("Quality selection cancelled for task: ${task.task}");
-      setState(() {
-        _checkedState[task.task] = false;
-      });
+      return _buildTaskList(context);
+    }
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.celebration, size: 120, color: Colors.amber),
+          SizedBox(height: 32),
+          Text(
+            'All Caught Up!',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No items to review today.',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+          ),
+          Text(
+            'Check back tomorrow or add new items.',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskList(BuildContext context) {
+    return ListView.builder(
+      itemCount: _todaysTasks.length,
+      padding: EdgeInsets.all(16),
+      itemBuilder: (context, index) {
+        final task = _todaysTasks[index];
+        return _buildTaskCard(context, task);
+      },
+    );
+  }
+
+  Widget _buildTaskCard(BuildContext context, Task task) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showQualitySelector(context, task),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                task.task,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.replay, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    'Repetition: ${task.repetition}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  SizedBox(width: 16),
+                  Icon(Icons.timeline, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showQualitySelector(BuildContext context, Task task) async {
+    final scheduleManager = Provider.of<ScheduleManager>(
+      context,
+      listen: false,
+    );
+
+    final result = await Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder:
+            (context, animation, secondaryAnimation) =>
+                QualitySelectorScreen(task: task),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+
+    if (result != null && result is int) {
+      final selectedQuality = result;
+      _logger.info("Selected quality: $selectedQuality for task: ${task.task}");
+      await scheduleManager.updateTaskReview(task, selectedQuality);
+      _logger.info("Task update called. List should refresh.");
+      _refreshTasks();
+    } else {
+      _logger.info("Quality selection cancelled for task: ${task.task}");
     }
   }
 }

@@ -6,11 +6,13 @@ import 'add_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 // import 'package:spaced/utils/algorithm.dart'; // No longer used
 import 'package:provider/provider.dart';
-import '../main.dart'; // Import main.dart to access the global key
+// Import main.dart to access the global key
 
 class SwipeNavigationScreen extends StatefulWidget {
+  const SwipeNavigationScreen({super.key});
+
   @override
-  _SwipeNavigationScreenState createState() => _SwipeNavigationScreenState();
+  State<SwipeNavigationScreen> createState() => _SwipeNavigationScreenState();
 }
 
 class _SwipeNavigationScreenState extends State<SwipeNavigationScreen> {

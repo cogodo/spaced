@@ -1,14 +1,17 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'logger_service.dart';
 
 // A simple in-memory database to replace Firestore
 class LocalStorageService {
+  final _logger = getLogger('LocalStorageService');
+
   // In-memory database structure
   final Map<String, Map<String, dynamic>> _database = {};
 
   // Constructor
   LocalStorageService() {
-    print("LocalStorageService initializing");
+    _logger.info("Initializing");
     // Load data asynchronously but don't block initialization
     _loadFromDisk();
   }
@@ -24,9 +27,9 @@ class LocalStorageService {
           _database[entry.key] = Map<String, dynamic>.from(entry.value);
         }
       }
-      print("Local database loaded from disk");
+      _logger.info("Local database loaded from disk");
     } catch (e) {
-      print("Error loading local database: $e");
+      _logger.severe("Error loading local database", e);
     }
   }
 
@@ -36,9 +39,9 @@ class LocalStorageService {
       final prefs = await SharedPreferences.getInstance();
       final databaseJson = jsonEncode(_database);
       await prefs.setString('localDatabase', databaseJson);
-      print("Local database saved to disk");
+      _logger.info("Local database saved to disk");
     } catch (e) {
-      print("Error saving local database: $e");
+      _logger.severe("Error saving local database", e);
     }
   }
 
@@ -186,7 +189,7 @@ class LocalDocumentSnapshot {
 
   // Get document data
   Map<String, dynamic>? data() =>
-      _data != null ? Map<String, dynamic>.from(_data!) : null;
+      _data != null ? Map<String, dynamic>.from(_data) : null;
 }
 
 // Local query snapshot - simulates Firestore QuerySnapshot

@@ -1,5 +1,4 @@
 import 'package:spaced/models/task_holder.dart';
-import 'dart:math';
 
 List<List<Task>> generateSchedule(List<Task> tasks) {
   var schedule = List<List<Task>>.generate(

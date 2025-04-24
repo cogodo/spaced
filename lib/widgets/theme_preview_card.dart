@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../themes/theme_data.dart'; // To access ThemeMetadata and ThemeNotifier
 
 class ThemePreviewCard extends StatelessWidget {
@@ -60,10 +59,10 @@ class ThemePreviewCard extends StatelessWidget {
               ),
               // Button Preview
               ElevatedButton(
-                onPressed: () {}, // Dummy button
+                onPressed: () {},
+                style: theme.elevatedButtonTheme.style, // Dummy button
                 // Button style comes from the theme
                 child: Text('Button'),
-                style: theme.elevatedButtonTheme.style,
               ),
               // Theme Name
               Text(

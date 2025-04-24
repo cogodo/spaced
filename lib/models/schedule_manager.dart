@@ -1,13 +1,16 @@
-import 'dart:convert'; // For JSON encoding/decoding
+// For JSON encoding/decoding
 import 'package:flutter/foundation.dart'; // For ChangeNotifier
 import 'package:spaced/models/task_holder.dart'; // Assuming Task is here
+import '../services/logger_service.dart'; // Import our logger service
 // Removed algorithm import as SM-2 logic is now in Task
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math'; // For max()
+// For max()
 import '../services/local_storage_service.dart'; // Import local storage instead of Firestore
 
 // Make ScheduleManager a ChangeNotifier to notify listeners of updates
 class ScheduleManager with ChangeNotifier {
+  // Create a logger instance for this class
+  final _logger = getLogger('ScheduleManager');
+
   final String userId; // Each instance is tied to a user
   final LocalStorageService _storage; // Local storage instead of Firestore
 
@@ -21,13 +24,13 @@ class ScheduleManager with ChangeNotifier {
   // Constructor now requires UID and LocalStorageService instance
   ScheduleManager({required this.userId, required LocalStorageService storage})
     : _storage = storage {
-    print("[ScheduleManager] Constructor called with userId: $userId");
+    _logger.info("Constructor called with userId: $userId");
     if (userId.isEmpty) {
       throw ArgumentError("User ID cannot be empty for ScheduleManager");
     }
     _userDocRef = _storage.getUserDocument(userId);
     _tasksCollectionRef = _storage.getUserTasksCollection(userId);
-    print("[ScheduleManager] Initialized for user: $userId");
+    _logger.info("Initialized for user: $userId");
     // Don't block constructor with async call
     Future.microtask(() => _loadUserData());
   }
@@ -37,19 +40,19 @@ class ScheduleManager with ChangeNotifier {
 
   // --- Load User Data --- (Called internally)
   Future<void> _loadUserData() async {
-    print("[_loadUserData] Loading data for user: $userId");
+    _logger.info("Loading data for user: $userId");
     try {
       // Load user settings (maxRepetitions, etc.)
       final userDoc = await _userDocRef.get();
       if (userDoc.exists && userDoc.data() != null) {
         final data = userDoc.data()!;
         maxRepetitions = data['maxRepetitions'] as int? ?? 10;
-        print("[_loadUserData] Loaded maxRepetitions: $maxRepetitions");
+        _logger.info("Loaded maxRepetitions: $maxRepetitions");
         // Load other settings like theme, pro status if stored here
       } else {
         // User document doesn't exist yet (first login?), use defaults
         // Optionally create the document with defaults here
-        print("[_loadUserData] User document not found, using defaults.");
+        _logger.info("User document not found, using defaults.");
         await _saveUserSettings(); // Save defaults if doc doesn't exist
       }
 
@@ -66,11 +69,11 @@ class ScheduleManager with ChangeNotifier {
               })
               .whereType<Task>() // Filter out nulls
               .toList();
-      print("[_loadUserData] Loaded ${_allTasks.length} tasks.");
+      _logger.info("Loaded ${_allTasks.length} tasks.");
 
       notifyListeners(); // Notify after loading all data
     } catch (e, s) {
-      print("[_loadUserData] ERROR loading user data: $e\n$s");
+      _logger.severe("ERROR loading user data", e, s);
       _allTasks = []; // Reset state on critical failure
       maxRepetitions = 10;
       notifyListeners(); // Notify about the error state
@@ -79,39 +82,20 @@ class ScheduleManager with ChangeNotifier {
 
   // --- Save User Settings --- (Separate from saving tasks)
   Future<void> _saveUserSettings() async {
-    print("[_saveUserSettings] Saving settings for user: $userId");
+    _logger.info("Saving settings for user: $userId");
     try {
       // Use set with merge option to create or update
       await _userDocRef.set({
         'maxRepetitions': maxRepetitions,
         // Add other settings like theme preference, pro status etc.
       }, options: LocalSetOptions(merge: true));
-      print("[_saveUserSettings] Settings saved.");
+      _logger.info("Settings saved.");
     } catch (e, s) {
-      print("Error saving user settings: $e\n$s");
+      _logger.severe("Error saving user settings", e, s);
     }
   }
 
   // --- Persistence for Tasks (Uses local storage) ---
-  Future<void> _saveTasks() async {
-    print("[_saveTasks] Saving all tasks for user $userId");
-    try {
-      // Delete all existing tasks
-      final currentDocs = await _tasksCollectionRef.get();
-      for (var doc in currentDocs.docs) {
-        await _tasksCollectionRef.doc(doc.id).delete();
-      }
-
-      // Add all current tasks
-      for (var task in _allTasks) {
-        await _tasksCollectionRef.doc(task.task).set(task.toJson());
-      }
-
-      print("[_saveTasks] Tasks saved for user $userId.");
-    } catch (e, s) {
-      print("Error saving tasks: $e\n$s");
-    }
-  }
 
   // --- Core Logic Methods (Modified for local storage) ---
 
@@ -119,7 +103,7 @@ class ScheduleManager with ChangeNotifier {
   List<Task> getTodaysTasks() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    print("[getTodaysTasks] Getting tasks for date: $today");
+    _logger.info("Getting tasks for date: $today");
 
     return _allTasks.where((task) {
       // Include tasks never reviewed (nextReviewDate is null)
@@ -139,8 +123,8 @@ class ScheduleManager with ChangeNotifier {
       (task) => task.task.toLowerCase().trim() == descriptionLower,
     );
     if (exists) {
-      print(
-        "[addTask] Task already exists locally for user $userId: $taskDescription",
+      _logger.info(
+        "Task already exists locally for user $userId: $taskDescription",
       );
       return false;
     }
@@ -155,16 +139,16 @@ class ScheduleManager with ChangeNotifier {
     newTask.nextReviewDate = tomorrow;
     _allTasks.add(newTask); // Add locally first for immediate UI update
 
-    print("[addTask] Added task locally for user $userId: ${newTask.task}");
+    _logger.info("Added task locally for user $userId: ${newTask.task}");
     notifyListeners(); // Notify UI immediately
 
     try {
       // Save specifically this task to local storage
       await _tasksCollectionRef.doc(newTask.task).set(newTask.toJson());
-      print("[addTask] Saved new task to local storage for user $userId.");
+      _logger.info("Saved new task to local storage for user $userId.");
       return true;
     } catch (e, s) {
-      print("Error saving new task to local storage: $e\n$s");
+      _logger.severe("Error saving new task to local storage", e, s);
       // Revert local change if save fails
       _allTasks.removeWhere((t) => t.task == newTask.task);
       notifyListeners();
@@ -178,8 +162,8 @@ class ScheduleManager with ChangeNotifier {
     if (taskIndex != -1) {
       _allTasks[taskIndex].calculateNextInterval(quality);
       final updatedTask = _allTasks[taskIndex];
-      print(
-        "[updateTaskReview] Updated task locally for user $userId: ${updatedTask.task}",
+      _logger.info(
+        "Updated task locally for user $userId: ${updatedTask.task}",
       );
       notifyListeners(); // Update UI immediately
 
@@ -188,15 +172,13 @@ class ScheduleManager with ChangeNotifier {
         await _tasksCollectionRef
             .doc(updatedTask.task)
             .update(updatedTask.toJson());
-        print(
-          "[updateTaskReview] Updated task in local storage for user $userId.",
-        );
+        _logger.info("Updated task in local storage for user $userId.");
       } catch (e, s) {
-        print("Error updating task in local storage: $e\n$s");
+        _logger.severe("Error updating task in local storage", e, s);
       }
     } else {
-      print(
-        "[updateTaskReview] Warning: Task ${taskToUpdate.task} not found locally for user $userId.",
+      _logger.warning(
+        "Task ${taskToUpdate.task} not found locally for user $userId.",
       );
     }
   }
@@ -206,28 +188,28 @@ class ScheduleManager with ChangeNotifier {
     final initialLength = _allTasks.length;
     _allTasks.removeWhere((t) => t.task == taskToRemove.task);
     if (_allTasks.length < initialLength) {
-      print(
-        "[removeTask] Removed task locally for user $userId: ${taskToRemove.task}",
+      _logger.info(
+        "Removed task locally for user $userId: ${taskToRemove.task}",
       );
       notifyListeners(); // Update UI immediately
 
       try {
         // Delete the specific task document from local storage
         await _tasksCollectionRef.doc(taskToRemove.task).delete();
-        print("[removeTask] Deleted task from local storage for user $userId.");
+        _logger.info("Deleted task from local storage for user $userId.");
       } catch (e, s) {
-        print("Error deleting task from local storage: $e\n$s");
+        _logger.severe("Error deleting task from local storage", e, s);
       }
     } else {
-      print(
-        "[removeTask] Task not found locally for user $userId: ${taskToRemove.task}",
+      _logger.warning(
+        "Task not found locally for user $userId: ${taskToRemove.task}",
       );
     }
   }
 
   // Add a method to clear all tasks (useful for testing/reset)
   Future<void> clearAllTasks() async {
-    print("[clearAllTasks] Clearing all tasks locally for user $userId.");
+    _logger.info("Clearing all tasks locally for user $userId.");
     _allTasks.clear();
     notifyListeners();
 
@@ -237,11 +219,9 @@ class ScheduleManager with ChangeNotifier {
       for (var doc in currentDocs.docs) {
         await _tasksCollectionRef.doc(doc.id).delete();
       }
-      print(
-        "[clearAllTasks] Cleared tasks from local storage for user $userId.",
-      );
+      _logger.info("Cleared tasks from local storage for user $userId.");
     } catch (e, s) {
-      print("Error clearing tasks from local storage: $e\n$s");
+      _logger.severe("Error clearing tasks from local storage", e, s);
     }
   }
 
@@ -251,28 +231,27 @@ class ScheduleManager with ChangeNotifier {
     if (newValue == maxRepetitions) return;
 
     maxRepetitions = newValue;
-    print(
-      "[setMaxRepetitions] Set max repetitions locally to: $maxRepetitions for user $userId",
+    _logger.info(
+      "Set max repetitions locally to: $maxRepetitions for user $userId",
     );
     notifyListeners(); // Update UI immediately for setting change
 
     await _saveUserSettings(); // Save setting to user document
 
     // Check tasks locally first
-    final initialTaskCount = _allTasks.length;
     List<Task> tasksToDelete = [];
     _allTasks.removeWhere((task) {
       final shouldRemove = task.repetition >= maxRepetitions;
       if (shouldRemove) {
-        print("[setMaxRepetitions] Marking task for removal: '${task.task}'");
+        _logger.info("Marking task for removal: '${task.task}'");
         tasksToDelete.add(task); // Keep track for local storage deletion
       }
       return shouldRemove;
     });
 
     if (tasksToDelete.isNotEmpty) {
-      print(
-        "[setMaxRepetitions] Removed ${tasksToDelete.length} tasks locally for user $userId.",
+      _logger.info(
+        "Removed ${tasksToDelete.length} tasks locally for user $userId.",
       );
       notifyListeners(); // Update UI for task removal
 
@@ -281,11 +260,9 @@ class ScheduleManager with ChangeNotifier {
         for (var task in tasksToDelete) {
           await _tasksCollectionRef.doc(task.task).delete();
         }
-        print(
-          "[setMaxRepetitions] Deleted tasks from local storage for user $userId.",
-        );
+        _logger.info("Deleted tasks from local storage for user $userId.");
       } catch (e, s) {
-        print("Error deleting tasks in local storage: $e\n$s");
+        _logger.severe("Error deleting tasks in local storage", e, s);
       }
     }
   }

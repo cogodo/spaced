@@ -13,7 +13,7 @@ class AllReviewItemsScreen extends StatefulWidget {
   });
 
   @override
-  _AllReviewItemsScreenState createState() => _AllReviewItemsScreenState();
+  State<AllReviewItemsScreen> createState() => _AllReviewItemsScreenState();
 }
 
 class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
@@ -156,7 +156,9 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                                 style: TextStyle(fontSize: isDesktop ? 14 : 12),
                               ),
                               backgroundColor:
-                                  Theme.of(context).colorScheme.surfaceVariant,
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                               visualDensity: VisualDensity.compact,
                             ),
 
@@ -167,7 +169,9 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                                 style: TextStyle(fontSize: isDesktop ? 14 : 12),
                               ),
                               backgroundColor:
-                                  Theme.of(context).colorScheme.surfaceVariant,
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                               visualDensity: VisualDensity.compact,
                             ),
 
@@ -178,7 +182,9 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                                 style: TextStyle(fontSize: isDesktop ? 14 : 12),
                               ),
                               backgroundColor:
-                                  Theme.of(context).colorScheme.surfaceVariant,
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                               visualDensity: VisualDensity.compact,
                             ),
                           ],
@@ -217,9 +223,14 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
     if (confirmDelete == true) {
       widget.onDeleteTask(task);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Item deleted'), duration: Duration(seconds: 2)),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Item deleted'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 }
