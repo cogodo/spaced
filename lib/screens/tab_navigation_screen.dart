@@ -3,6 +3,7 @@ import 'package:spaced/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
 import 'settings_screen.dart';
+import 'about_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
 
@@ -68,6 +69,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         onDeleteTask: scheduleManager.removeTask,
       ),
       SettingsScreen(),
+      AboutScreen(),
     ];
 
     return Scaffold(
@@ -79,7 +81,9 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
               ? 'Add New Item'
               : _currentIndex == 2
               ? 'All Items'
-              : 'Settings',
+              : _currentIndex == 3
+              ? 'Settings'
+              : 'About',
         ),
         centerTitle: true,
       ),
@@ -111,6 +115,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 NavigationRailDestination(
                   icon: Icon(Icons.settings),
                   label: Text('Settings'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.info_outline),
+                  label: Text('About'),
                 ),
               ],
               // Make the rail wider for better visibility
@@ -192,6 +200,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                   BottomNavigationBarItem(
                     icon: Icon(Icons.settings),
                     label: 'Settings',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.info_outline),
+                    label: 'About',
                   ),
                 ],
                 // Ensure it's large enough for easy touch
