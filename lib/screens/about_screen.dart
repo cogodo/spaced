@@ -15,7 +15,7 @@ class AboutScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Center(
-            child: Container(
+            child: SizedBox(
               width: contentWidth,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,20 +182,31 @@ class AboutScreen extends StatelessWidget {
     required IconData icon,
     required List<Widget> children,
   }) {
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
-            SizedBox(width: 12),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: primaryColor.withAlpha(26), // 0.1 opacity = 26 alpha
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 28, color: primaryColor),
+              SizedBox(width: 12),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         SizedBox(height: 16),
         ...children,
@@ -204,6 +215,8 @@ class AboutScreen extends StatelessWidget {
   }
 
   Widget _buildBulletPoint(BuildContext context, String text) {
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -214,7 +227,7 @@ class AboutScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+              color: primaryColor,
             ),
           ),
           SizedBox(width: 8),
@@ -231,18 +244,20 @@ class AboutScreen extends StatelessWidget {
     required String term,
     required String definition,
   }) {
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
+          SizedBox(
             width: 100,
             child: Text(
               term,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
+                color: primaryColor,
               ),
             ),
           ),
@@ -262,22 +277,41 @@ class AboutScreen extends StatelessWidget {
     required String text,
     required String url,
   }) {
-    return RichText(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-          decoration: TextDecoration.underline,
-          fontSize: 16,
+    // Get primary color from theme
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+
+    // For link text, we want to use the primary color but ensure it's readable
+    // against the background by calculating its contrast
+    final bool isDarkPrimary = primaryColor.computeLuminance() < 0.5;
+
+    // Create a container for better visibility on different backgrounds
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            isDarkPrimary
+                ? primaryColor.withAlpha(38)
+                : null, // 0.15 opacity = 38 alpha
+        borderRadius: BorderRadius.circular(4),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: RichText(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            color: primaryColor,
+            decoration: TextDecoration.underline,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          recognizer:
+              TapGestureRecognizer()
+                ..onTap = () async {
+                  final Uri uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  }
+                },
         ),
-        recognizer:
-            TapGestureRecognizer()
-              ..onTap = () async {
-                final Uri uri = Uri.parse(url);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri);
-                }
-              },
       ),
     );
   }

@@ -92,7 +92,9 @@ class ThemePreviewCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: _getContrastingTextColor(
+                    themeMeta.data.colorScheme.primary,
+                  ),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -103,5 +105,15 @@ class ThemePreviewCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _getContrastingTextColor(Color backgroundColor) {
+    // Calculate relative luminance using the formula recommended by WCAG
+    // This is more accurate than just checking RGB values
+    final double luminance = backgroundColor.computeLuminance();
+
+    // If luminance is greater than 0.5, the color is considered light
+    // This threshold provides good contrast for readability
+    return luminance > 0.5 ? Colors.black : Colors.white;
   }
 }
