@@ -17,7 +17,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Task> _todaysTasks = [];
   bool _isRefreshing = false;
 
-
   @override
   void initState() {
     super.initState();
@@ -114,17 +113,66 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                task.task,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              // Add FSRS badge at the top right
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      task.task,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'FSRS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: 8),
+              SizedBox(height: 12),
+
+              // First row with repetition and stability
               Row(
                 children: [
                   Icon(Icons.replay, size: 16, color: Colors.grey[600]),
                   SizedBox(width: 4),
                   Text(
                     'Repetition: ${task.repetition}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  SizedBox(width: 16),
+                  Icon(Icons.auto_graph, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    'Stability: ${task.stability.toStringAsFixed(1)}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 8),
+
+              // Second row with difficulty
+              Row(
+                children: [
+                  Icon(Icons.speed, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    'Difficulty: ${(task.difficulty * 100).round()}%',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                   SizedBox(width: 16),

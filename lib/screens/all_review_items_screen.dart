@@ -145,49 +145,124 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                         SizedBox(height: 12),
 
                         // Task details in a more readable format
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 8,
+                        // Add a label to indicate this is using FSRS algorithm
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Chip(
+                            label: Text(
+                              'FSRS',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.secondary,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+
+                        SizedBox(height: 8),
+
+                        // Group stats into two rows for better organization
+                        // Row 1: Next review date and repetition count
+                        Row(
                           children: [
                             // Next review date chip
-                            Chip(
-                              label: Text(
-                                'Next: ${_formatDate(task.nextReviewDate)}',
-                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                            Expanded(
+                              child: Chip(
+                                label: Text(
+                                  'Next: ${_formatDate(task.nextReviewDate)}',
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 14 : 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                backgroundColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                                visualDensity: VisualDensity.compact,
                               ),
-                              backgroundColor:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                              visualDensity: VisualDensity.compact,
                             ),
-
-                            // E-Factor chip
-                            Chip(
-                              label: Text(
-                                'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
-                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
-                              ),
-                              backgroundColor:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                              visualDensity: VisualDensity.compact,
-                            ),
+                            SizedBox(width: 8),
 
                             // Repetition count chip
-                            Chip(
-                              label: Text(
-                                'Reps: ${task.repetition}',
-                                style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                            Expanded(
+                              child: Chip(
+                                label: Text(
+                                  'Reps: ${task.repetition}',
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 14 : 12,
+                                  ),
+                                ),
+                                backgroundColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                                visualDensity: VisualDensity.compact,
                               ),
-                              backgroundColor:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                              visualDensity: VisualDensity.compact,
                             ),
                           ],
+                        ),
+
+                        SizedBox(height: 8),
+
+                        // Row 2: FSRS specific stats - stability, difficulty, and legacy eFactor
+                        Row(
+                          children: [
+                            // Stability chip (new FSRS metric)
+                            Expanded(
+                              child: Chip(
+                                label: Text(
+                                  'Stability: ${task.stability.toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 14 : 12,
+                                  ),
+                                ),
+                                backgroundColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+
+                            // Difficulty chip (new FSRS metric)
+                            Expanded(
+                              child: Chip(
+                                label: Text(
+                                  'Difficulty: ${(task.difficulty * 100).round()}%',
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 14 : 12,
+                                  ),
+                                ),
+                                backgroundColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Keep E-Factor for legacy display
+                        SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Chip(
+                            label: Text(
+                              'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
+                              style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                            ),
+                            backgroundColor:
+                                Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                            visualDensity: VisualDensity.compact,
+                          ),
                         ),
                       ],
                     ),

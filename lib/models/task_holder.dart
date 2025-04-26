@@ -1,34 +1,44 @@
 import 'dart:math';
+import 'fsrs_algorithm.dart';
 
 class Task {
-  late int responseQuality; // Quality of the last response (0-5 scale)
+  late int responseQuality; // Keep for backward compatibility
   int
-  daysSinceInit; // Days since the task was initialized - might need review if this is still relevant
-  int
-  repetition; // Number of repetitions (initially 0 or 1?) - Let's assume it starts at 0 before first review
-  int
-  previousInterval; // Previous interval in days (initially 0 or 1?) - Let's assume 0 before first review
-  double eFactor; // E-Factor (initially 2.5 for new items)
-  String task; // The task description
-  DateTime? nextReviewDate; // Add a field to store the next review date
+  daysSinceInit; // Days since the task was initialized - might still be useful for stats
+  int repetition; // Number of successful repetitions
+  int previousInterval; // Previous interval in days
 
-  // Constructor - adjust initial values if needed
+  // Keep eFactor for backward compatibility and display purposes
+  double eFactor;
+
+  // New FSRS fields
+  double stability; // Memory stability
+  double difficulty; // Item difficulty (0.1 to 1.0)
+
+  String task; // The task description
+  DateTime? nextReviewDate; // When to review next
+  DateTime? lastReviewDate; // When the item was last reviewed - useful for FSRS
+
+  // Constructor - now includes FSRS parameters with defaults
   Task({
     required this.task,
-    this.daysSinceInit = 0, // Consider if this is still needed
-    this.repetition = 0, // Start repetitions at 0
-    this.previousInterval = 0, // Start interval at 0
+    this.daysSinceInit = 0,
+    this.repetition = 0,
+    this.previousInterval = 0,
     this.eFactor = 2.5,
-    this.nextReviewDate, // Initialize potentially
+    this.stability = FSRSAlgorithm.INITIAL_STABILITY, // Use constant
+    this.difficulty = FSRSAlgorithm.INITIAL_DIFFICULTY, // Use constant
+    this.nextReviewDate,
+    this.lastReviewDate,
   });
 
-  // Method to set the response quality - keeping this separate might be redundant now
+  // Method to set the response quality - keeping this for backward compatibility
   void setResponseQuality(int quality) {
     responseQuality = quality;
   }
 
-  /// Calculates the next review interval in days based on the SM-2 algorithm.
-  /// Updates the task's repetition count, E-Factor, and previous interval.
+  /// Calculates the next review interval in days using the FSRS algorithm.
+  /// Updates the task's repetition count, stability, difficulty, and dates.
   /// Sets the nextReviewDate based on the calculated interval.
   /// Returns the calculated interval in days.
   int calculateNextInterval(int quality) {
@@ -37,56 +47,70 @@ class Task {
     }
 
     responseQuality = quality;
-    int nextInterval;
 
-    if (quality < 3) {
-      // Incorrect response - reset repetition
-      repetition = 0;
-      nextInterval = 1; // Review again tomorrow
+    // Calculate next parameters using FSRS algorithm
+    final fsrsResult = FSRSAlgorithm.calculateNext(
+      quality: quality,
+      stability: stability,
+      difficulty: difficulty,
+      repetition: repetition,
+    );
+
+    // Extract values from result
+    final int nextInterval = fsrsResult['nextInterval'];
+    final bool wasSuccessful = fsrsResult['wasSuccessful'];
+
+    // Update task properties
+    stability = fsrsResult['newStability'];
+    difficulty = fsrsResult['newDifficulty'];
+
+    // Update repetition - this aligns with SM-2 behavior
+    if (wasSuccessful) {
+      repetition = fsrsResult['newRepetition'];
     } else {
-      // Correct response
-      // Calculate new E-Factor
-      eFactor = eFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-      if (eFactor < 1.3) {
-        eFactor = 1.3; // E-Factor should not go below 1.3
-      }
-
-      // Calculate next interval based on repetition number
-      if (repetition == 0) {
-        nextInterval = 1; // First review success -> 1 day
-      } else if (repetition == 1) {
-        nextInterval = 6; // Second review success -> 6 days
-      } else {
-        // Use max(1, ...) ensures interval doesn't become 0 for very low eFactor
-        nextInterval = max(1, (previousInterval * eFactor).round());
-      }
-
-      repetition++; // Increment repetition count only on success
+      repetition = 0; // Reset on failure
     }
 
-    previousInterval =
-        nextInterval; // Store the calculated interval for the next iteration
+    // Update eFactor approximation for backward compatibility
+    // This keeps the UI showing something sensible for eFactor
+    // The eFactor in SM-2 is roughly the expansion rate of intervals
+    // In FSRS this is approximated by stability growth rate
+    eFactor = max(1.3, 2.5 - (difficulty * 1.5));
 
-    // Calculate the actual next review date from today
+    // Store the calculated interval
+    previousInterval = nextInterval;
+
+    // Update review dates
     final now = DateTime.now();
-    // Set time to midnight to ensure consistent date comparison
     final today = DateTime(now.year, now.month, now.day);
+    lastReviewDate = today;
     nextReviewDate = today.add(Duration(days: nextInterval));
 
-    return nextInterval; // Return the interval in days
+    return nextInterval;
   }
 
   // --- JSON Serialization ---
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
       task: json['task'] as String,
-      daysSinceInit: json['daysSinceInit'] as int? ?? 0, // Retain for now
+      daysSinceInit: json['daysSinceInit'] as int? ?? 0,
       repetition: json['repetition'] as int? ?? 0,
       previousInterval: json['previousInterval'] as int? ?? 0,
       eFactor: (json['eFactor'] as num?)?.toDouble() ?? 2.5,
+      // Handle new FSRS fields with defaults if they don't exist in older data
+      stability:
+          (json['stability'] as num?)?.toDouble() ??
+          FSRSAlgorithm.INITIAL_STABILITY,
+      difficulty:
+          (json['difficulty'] as num?)?.toDouble() ??
+          FSRSAlgorithm.INITIAL_DIFFICULTY,
       nextReviewDate:
           json['nextReviewDate'] != null
               ? DateTime.parse(json['nextReviewDate'] as String)
+              : null,
+      lastReviewDate:
+          json['lastReviewDate'] != null
+              ? DateTime.parse(json['lastReviewDate'] as String)
               : null,
     );
   }
@@ -94,11 +118,15 @@ class Task {
   Map<String, dynamic> toJson() {
     return {
       'task': task,
-      'daysSinceInit': daysSinceInit, // Retain for now
+      'daysSinceInit': daysSinceInit,
       'repetition': repetition,
       'previousInterval': previousInterval,
       'eFactor': eFactor,
+      // Include new FSRS fields
+      'stability': stability,
+      'difficulty': difficulty,
       'nextReviewDate': nextReviewDate?.toIso8601String(),
+      'lastReviewDate': lastReviewDate?.toIso8601String(),
     };
   }
 }
