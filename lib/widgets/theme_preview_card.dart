@@ -19,82 +19,80 @@ class ThemePreviewCard extends StatelessWidget {
     return Theme(
       data: theme,
       child: Card(
-        // Use card's background color from the theme
-        color: theme.cardColor,
+        // Use scaffold background color from the theme to match the app background
+        color: theme.scaffoldBackgroundColor,
         elevation: isSelected ? 4 : 1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side:
               isSelected
                   ? BorderSide(color: theme.colorScheme.primary, width: 2)
-                  : BorderSide.none,
+                  : BorderSide(
+                    color: theme.colorScheme.outline.withAlpha(40),
+                    width: 0.5,
+                  ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(10.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Color Sample Row
+              // App Bar Preview
               Container(
-                height: 20,
+                height: 24,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
+                  color:
+                      theme.colorScheme.primary,
                   borderRadius: BorderRadius.circular(10),
                 ),
+                alignment: Alignment.center,
+                
               ),
 
+            
               SizedBox(height: 8),
 
               // Button Preview
               Container(
-                height: 24,
+                height: 20,
                 decoration: BoxDecoration(
                   color:
                       theme.elevatedButtonTheme.style?.backgroundColor?.resolve(
                         {},
                       ) ??
                       theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  'Button',
-                  style: TextStyle(fontSize: 10, color: Colors.white),
-                ),
+                
               ),
 
               SizedBox(height: 8),
 
               // Input Field Preview
               Container(
-                height: 24,
+                height: 20,
                 decoration: BoxDecoration(
                   color: theme.inputDecorationTheme.fillColor,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: theme.colorScheme.outline,
                     width: 0.5,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'input',
-                  style: TextStyle(fontSize: 10, color: theme.hintColor),
-                ),
+                
               ),
 
-              SizedBox(height: 10),
+              SizedBox(height: 8),
 
-              // Theme Name
+              // Theme Name - Use the theme's default text style for consistency
               Text(
                 themeMeta.name,
-                style: TextStyle(
+                style: theme.textTheme.labelMedium?.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: _getContrastingTextColor(
-                    themeMeta.data.colorScheme.primary,
-                  ),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -105,15 +103,5 @@ class ThemePreviewCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color _getContrastingTextColor(Color backgroundColor) {
-    // Calculate relative luminance using the formula recommended by WCAG
-    // This is more accurate than just checking RGB values
-    final double luminance = backgroundColor.computeLuminance();
-
-    // If luminance is greater than 0.5, the color is considered light
-    // This threshold provides good contrast for readability
-    return luminance > 0.5 ? Colors.black : Colors.white;
   }
 }
