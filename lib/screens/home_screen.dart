@@ -175,13 +175,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Difficulty: ${(task.difficulty * 100).round()}%',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
-                  SizedBox(width: 16),
-                  Icon(Icons.timeline, size: 16, color: Colors.grey[600]),
-                  SizedBox(width: 4),
-                  Text(
-                    'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
                 ],
               ),
             ],

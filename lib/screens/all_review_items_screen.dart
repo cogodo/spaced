@@ -208,10 +208,10 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
                         SizedBox(height: 8),
 
-                        // Row 2: FSRS specific stats - stability, difficulty, and legacy eFactor
+                        // Row 2: FSRS specific stats - stability and difficulty
                         Row(
                           children: [
-                            // Stability chip (new FSRS metric)
+                            // Stability chip (FSRS metric)
                             Expanded(
                               child: Chip(
                                 label: Text(
@@ -229,7 +229,7 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                             ),
                             SizedBox(width: 8),
 
-                            // Difficulty chip (new FSRS metric)
+                            // Difficulty chip (FSRS metric)
                             Expanded(
                               child: Chip(
                                 label: Text(
@@ -246,23 +246,6 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                               ),
                             ),
                           ],
-                        ),
-
-                        // Keep E-Factor for legacy display
-                        SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Chip(
-                            label: Text(
-                              'E-Factor: ${task.eFactor.toStringAsFixed(2)}',
-                              style: TextStyle(fontSize: isDesktop ? 14 : 12),
-                            ),
-                            backgroundColor:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                            visualDensity: VisualDensity.compact,
-                          ),
                         ),
                       ],
                     ),

@@ -8,9 +8,6 @@ class Task {
   int repetition; // Number of successful repetitions
   int previousInterval; // Previous interval in days
 
-  // Keep eFactor for backward compatibility and display purposes
-  double eFactor;
-
   // New FSRS fields
   double stability; // Memory stability
   double difficulty; // Item difficulty (0.1 to 1.0)
@@ -25,7 +22,6 @@ class Task {
     this.daysSinceInit = 0,
     this.repetition = 0,
     this.previousInterval = 0,
-    this.eFactor = 2.5,
     this.stability = FSRSAlgorithm.INITIAL_STABILITY, // Use constant
     this.difficulty = FSRSAlgorithm.INITIAL_DIFFICULTY, // Use constant
     this.nextReviewDate,
@@ -71,12 +67,6 @@ class Task {
       repetition = 0; // Reset on failure
     }
 
-    // Update eFactor approximation for backward compatibility
-    // This keeps the UI showing something sensible for eFactor
-    // The eFactor in SM-2 is roughly the expansion rate of intervals
-    // In FSRS this is approximated by stability growth rate
-    eFactor = max(1.3, 2.5 - (difficulty * 1.5));
-
     // Store the calculated interval
     previousInterval = nextInterval;
 
@@ -96,7 +86,6 @@ class Task {
       daysSinceInit: json['daysSinceInit'] as int? ?? 0,
       repetition: json['repetition'] as int? ?? 0,
       previousInterval: json['previousInterval'] as int? ?? 0,
-      eFactor: (json['eFactor'] as num?)?.toDouble() ?? 2.5,
       // Handle new FSRS fields with defaults if they don't exist in older data
       stability:
           (json['stability'] as num?)?.toDouble() ??
@@ -121,7 +110,6 @@ class Task {
       'daysSinceInit': daysSinceInit,
       'repetition': repetition,
       'previousInterval': previousInterval,
-      'eFactor': eFactor,
       // Include new FSRS fields
       'stability': stability,
       'difficulty': difficulty,
