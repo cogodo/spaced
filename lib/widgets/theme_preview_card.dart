@@ -41,15 +41,12 @@ class ThemePreviewCard extends StatelessWidget {
               Container(
                 height: 24,
                 decoration: BoxDecoration(
-                  color:
-                      theme.colorScheme.primary,
+                  color: theme.colorScheme.primary,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
-                
               ),
 
-            
               SizedBox(height: 8),
 
               // Button Preview
@@ -64,7 +61,6 @@ class ThemePreviewCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 alignment: Alignment.center,
-                
               ),
 
               SizedBox(height: 8),
@@ -82,7 +78,6 @@ class ThemePreviewCard extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 alignment: Alignment.centerLeft,
-                
               ),
 
               SizedBox(height: 8),

@@ -124,19 +124,9 @@ final Map<String, ThemeMetadata> appThemes = {
       scaffoldBackgroundColor: Colors.grey[50], // Very light grey background
       cardColor: Colors.white,
 
+      // Apply system overlay style for status bar icons without appBarTheme
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.white, // Clean white app bar
-        foregroundColor: Colors.grey[800], // Dark grey text/icons on app bar
-        elevation: 0.5, // Subtle elevation
         systemOverlayStyle: SystemUiOverlayStyle.dark, // Dark status bar icons
-        iconTheme: IconThemeData(
-          color: Colors.grey[700],
-        ), // Specific icon color
-        titleTextStyle: GoogleFonts.firaCode(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey[800],
-        ),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -237,13 +227,10 @@ final Map<String, ThemeMetadata> appThemes = {
       textTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
       primaryTextTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
 
+      // Apply system overlay style for status bar icons without appBarTheme
       appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF1E1E1E),
-        titleTextStyle: GoogleFonts.firaCode(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
+        systemOverlayStyle:
+            SystemUiOverlayStyle.light, // Light status bar icons
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -302,14 +289,10 @@ final Map<String, ThemeMetadata> appThemes = {
         Brightness.light,
       ),
 
+      // Apply system overlay style for status bar icons without appBarTheme
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.lightBlue.shade700,
-        foregroundColor: Colors.white,
-        titleTextStyle: GoogleFonts.firaCode(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
+        systemOverlayStyle:
+            SystemUiOverlayStyle.light, // Light status bar icons
       ),
 
       cardColor: const Color.fromARGB(255, 171, 207, 224),
@@ -368,13 +351,10 @@ final Map<String, ThemeMetadata> appThemes = {
       textTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
       primaryTextTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
 
+      // Apply system overlay style for status bar icons without appBarTheme
       appBarTheme: AppBarTheme(
-        backgroundColor: const Color.fromARGB(255, 3, 63, 24),
-        titleTextStyle: GoogleFonts.firaCode(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
+        systemOverlayStyle:
+            SystemUiOverlayStyle.light, // Light status bar icons
       ),
 
       cardColor: Colors.green[900]?.withAlpha(204),

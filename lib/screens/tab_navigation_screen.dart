@@ -6,6 +6,7 @@ import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 class TabNavigationScreen extends StatefulWidget {
   const TabNavigationScreen({super.key});
@@ -18,19 +19,31 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
   int _currentIndex = 0;
   bool _showConfirmation = false;
   String _confirmationText = "Review Added!";
+  Timer? _confirmationTimer;
 
   // Method to show a confirmation message
   void _showConfirmationMessage(String text) {
+    // Cancel any existing timer to avoid conflicts
+    _confirmationTimer?.cancel();
+
     setState(() {
       _confirmationText = text;
       _showConfirmation = true;
     });
 
-    Future.delayed(Duration(seconds: 2), () {
+    // Start a new timer
+    _confirmationTimer = Timer(Duration(seconds: 3), () {
       if (mounted) {
         setState(() => _showConfirmation = false);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    // Clean up timer when widget is disposed
+    _confirmationTimer?.cancel();
+    super.dispose();
   }
 
   // Method to handle adding a task
@@ -86,6 +99,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
               : 'About',
         ),
         centerTitle: true,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        // Use primary for text/icons to match theme
+        foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+        elevation: 0, // No elevation to blend with scaffold
       ),
       body: Row(
         children: [
@@ -99,6 +116,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 });
               },
               labelType: NavigationRailLabelType.all,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               destinations: [
                 NavigationRailDestination(
                   icon: Icon(Icons.home),
@@ -184,6 +202,12 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     _currentIndex = index;
                   });
                 },
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                // Use the text color for items to match theme
+                selectedItemColor: Theme.of(context).colorScheme.primary,
+                unselectedItemColor: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.color?.withAlpha(155),
                 items: [
                   BottomNavigationBarItem(
                     icon: Icon(Icons.home),

@@ -146,23 +146,6 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
                         // Task details in a more readable format
                         // Add a label to indicate this is using FSRS algorithm
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Chip(
-                            label: Text(
-                              'FSRS',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white,
-                              ),
-                            ),
-                            backgroundColor:
-                                Theme.of(context).colorScheme.secondary,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
-
-                        SizedBox(height: 8),
 
                         // Group stats into two rows for better organization
                         // Row 1: Next review date and repetition count

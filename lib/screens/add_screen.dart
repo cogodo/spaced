@@ -218,8 +218,13 @@ class _AdderScreenState extends State<AdderScreen>
   Future<void> _submitTask() async {
     final taskDescription = _taskController.text.trim();
     if (taskDescription.isEmpty) {
+      // Clear any existing snackbars before showing a new one
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter something to remember')),
+        SnackBar(
+          content: Text('Please enter something to remember'),
+          duration: Duration(seconds: 3),
+        ),
       );
       return;
     }

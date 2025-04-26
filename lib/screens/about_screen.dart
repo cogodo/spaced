@@ -252,7 +252,7 @@ class AboutScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 140,
             child: Text(
               term,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
