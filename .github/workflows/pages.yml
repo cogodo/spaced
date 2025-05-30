@@ -89,6 +89,12 @@ jobs:
           </html>
           EOL
           
+          # Copy CNAME file for custom domain
+          if [ -f "web/CNAME" ]; then
+            echo "Copying CNAME file for custom domain"
+            cp web/CNAME build/web/CNAME
+          fi
+          
           # Use alternative index.html if it exists
           if [ -f "alt-index.html" ]; then
             echo "Using alternative index.html"

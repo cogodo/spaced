@@ -4,7 +4,7 @@ A simple spaced repetition app that helps you remember what matters.
 
 ## Live Demo
 
-Visit the app: [https://cogodo.github.io/spaced](https://cogodo.github.io/spaced)
+Visit the app: [https://spacedapp.app](https://spacedapp.app)
 
 ## About
 
