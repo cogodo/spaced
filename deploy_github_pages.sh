@@ -59,5 +59,5 @@ git push origin gh-pages
 echo "🔙 Switching back to main branch..."
 git checkout main
 
-echo "✅ Deployment complete! Your app should be available at https://spacedapp.app/"
+echo "✅ Deployment complete! Your app should be available at https://getspaced.app/"
 echo "Note: If this is your first deployment, it may take a few minutes for GitHub Pages to build your site." 
