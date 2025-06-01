@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-    <meta name="description" content="Spaced Repetition App">
+    <meta name="description" content="Spaced Repetition App - Remember things, forever.">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <!-- iOS meta tags & icons -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -15,19 +16,40 @@
     <!-- Favicon -->
     <link rel="icon" href="icons/favicon_circle.ico" type="image/x-icon" />
 
+    <!-- Preload critical resources -->
+    <link rel="preload" href="main.dart.js" as="script">
+    <link rel="preload" href="flutter.js" as="script">
+    <link rel="modulepreload" href="main.dart.js">
+
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//fonts.gstatic.com">
+
     <title>Spaced</title>
     <link rel="manifest" href="manifest.json">
-    <script src="flutter.js" defer></script>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
         body {
-            background-color: #f5f5f5;
             margin: 0;
             padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         .loading {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
@@ -40,12 +62,13 @@
         }
 
         .spinner {
-            width: 60px;
-            height: 60px;
-            border: 8px solid rgba(0, 0, 0, 0.1);
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(127, 81, 214, 0.1);
             border-radius: 50%;
             border-top-color: #7f51d6;
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 20px;
         }
 
         @keyframes spin {
@@ -53,32 +76,221 @@
                 transform: rotate(360deg);
             }
         }
+
+        .loading-text {
+            color: #333;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .loading-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(127, 81, 214, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: #7f51d6;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .error-container {
+            text-align: center;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .error-title {
+            color: #d32f2f;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .error-message {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .retry-button {
+            background: #7f51d6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .retry-button:hover {
+            background: #6a3dc1;
+        }
+
+        /* Critical CSS for first paint */
+        #flutter-app {
+            display: none;
+        }
+
+        .flutter-ready #flutter-app {
+            display: block;
+        }
+
+        .flutter-ready .loading {
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+        }
     </style>
 </head>
 
 <body>
     <div class="loading" id="loading">
         <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Loading Spaced...</div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="progressBar"></div>
+        </div>
     </div>
 
+    <div id="flutter-app"></div>
+
     <script>
-        window.addEventListener('load', function () {
-            _flutter.loader.loadEntrypoint({
-                serviceWorker: {
-                    serviceWorkerVersion: null,
-                },
-                onEntrypointLoaded: function (engineInitializer) {
-                    engineInitializer.initializeEngine().then(function (appRunner) {
-                        appRunner.runApp();
-                        // Hide loader
-                        setTimeout(function () {
-                            document.getElementById('loading').style.display = 'none';
-                        }, 1000);
-                    });
-                }
-            });
-        });
+        // Performance monitoring
+        const perfData = {
+            startTime: performance.now(),
+            phases: {}
+        };
+
+        function updateProgress(percentage, text) {
+            const progressBar = document.getElementById('progressBar');
+            const loadingText = document.getElementById('loadingText');
+            if (progressBar) progressBar.style.width = percentage + '%';
+            if (loadingText && text) loadingText.textContent = text;
+        }
+
+        function showError(title, message, error) {
+            const loading = document.getElementById('loading');
+            console.error(title, message, error);
+
+            loading.innerHTML = `
+                <div class="error-container">
+                    <div class="error-title">${title}</div>
+                    <div class="error-message">${message}</div>
+                    ${error ? `<details style="margin: 16px 0; text-align: left;"><summary style="cursor: pointer;">Technical Details</summary><pre style="background: #f5f5f5; padding: 16px; overflow: auto; font-size: 12px;">${error.toString()}</pre></details>` : ''}
+                    <button class="retry-button" onclick="location.reload()">Retry</button>
+                    <div style="margin-top: 16px; font-size: 14px; color: #888;">
+                        Try clearing your browser cache if the issue persists.
+                    </div>
+                </div>
+            `;
+        }
+
+        // Optimized loading with progress tracking
+        function initializeApp() {
+            updateProgress(10, 'Initializing...');
+            perfData.phases.init = performance.now();
+
+            // Check if Flutter is available
+            if (typeof _flutter === 'undefined') {
+                setTimeout(() => {
+                    if (typeof _flutter === 'undefined') {
+                        showError(
+                            'Loading Failed',
+                            'Flutter framework failed to load. Please check your internet connection.',
+                            new Error('Flutter.js not loaded after timeout')
+                        );
+                    }
+                }, 5000);
+                return;
+            }
+
+            updateProgress(25, 'Loading app...');
+            perfData.phases.flutterReady = performance.now();
+
+            try {
+                _flutter.loader.load({
+                    serviceWorkerSettings: {
+                        serviceWorkerVersion: null,
+                    },
+                    onEntrypointLoaded: async function (engineInitializer) {
+                        updateProgress(50, 'Starting engine...');
+                        perfData.phases.entryLoaded = performance.now();
+
+                        try {
+                            const appRunner = await engineInitializer.initializeEngine({
+                                hostElement: document.getElementById('flutter-app')
+                            });
+
+                            updateProgress(75, 'Starting app...');
+                            perfData.phases.engineReady = performance.now();
+
+                            await appRunner.runApp();
+
+                            updateProgress(100, 'Ready!');
+                            perfData.phases.appReady = performance.now();
+
+                            // Mark as ready and hide loading
+                            setTimeout(() => {
+                                document.body.classList.add('flutter-ready');
+                                setTimeout(() => {
+                                    document.getElementById('loading').style.display = 'none';
+                                }, 500);
+                            }, 200);
+
+                            // Log performance metrics
+                            const totalTime = perfData.phases.appReady - perfData.startTime;
+                            console.log(`App loaded in ${Math.round(totalTime)}ms`);
+
+                        } catch (error) {
+                            showError(
+                                'Engine Error',
+                                'Failed to start the Flutter engine.',
+                                error
+                            );
+                        }
+                    }
+                });
+            } catch (error) {
+                showError(
+                    'Initialization Error',
+                    'Failed to initialize the application.',
+                    error
+                );
+            }
+        }
+
+        // Start loading when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+
+        // Fallback timeout
+        setTimeout(() => {
+            if (!document.body.classList.contains('flutter-ready')) {
+                showError(
+                    'Timeout',
+                    'The app is taking longer than expected to load. This might be due to a slow internet connection.',
+                    null
+                );
+            }
+        }, 30000);
     </script>
+
+    <!-- Load Flutter.js with optimized loading -->
+    <script src="flutter.js" defer></script>
 </body>
 
 </html>

@@ -51,8 +51,13 @@ jobs:
         
       - name: Build web with verbose output
         run: |
-          # Build with base-href set to work with GitHub Pages
-          flutter build web --release --verbose
+          # Build with optimizations for performance
+          flutter build web --release \
+            --web-renderer canvaskit \
+            --tree-shake-icons \
+            --dart-define=flutter.inspector.structuredErrors=false \
+            --source-maps \
+            --verbose
           
       - name: Verify build output
         run: |
@@ -113,6 +118,61 @@ jobs:
           
           # Create .nojekyll file to bypass Jekyll processing
           touch build/web/.nojekyll
+          
+          # Add performance headers via _headers file (for compatible hosting)
+          cat > build/web/_headers << 'EOL'
+          /*
+            Cache-Control: public, max-age=31536000, immutable
+            X-Content-Type-Options: nosniff
+            X-Frame-Options: DENY
+            X-XSS-Protection: 1; mode=block
+            Referrer-Policy: strict-origin-when-cross-origin
+          
+          /*.html
+            Cache-Control: public, max-age=0, must-revalidate
+          
+          /main.dart.js
+            Cache-Control: public, max-age=31536000, immutable
+            Content-Encoding: gzip
+          
+          /flutter.js
+            Cache-Control: public, max-age=31536000, immutable
+            Content-Encoding: gzip
+          EOL
+          
+          # Optimize images and assets
+          echo "Optimizing build output..."
+          
+          # Create sw.js with better caching strategy
+          cat > build/web/sw.js << 'EOL'
+          const CACHE_NAME = 'spaced-v1';
+          const urlsToCache = [
+            '/',
+            '/main.dart.js',
+            '/flutter.js',
+            '/manifest.json',
+            '/icons/favicon_circle.ico'
+          ];
+          
+          self.addEventListener('install', event => {
+            event.waitUntil(
+              caches.open(CACHE_NAME)
+                .then(cache => cache.addAll(urlsToCache))
+            );
+          });
+          
+          self.addEventListener('fetch', event => {
+            event.respondWith(
+              caches.match(event.request)
+                .then(response => {
+                  if (response) {
+                    return response;
+                  }
+                  return fetch(event.request);
+                })
+            );
+          });
+          EOL
           
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -305,14 +305,41 @@ class AboutScreen extends StatelessWidget {
           ),
           recognizer:
               TapGestureRecognizer()
-                ..onTap = () async {
-                  final Uri uri = Uri.parse(url);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri);
-                  }
-                },
+                ..onTap = () => _launchUrlOptimized(context, url),
         ),
       ),
     );
+  }
+
+  // Optimized URL launching with performance improvements
+  void _launchUrlOptimized(BuildContext context, String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+
+      // Use async launch with better performance
+      final bool launched = await launchUrl(
+        uri,
+        mode:
+            LaunchMode
+                .externalApplication, // Opens in external browser for better performance
+        webOnlyWindowName: '_blank', // Opens in new tab for web
+      );
+
+      if (!launched) {
+        // Fallback: try platform default
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      // Show user-friendly error if launching fails
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open link. Please try again.'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
