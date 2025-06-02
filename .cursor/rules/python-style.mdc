@@ -1,0 +1,477 @@
+---
+description: whenever python files are involved, must attach
+globs: 
+alwaysApply: false
+---
+Python Code Style & Best Practices
+=================================
+
+## General Python Style (PEP 8)
+
+### Naming Conventions
+- **ALWAYS** use `snake_case` for variables, functions, and module names
+- **ALWAYS** use `PascalCase` for class names
+- **ALWAYS** use `SCREAMING_SNAKE_CASE` for constants
+- **NEVER** use single letter variables except for short loop counters
+
+```python
+❌ Don't use:
+class myClass:
+    pass
+
+userName = "john"
+MAXCOUNT = 100
+
+✅ Do use:
+class MyClass:
+    pass
+
+user_name = "john"
+MAX_COUNT = 100
+```
+
+### Import Organization
+- **ALWAYS** organize imports in this order:
+  1. Standard library imports
+  2. Related third-party imports
+  3. Local application/library imports
+- **ALWAYS** add a blank line between each import group
+- **ALWAYS** sort imports alphabetically within each group
+- **NEVER** use wildcard imports (`from module import *`)
+
+```python
+✅ Correct import order:
+import os
+import sys
+from pathlib import Path
+
+import requests
+import numpy as np
+
+from .models import User
+from .utils import helper_function
+```
+
+## Modern Python Features
+
+### Type Hints
+- **ALWAYS** use type hints for function parameters and return types
+- **ALWAYS** use `Optional[Type]` or `Type | None` for nullable types
+- **ALWAYS** import types from `typing` module when needed
+
+```python
+❌ Don't use:
+def process_data(data, user_id):
+    return data.get(user_id)
+
+✅ Do use (Python 3.9+):
+def process_data(data: dict[str, Any], user_id: int) -> Optional[str]:
+    return data.get(user_id)
+
+✅ Do use (Python 3.10+):
+def process_data(data: dict[str, Any], user_id: int) -> str | None:
+    return data.get(user_id)
+```
+
+### String Formatting
+- **NEVER** use old-style `%` formatting or `.format()` for simple cases
+- **ALWAYS** use f-strings for string interpolation (Python 3.6+)
+- **ALWAYS** use f-strings for readability when possible
+
+```python
+❌ Don't use:
+name = "Alice"
+age = 30
+message = "Hello, %s. You are %d years old." % (name, age)
+message = "Hello, {}. You are {} years old.".format(name, age)
+
+✅ Do use:
+name = "Alice"
+age = 30
+message = f"Hello, {name}. You are {age} years old."
+```
+
+## Error Handling & Exceptions
+
+### Exception Handling Best Practices
+- **ALWAYS** catch specific exceptions rather than bare `except:`
+- **NEVER** catch and ignore exceptions without logging
+- **ALWAYS** use `finally` for cleanup when needed
+- **ALWAYS** prefer EAFP (Easier to Ask for Forgiveness than Permission)
+
+```python
+❌ Don't use:
+try:
+    result = risky_operation()
+except:
+    pass
+
+if hasattr(obj, 'method'):
+    obj.method()
+
+✅ Do use:
+import logging
+
+try:
+    result = risky_operation()
+except ValueError as e:
+    logging.error(f"Value error in risky_operation: {e}")
+    raise
+except Exception as e:
+    logging.error(f"Unexpected error: {e}")
+    raise
+finally:
+    cleanup_resources()
+
+# EAFP approach
+try:
+    obj.method()
+except AttributeError:
+    # Handle missing method
+    pass
+```
+
+### Custom Exceptions
+- **ALWAYS** inherit from appropriate base exception classes
+- **ALWAYS** provide meaningful error messages
+- **NEVER** use generic `Exception` for custom errors
+
+```python
+❌ Don't use:
+raise Exception("Something went wrong")
+
+✅ Do use:
+class ValidationError(ValueError):
+    """Raised when data validation fails."""
+    pass
+
+class AuthenticationError(Exception):
+    """Raised when authentication fails."""
+    def __init__(self, message: str, error_code: int = None):
+        super().__init__(message)
+        self.error_code = error_code
+```
+
+## Data Structures & Algorithms
+
+### List and Dictionary Comprehensions
+- **ALWAYS** prefer comprehensions over loops for simple transformations
+- **NEVER** make comprehensions too complex (max 2-3 conditions)
+- **ALWAYS** use generator expressions for large datasets
+
+```python
+❌ Don't use:
+squares = []
+for i in range(10):
+    squares.append(i**2)
+
+result = []
+for item in items:
+    if item.active:
+        if item.value > 10:
+            result.append(item.name.upper())
+
+✅ Do use:
+squares = [i**2 for i in range(10)]
+
+# Simple comprehension
+active_names = [item.name.upper() for item in items if item.active and item.value > 10]
+
+# For complex logic, use regular loop
+result = []
+for item in items:
+    if complex_condition(item):
+        processed = complex_processing(item)
+        result.append(processed)
+```
+
+### Dictionary Operations
+- **ALWAYS** use `dict.get()` with defaults instead of checking keys
+- **ALWAYS** use `dict.setdefault()` for initializing nested structures
+- **NEVER** use `has_key()` (Python 2 legacy)
+
+```python
+❌ Don't use:
+if 'key' in my_dict:
+    value = my_dict['key']
+else:
+    value = 'default'
+
+if 'users' not in data:
+    data['users'] = []
+data['users'].append(user)
+
+✅ Do use:
+value = my_dict.get('key', 'default')
+
+data.setdefault('users', []).append(user)
+```
+
+## Object-Oriented Programming
+
+### Class Design
+- **ALWAYS** use `@property` for computed attributes
+- **ALWAYS** use `__slots__` for classes with many instances
+- **NEVER** use mutable defaults in function/method parameters
+
+```python
+❌ Don't use:
+class User:
+    def __init__(self, name, tags=[]):
+        self.name = name
+        self.tags = tags  # Dangerous mutable default!
+    
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+✅ Do use:
+class User:
+    __slots__ = ['_name', '_first_name', '_last_name']
+    
+    def __init__(self, name: str, tags: list[str] = None):
+        self._name = name
+        self.tags = tags or []
+    
+    @property
+    def full_name(self) -> str:
+        return f"{self._first_name} {self._last_name}"
+```
+
+### Method Decorators
+- **ALWAYS** use `@staticmethod` for methods that don't access instance/class
+- **ALWAYS** use `@classmethod` for alternative constructors
+- **ALWAYS** use `@property` for getters/setters
+
+```python
+✅ Proper decorator usage:
+class MathUtils:
+    @staticmethod
+    def add(a: int, b: int) -> int:
+        return a + b
+    
+    @classmethod
+    def from_string(cls, value: str) -> 'MathUtils':
+        return cls(int(value))
+    
+    @property
+    def computed_value(self) -> float:
+        return self._value * 1.5
+```
+
+## Async Programming
+
+### Async/Await Best Practices
+- **ALWAYS** use `async def` and `await` for asynchronous operations
+- **NEVER** use `asyncio.create_task()` without proper cleanup
+- **ALWAYS** use `async with` for async context managers
+
+```python
+❌ Don't use:
+def fetch_data():
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(async_fetch())
+
+✅ Do use:
+import asyncio
+import aiohttp
+
+async def fetch_data(url: str) -> dict:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+
+async def main():
+    tasks = [fetch_data(url) for url in urls]
+    results = await asyncio.gather(*tasks)
+    return results
+```
+
+## File and Resource Handling
+
+### Context Managers
+- **ALWAYS** use context managers (`with` statement) for file operations
+- **ALWAYS** use `pathlib.Path` instead of `os.path` for path operations
+- **NEVER** forget to close files/resources manually
+
+```python
+❌ Don't use:
+import os
+
+file = open('data.txt', 'r')
+content = file.read()
+file.close()
+
+file_path = os.path.join('data', 'file.txt')
+
+✅ Do use:
+from pathlib import Path
+
+with open('data.txt', 'r', encoding='utf-8') as file:
+    content = file.read()
+
+file_path = Path('data') / 'file.txt'
+```
+
+## Testing Guidelines
+
+### Test Structure
+- **ALWAYS** use descriptive test method names that explain what is tested
+- **ALWAYS** follow the Arrange-Act-Assert pattern
+- **ALWAYS** use `pytest` fixtures for setup/teardown
+- **NEVER** test implementation details
+
+```python
+✅ Good test structure:
+import pytest
+from unittest.mock import Mock, patch
+
+class TestUserService:
+    @pytest.fixture
+    def user_service(self):
+        return UserService(Mock())
+    
+    def test_create_user_with_valid_data_returns_user_id(self, user_service):
+        # Arrange
+        user_data = {'name': 'John', 'email': 'john@example.com'}
+        
+        # Act
+        user_id = user_service.create_user(user_data)
+        
+        # Assert
+        assert isinstance(user_id, int)
+        assert user_id > 0
+    
+    def test_create_user_with_invalid_email_raises_validation_error(self, user_service):
+        # Arrange
+        user_data = {'name': 'John', 'email': 'invalid-email'}
+        
+        # Act & Assert
+        with pytest.raises(ValidationError, match="Invalid email format"):
+            user_service.create_user(user_data)
+```
+
+## Performance & Security
+
+### Performance Best Practices
+- **ALWAYS** use `collections.defaultdict` for grouped data
+- **ALWAYS** use `itertools` for efficient iterations
+- **NEVER** concatenate strings in loops - use `join()`
+
+```python
+❌ Don't use:
+result = ""
+for item in items:
+    result += str(item) + ", "
+
+groups = {}
+for item in items:
+    if item.category not in groups:
+        groups[item.category] = []
+    groups[item.category].append(item)
+
+✅ Do use:
+from collections import defaultdict
+import itertools
+
+result = ", ".join(str(item) for item in items)
+
+groups = defaultdict(list)
+for item in items:
+    groups[item.category].append(item)
+
+# Use itertools for efficient processing
+for chunk in itertools.batched(large_list, 1000):
+    process_chunk(chunk)
+```
+
+### Security Best Practices
+- **NEVER** use `eval()` or `exec()` with user input
+- **ALWAYS** validate and sanitize user input
+- **ALWAYS** use parameterized queries for database operations
+
+```python
+❌ Don't use:
+user_input = "print('hello')"
+eval(user_input)  # Dangerous!
+
+query = f"SELECT * FROM users WHERE name = '{user_name}'"  # SQL injection risk
+
+✅ Do use:
+import ast
+
+try:
+    parsed = ast.literal_eval(safe_input)  # Only for literals
+except (ValueError, SyntaxError):
+    raise ValidationError("Invalid input format")
+
+# Use parameterized queries
+cursor.execute("SELECT * FROM users WHERE name = %s", (user_name,))
+```
+
+## Code Documentation
+
+### Docstrings
+- **ALWAYS** use docstrings for modules, classes, and public functions
+- **ALWAYS** follow Google or NumPy docstring style consistently
+- **ALWAYS** document parameters, return values, and raised exceptions
+
+```python
+✅ Proper docstring format (Google style):
+def calculate_discount(price: float, discount_rate: float, min_amount: float = 100.0) -> float:
+    """Calculate the discounted price for a given item.
+    
+    Args:
+        price: The original price of the item.
+        discount_rate: The discount rate as a decimal (0.1 for 10%).
+        min_amount: Minimum amount required for discount eligibility.
+    
+    Returns:
+        The final price after applying the discount.
+    
+    Raises:
+        ValueError: If price is negative or discount_rate is not between 0 and 1.
+    
+    Example:
+        >>> calculate_discount(150.0, 0.1)
+        135.0
+    """
+    if price < 0:
+        raise ValueError("Price cannot be negative")
+    if not 0 <= discount_rate <= 1:
+        raise ValueError("Discount rate must be between 0 and 1")
+    
+    if price >= min_amount:
+        return price * (1 - discount_rate)
+    return price
+```
+
+## Deprecated/Legacy Python
+- **NEVER** use Python 2 syntax or features
+- **NEVER** use `unicode()` or `basestring` (Python 2 legacy)
+- **ALWAYS** use `super()` without arguments (Python 3+)
+
+```python
+❌ Don't use (Python 2 legacy):
+class Child(Parent):
+    def __init__(self):
+        super(Child, self).__init__()
+
+print "Hello, World!"
+unicode_string = unicode("text")
+
+✅ Do use (Python 3+):
+class Child(Parent):
+    def __init__(self):
+        super().__init__()
+
+print("Hello, World!")
+text = "text"  # All strings are Unicode in Python 3
+```
+
+<!-- Changelog:
+  - 2024-01-XX: Initial creation of Python style rules
+  - Added comprehensive PEP 8 guidelines
+  - Added modern Python features (type hints, f-strings)
+  - Added async/await best practices
+  - Added security and performance guidelines
+-->

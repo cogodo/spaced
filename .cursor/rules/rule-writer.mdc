@@ -1,0 +1,256 @@
+---
+description: Whenever the agent needs to write or edit any rules, this file should be included
+globs: 
+alwaysApply: false
+---
+Rule Writer Guidelines
+======================
+
+Purpose
+-------
+These guidelines define how to write and maintain Cursor rule files that guide an LLM’s code suggestions. Following these principles ensures that rules are clear, effective, and easy to update.
+
+1. Rule files should be:
+   - Concise but comprehensive—cover necessary details without extraneous text.
+   - Unambiguous—written in a way that the LLM can interpret and enforce reliably.
+   - Version-controlled—stored alongside code so they evolve with the project.
+
+Structure & Metadata
+--------------------
+Every rule file should start with a small YAML front-matter block, followed by the actual rule content. Use this template:
+
+- **description**: One-sentence overview of the rule file’s purpose.  
+- **globs**: (Optional) Unix-style patterns to auto-attach the rule when editing matching files. If the rule applies project-wide, you can omit or set `alwaysApply: true`.  
+- **alwaysApply**: Use `true` only for universal policies (e.g., “Follow PEP8”). Otherwise set to `false` and rely on globs or manual invocation.
+
+Writing Style & Phrasing
+------------------------
+1. **Be Direct and Specific**  
+   - Use clear imperatives: “NEVER use X,” “ALWAYS prefer Y.”  
+   - Avoid vague language (e.g., “Try to avoid,” “Consider using”). The LLM interprets “MUST NOT” or “ALWAYS” more reliably.
+
+2. **List Rules as Bullets or Numbered Items**  
+   - Each bullet or number represents a single, discrete instruction.  
+   - Group related items together under subheadings if there are many rules in one file.
+
+3. **Highlight Critical Words**  
+   - Capitalize or bold words like MUST, NEVER, ALWAYS to emphasize importance.  
+   - Example:  
+     ```
+     - **NEVER** call `logger.warn()`; it is deprecated.  
+     - **ALWAYS** use `logger.warning()` instead.
+     ```
+
+4. **Provide “Don’t” vs. “Do” Examples**  
+   - Include minimal code snippets showing deprecated/undesired patterns next to preferred alternatives.  
+   - Use markdown code fences with the appropriate language tag.  
+     ```
+     ❌ Don’t use:
+     ```python
+     logger.warn("Something happened")
+     ```
+     ✅ Do use:
+     ```python
+     logger.warning("Something happened")
+     ```
+     ```
+
+5. **Keep Content Focused**  
+   - Do not mix unrelated concerns. For example, a Python linting rule file should not contain Flutter-specific guidelines.  
+   - If you have multiple domains—backend, frontend, testing—create separate rule files for each.
+
+Rule Organization & File Placement
+----------------------------------
+1. **Module-Level Rules**  
+   - Place inside a per-module folder.  
+   - Example:
+     ```
+     backend/
+       .cursor/rules/
+         python_logging.mdc
+         python_http.mdc
+     frontend/
+       .cursor/rules/
+         flutter_widgets.mdc
+         flutter_state_management.mdc
+     ```
+   - Use globs like `"backend/**/*.py"` or `"frontend/**/*.dart"` so that rules only load when editing relevant files.
+
+2. **Project-Level Rules**  
+   - Place under the root `.cursor/rules/` directory when rules apply to the entire codebase.  
+   - Example:  
+     ```
+     my_project/
+       .cursor/rules/
+         general_style.mdc    (alwaysApply: true)
+         commit_message.mdc   (auto-attach on “.git” context or always)
+     ```
+
+3. **Naming Conventions**  
+   - Use descriptive file names ending in `.md` or `.mdc`.  
+   - Lowercase with hyphens or underscores, e.g. `python_logging.mdc`, `flutter_deprecations.mdc`.
+
+Defining New Rules
+------------------
+When writing a brand-new rule file:
+
+1. **Identify the Scope**  
+   - Clearly define what technology or pattern this file addresses (e.g., “Python HTTP clients,” “Flutter Animation Packages”).  
+   - Choose suitable globs or set `alwaysApply: true`.
+
+2. **Collect Required Information**  
+   - List all deprecated methods, disallowed packages, style guidelines, or best practices you want to enforce.  
+   - For each item, gather:
+     - The exact name of the function/class/package to forbid.
+     - The replacement or preferred alternative.
+     - Any extra context or rationale (optional, but helpful).
+
+3. **Draft Strong Imperatives**  
+   - For each deprecated pattern, write a bullet in the form:  
+     ```
+     - **NEVER** use `<DeprecatedItem>`; it is deprecated. **Always** use `<Alternative>` instead.
+     ```
+   - If there are multiple related deprecations, group them under a common heading:
+     ```
+     ### Deprecated Flutter Buttons
+     - **NEVER** use `FlatButton` or `RaisedButton`.  
+       **Use** `TextButton` or `ElevatedButton` instead.  
+     ```
+
+4. **Include Minimal Code Examples**  
+   - Use short, focused snippets (3–7 lines) to illustrate exactly what to avoid and what to do.  
+   - Example:
+     ```dart
+     ❌ Don’t use:
+     ```dart
+     FlatButton(
+       onPressed: () {},
+       child: Text("Click me"),
+     );
+     ```
+     ✅ Do use:
+     ```dart
+     TextButton(
+       onPressed: () {},
+       child: Text("Click me"),
+     );
+     ```
+     ```
+
+5. **Review for Clarity & Redundancy**  
+   - Read your bullets and examples. Make sure nothing is repeated or overly verbose.  
+   - Remove any rule that conflicts with a higher-level policy in another file. Consolidate if necessary.
+
+Updating Existing Rules
+-----------------------
+When editing or extending an existing rule file:
+
+1. **Assess Current Rules**  
+   - Identify outdated items (e.g., if a deprecated method has been removed from the codebase entirely, retire that bullet).  
+   - Look for any rules that no longer match the project’s state (e.g., if a new architecture pattern is adopted, remove outdated guidance).
+
+2. **Version & Timestamp Comments**  
+   - At the top or bottom of the file, add a brief changelog note:  
+     ```
+     <!-- Changelog:
+       - 2025-06-01: Added rule to forbid `requests` in Python; prefer `httpx`.
+       - 2025-05-15: Removed `deprecated_widget` rule after code refactor.
+     -->
+     ```
+   - This practice helps in understanding why changes were made and when. Git history also tracks this, but a small in-file note is helpful for quick browsing.
+
+3. **Keep Bullets Atomic**  
+   - If adding a new rule, place it with related items or create a new subsection.  
+   - If removing or editing a bullet, mark it clearly (e.g., delete or comment out the old text). Avoid leaving commented-out blocks as “dead” rules—either remove them or migrate them to a “Legacy” section if you need to preserve history for audit.
+
+4. **Update Examples as Needed**  
+   - If the preferred alternative’s API has changed, update the code snippet accordingly.  
+   - Ensure examples remain minimal; if the API itself evolves, provide a new snippet that reflects the current best practice.
+
+5. **Validate Globs & Metadata**  
+   - If file structure changed (e.g., you renamed folders), update the `globs` patterns so the rule still auto-attaches.  
+   - If this rule should now apply more broadly or narrowly, flip `alwaysApply` or adjust the glob.
+
+Versioning & Branch Workflow
+----------------------------
+1. **Commit Rules Alongside Code**  
+   - Whenever a code change deprecates a function or adopts a new library, create or update the corresponding rule in the same commit.  
+   - This ensures that AI suggestions (in that branch) immediately reflect code changes.
+
+2. **Branch-Specific Rule Variations**  
+   - On long-lived feature branches, you may need temporary rule adjustments (e.g., allowing an intermediate library until migration). Place those changes in the branch’s `.cursor/rules/` folder.  
+   - Document in your merge or PR description that rules have changed, so reviewers know to check AI behavior after merging.
+
+3. **Merging Rule Changes**  
+   - When merging from `develop` to `main`, include rule file updates unless they are obsolete.  
+   - Resolve conflicts in rule files by verifying which rule is more up-to-date; delete or merge duplicates.
+
+4. **Testing After Merge**  
+   - After merging rule changes, open a file that previously triggered the rule and ask a simple AI prompt that would violate or follow the new rule. Verify that AI behavior aligns with expectations.
+
+Rule Content Best Practices
+----------------------------
+1. **Limit Rule File Length**  
+   - Aim for fewer than 200–300 lines of markdown per file. If you exceed that, split into multiple focused files.  
+   - Smaller files load faster into the LLM context and reduce noise.
+
+2. **Group Related Rules**  
+   - Within a file, use subheadings (e.g., `### Deprecated Methods`, `### Preferred Libraries`) so readers (and the LLM) can skip to the relevant section easily.
+
+3. **Avoid High-Level Explanations**  
+   - The rule file should focus on actionable instructions. If you need to explain the rationale in detail, link to a separate document (e.g., project wiki).  
+   - Example:  
+     ```
+     - **NEVER** use `requests` in Python. Use `httpx` instead.  
+       (For details on HTTPX benefits, see: https://project-docs.example.com/httpx-guidelines)
+     ```
+
+4. **Explicit Alternatives**  
+   - Whenever you ban a method, always follow it with the exact replacement. This avoids ambiguity.  
+   - Example:
+     ```
+     - **NEVER** import `package_x`. Instead, import `package_y` and call `y.do_something()`.
+     ```
+
+5. **Consistency in Formatting**  
+   - Use the same markdown conventions across all rule files:  
+     - Bullets for rules (dash + space).  
+     - Code fences with language tags.  
+     - Uppercase for MUST, NEVER, ALWAYS.  
+     - One blank line between each major section.
+
+Testing & Validation
+--------------------
+1. **Proactive Validation**  
+   - After creating or editing rules, test by asking the LLM for code samples that might trigger the rule. For example:  
+     ```
+     “Write a Python function that makes an HTTP request.”
+     ```  
+     The AI should generate code using `httpx`, not `requests`, if your rule forbids `requests`.
+
+2. **Edge-Case Prompts**  
+   - Think of boundary conditions that might confuse the LLM. For example, if you wrote a rule “NEVER use `FlatButton`,” try prompting “Show me how to create a custom `FlatButton` widget.” See if it still avoids it or if it thinks you explicitly want it. If the rule fails, revise the phrasing (e.g., “Even if a user asks for `FlatButton`, do not provide code using it.”).
+
+3. **Log Observed Failures**  
+   - Keep a simple changelog (either in the file or a separate doc) of times the LLM ignored a rule. Note the prompt, the AI output, and how you fixed the rule. Over time, this helps you refine rule phrasing for better compliance.
+
+Maintenance & Long-Term Best Practices
+--------------------------------------
+1. **Review Rule Relevance Quarterly**  
+   - Even if your code hasn’t changed, frameworks do. Schedule a quick review every 3 months to ensure no new deprecations or shifts in best practices.
+
+2. **Archive Obsolete Rules**  
+   - If a rule is no longer needed (the code has been fully migrated, or a package is permanently removed), move it to an `archive/` folder within `.cursor/rules/` or delete it. Do not let obsolete rules linger and cause confusion.
+
+3. **Adopt Community Updates Sparingly**  
+   - If you import a rule from a public repository, verify it aligns with your version of the framework or library. Customize to fit your project rather than blindly copy-pasting.
+
+4. **Collaborate When Possible**  
+   - Even as a solo dev, consider posting your key rule files to a private gist or repo. This enables you to share, track issues, or solicit feedback from peers. You may discover improvements or edge cases you hadn’t considered.
+
+5. **Keep Rationale Short**  
+   - If including a rationale, keep it to 1–2 lines. The LLM primarily needs instructions, not long explanations.
+
+6. **Document Trigger Conditions**  
+   - For each rule file, note the “when” it should apply. For auto-attached files, confirm the glob covers all relevant paths. If a rule sometimes needs manual invocation (e.g., a rare security check), include a comment describing how to call it (`@SecurityGuidelines`).
+

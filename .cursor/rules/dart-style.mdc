@@ -1,0 +1,413 @@
+---
+description: any time dart files are being edited, must attaach
+globs: 
+alwaysApply: false
+---
+Dart Code Style & Best Practices
+===============================
+
+## General Dart Style
+
+### Naming Conventions
+- **ALWAYS** use `lowerCamelCase` for variables, methods, and parameters
+- **ALWAYS** use `UpperCamelCase` for classes, enums, typedefs, and extension names
+- **ALWAYS** use `lowercase_with_underscores` for library names and file names
+- **ALWAYS** use `SCREAMING_CAPS` for constants
+
+```dart
+❌ Don't use:
+class my_widget extends StatelessWidget {}
+String User_Name = 'John';
+const string maxCount = 100;
+
+✅ Do use:
+class MyWidget extends StatelessWidget {}
+String userName = 'John';
+const int MAX_COUNT = 100;
+```
+
+### Import Organization
+- **ALWAYS** organize imports in this order:
+  1. Dart core libraries (`dart:`)
+  2. Flutter libraries (`package:flutter/`)
+  3. Third-party packages (`package:`)
+  4. Local app imports (relative paths)
+- **ALWAYS** add a blank line between each import group
+- **ALWAYS** sort imports alphabetically within each group
+
+```dart
+✅ Correct import order:
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/user.dart';
+import '../services/auth_service.dart';
+```
+
+## Flutter Widget Best Practices
+
+### Widget Construction
+- **ALWAYS** prefer `const` constructors when possible
+- **NEVER** create widgets in build methods - extract to separate methods or classes
+- **ALWAYS** use `key` parameter for widgets that can be reordered or rebuilt
+
+```dart
+❌ Don't use:
+Widget build(BuildContext context) {
+  return Column(
+    children: [
+      Container(
+        child: Text('Hello'),
+      ),
+    ],
+  );
+}
+
+✅ Do use:
+Widget build(BuildContext context) {
+  return const Column(
+    children: [
+      _GreetingText(),
+    ],
+  );
+}
+
+class _GreetingText extends StatelessWidget {
+  const _GreetingText({Key? key}) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
+    return const Text('Hello');
+  }
+}
+```
+
+### State Management
+- **ALWAYS** prefer `StatelessWidget` over `StatefulWidget` when no state is needed
+- **NEVER** call `setState()` after `dispose()` has been called
+- **ALWAYS** dispose controllers, listeners, and streams in `dispose()`
+
+```dart
+✅ Proper state management:
+class MyWidget extends StatefulWidget {
+  @override
+  _MyWidgetState createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  late TextEditingController _controller;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+```
+
+## Deprecated Flutter APIs
+
+### Deprecated Button Widgets
+- **NEVER** use `FlatButton`, `RaisedButton`, or `OutlineButton` - they are deprecated
+- **ALWAYS** use `TextButton`, `ElevatedButton`, or `OutlinedButton` instead
+
+```dart
+❌ Don't use:
+FlatButton(
+  onPressed: () {},
+  child: Text('Click me'),
+);
+
+RaisedButton(
+  onPressed: () {},
+  child: Text('Click me'),
+);
+
+✅ Do use:
+TextButton(
+  onPressed: () {},
+  child: Text('Click me'),
+);
+
+ElevatedButton(
+  onPressed: () {},
+  child: Text('Click me'),
+);
+```
+
+### Deprecated Text Styling
+- **NEVER** use deprecated `TextTheme` properties like `headline1`, `headline2`, etc.
+- **ALWAYS** use the new Material 3 text styles: `headlineLarge`, `headlineMedium`, etc.
+
+```dart
+❌ Don't use:
+Text(
+  'Title',
+  style: Theme.of(context).textTheme.headline1,
+);
+
+✅ Do use:
+Text(
+  'Title',
+  style: Theme.of(context).textTheme.headlineLarge,
+);
+```
+
+### Deprecated Layout Widgets
+- **NEVER** use `Scaffold.resizeToAvoidBottomPadding` - it's deprecated
+- **ALWAYS** use `Scaffold.resizeToAvoidBottomInset` instead
+
+### Theme Data Naming
+- **NEVER** use `CardTheme` - use `CardThemeData` instead
+- **NEVER** use `ButtonTheme` - use `ButtonThemeData` instead  
+- **ALWAYS** use the `*ThemeData` classes for theme configuration
+
+```dart
+❌ Don't use:
+ThemeData(
+  cardTheme: CardTheme(elevation: 4),
+  buttonTheme: ButtonTheme(height: 36),
+);
+
+✅ Do use:
+ThemeData(
+  cardTheme: CardThemeData(elevation: 4),
+  elevatedButtonTheme: ElevatedButtonThemeData(...),
+);
+```
+
+### Deprecated Color Methods
+- **NEVER** use `withOpacity()` - it's deprecated since Flutter 3.27
+- **ALWAYS** use `withValues(alpha: ...)` instead for better color space support
+- **NEVER** use `opacity` property - use `a` property for alpha channel
+
+```dart
+❌ Don't use:
+Color transparentBlue = Colors.blue.withOpacity(0.5);
+double alpha = color.opacity;
+
+✅ Do use:
+Color transparentBlue = Colors.blue.withValues(alpha: 0.5);
+double alpha = color.a;
+```
+
+### Deprecated Widget State APIs
+- **NEVER** use `MaterialStateProperty` - it's deprecated since Flutter 3.19
+- **ALWAYS** use `WidgetStateProperty` instead (moved to Widgets layer)
+- **NEVER** use `MaterialState` - use `WidgetState` instead
+
+```dart
+❌ Don't use:
+MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+  if (states.contains(MaterialState.selected)) {
+    return Colors.red;
+  }
+  return Colors.blue;
+});
+
+✅ Do use:
+WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+  if (states.contains(WidgetState.selected)) {
+    return Colors.red;
+  }
+  return Colors.blue;
+});
+```
+
+## Error Handling & Null Safety
+
+### Null Safety Best Practices
+- **ALWAYS** use null-aware operators (`?.`, `??`, `??=`) when dealing with nullable types
+- **NEVER** use `!` operator unless you're absolutely certain the value is non-null
+- **ALWAYS** prefer early returns over nested conditionals
+
+```dart
+❌ Don't use:
+String getName(User? user) {
+  if (user != null) {
+    if (user.name != null) {
+      return user.name!;
+    } else {
+      return 'Unknown';
+    }
+  } else {
+    return 'Unknown';
+  }
+}
+
+✅ Do use:
+String getName(User? user) {
+  return user?.name ?? 'Unknown';
+}
+```
+
+### Exception Handling
+- **ALWAYS** catch specific exceptions rather than generic `Exception`
+- **NEVER** catch and ignore exceptions without logging
+- **ALWAYS** use `try-catch-finally` for resource cleanup
+
+```dart
+❌ Don't use:
+try {
+  await apiCall();
+} catch (e) {
+  // Silent failure
+}
+
+✅ Do use:
+try {
+  await apiCall();
+} on HttpException catch (e) {
+  _logger.error('HTTP error: ${e.message}');
+  rethrow;
+} on FormatException catch (e) {
+  _logger.error('Format error: ${e.message}');
+  rethrow;
+} catch (e) {
+  _logger.error('Unexpected error: $e');
+  rethrow;
+}
+```
+
+## Async Programming
+
+### Future and Stream Handling
+- **ALWAYS** use `async`/`await` instead of `then()` for better readability
+- **NEVER** use `await` in loops - prefer `Future.wait()` for parallel execution
+- **ALWAYS** handle loading states in UI when dealing with async operations
+
+```dart
+❌ Don't use:
+Future<void> loadData() {
+  return apiService.getData().then((data) {
+    setState(() {
+      this.data = data;
+    });
+  });
+}
+
+// Don't use await in loops
+for (var item in items) {
+  await processItem(item);
+}
+
+✅ Do use:
+Future<void> loadData() async {
+  final data = await apiService.getData();
+  setState(() {
+    this.data = data;
+  });
+}
+
+// Use Future.wait for parallel execution
+await Future.wait(
+  items.map((item) => processItem(item)),
+);
+```
+
+## Performance Guidelines
+
+### Widget Performance
+- **ALWAYS** use `const` constructors when widgets don't depend on runtime data
+- **NEVER** create new objects in build methods - move them to instance variables
+- **ALWAYS** use `ListView.builder()` for large lists instead of `ListView()`
+
+```dart
+❌ Don't use:
+Widget build(BuildContext context) {
+  final items = List.generate(1000, (i) => 'Item $i');
+  return ListView(
+    children: items.map((item) => ListTile(title: Text(item))).toList(),
+  );
+}
+
+✅ Do use:
+final items = List.generate(1000, (i) => 'Item $i');
+
+Widget build(BuildContext context) {
+  return ListView.builder(
+    itemCount: items.length,
+    itemBuilder: (context, index) {
+      return ListTile(title: Text(items[index]));
+    },
+  );
+}
+```
+
+### Memory Management
+- **ALWAYS** dispose of controllers, animation controllers, and streams
+- **NEVER** hold strong references to widgets or contexts in long-lived objects
+- **ALWAYS** use `WeakReference` for callbacks that might outlive widgets
+
+## Code Organization
+
+### File Structure
+- **ALWAYS** keep files under 300-400 lines when possible
+- **ALWAYS** use private classes (prefix with `_`) for internal widgets
+- **NEVER** export internal implementation details from library files
+
+### Method Length
+- **ALWAYS** keep methods under 20-30 lines
+- **ALWAYS** extract complex logic into separate methods with descriptive names
+- **NEVER** have deeply nested conditional logic (max 3 levels)
+
+### Documentation
+- **ALWAYS** add documentation comments (`///`) for public APIs
+- **ALWAYS** document complex business logic with inline comments
+- **NEVER** leave TODO comments in production code without tracking issues
+
+```dart
+✅ Proper documentation:
+/// Calculates the next review date based on spaced repetition algorithm.
+/// 
+/// The [difficulty] should be between 1-5, where 1 is easiest and 5 is hardest.
+/// Returns the next review date, or null if the item should be archived.
+DateTime? calculateNextReview(int difficulty, DateTime lastReview) {
+  // Implementation with clear logic
+}
+```
+
+## Testing Guidelines
+
+### Test Structure
+- **ALWAYS** use descriptive test names that explain what is being tested
+- **ALWAYS** follow the Arrange-Act-Assert pattern
+- **NEVER** test implementation details - focus on behavior
+
+```dart
+✅ Good test structure:
+testWidgets('should display error message when login fails', (tester) async {
+  // Arrange
+  final mockAuth = MockAuthService();
+  when(mockAuth.login(any, any)).thenThrow(AuthException('Invalid credentials'));
+  
+  // Act
+  await tester.pumpWidget(LoginScreen(authService: mockAuth));
+  await tester.enterText(find.byKey(Key('email')), 'test@example.com');
+  await tester.enterText(find.byKey(Key('password')), 'wrongpassword');
+  await tester.tap(find.byKey(Key('loginButton')));
+  await tester.pump();
+  
+  // Assert
+  expect(find.text('Invalid credentials'), findsOneWidget);
+});
+```
+
+<!-- Changelog:
+  - 2024-01-XX: Initial creation of Dart style rules
+  - Added comprehensive Flutter widget guidelines
+  - Added deprecation warnings for old button widgets
+  - Added null safety and async programming best practices
+-->

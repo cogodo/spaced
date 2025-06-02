@@ -105,7 +105,7 @@ class ThemeNotifier with ChangeNotifier {
             : 'Light';
 
     _currentThemeMeta = appThemes[initialThemeKey]!;
-    _logger.info('Initial theme set to: ${currentThemeKey}');
+    _logger.info('Initial theme set to: $currentThemeKey');
     // No need to notifyListeners here as it's the initial state
   }
 
