@@ -51,11 +51,8 @@ jobs:
         
       - name: Build web with optimizations
         run: |
-          # Build with proven performance optimizations
-          flutter build web --release \
-            --tree-shake-icons \
-            --web-renderer auto \
-            --verbose
+          # Build with basic performance optimizations
+          flutter build web --release --tree-shake-icons
           
       - name: Verify build output
         run: |
