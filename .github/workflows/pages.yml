@@ -49,14 +49,12 @@ jobs:
       - name: Enable web
         run: flutter config --enable-web
         
-      - name: Build web with verbose output
+      - name: Build web with optimizations
         run: |
-          # Build with optimizations for performance
+          # Build with proven performance optimizations
           flutter build web --release \
-            --web-renderer canvaskit \
             --tree-shake-icons \
-            --dart-define=flutter.inspector.structuredErrors=false \
-            --source-maps \
+            --web-renderer auto \
             --verbose
           
       - name: Verify build output
@@ -68,32 +66,6 @@ jobs:
         
       - name: Prepare web files
         run: |
-          # Create 404.html file for SPA routing
-          cat > build/web/404.html << 'EOL'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Spaced Repetition App</title>
-            <script type="text/javascript">
-              // Single Page Apps for GitHub Pages
-              // https://github.com/rafgraph/spa-github-pages
-              var l = window.location;
-              l.replace(
-                l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-                l.pathname.split('/').slice(0, 1).join('/') + '/' +
-                l.pathname.slice(1).split('/').slice(0).join('/') +
-                (l.search || '') +
-                l.hash
-              );
-            </script>
-          </head>
-          <body>
-            <p>Redirecting...</p>
-          </body>
-          </html>
-          EOL
-          
           # Copy CNAME file for custom domain
           if [ -f "web/CNAME" ]; then
             echo "Copying CNAME file for custom domain"
@@ -102,76 +74,27 @@ jobs:
           
           # Use alternative index.html if it exists
           if [ -f "alt-index.html" ]; then
-            echo "Using alternative index.html"
+            echo "Using optimized index.html"
             cp alt-index.html build/web/index.html
-          fi
-          
-          # Replace the serviceWorkerVersion in index.html
-          if [ -f "build/web/index.html" ]; then
-            echo "Updating serviceWorkerVersion in index.html"
-            # Create a timestamp-based version
-            VERSION=$(date +%s)
-            # Replace null or undefined serviceWorkerVersion with our timestamp
-            sed -i "s/serviceWorkerVersion: null/serviceWorkerVersion: '$VERSION'/g" build/web/index.html
-            sed -i "s/serviceWorkerVersion: undefined/serviceWorkerVersion: '$VERSION'/g" build/web/index.html
           fi
           
           # Create .nojekyll file to bypass Jekyll processing
           touch build/web/.nojekyll
           
-          # Add performance headers via _headers file (for compatible hosting)
-          cat > build/web/_headers << 'EOL'
-          /*
-            Cache-Control: public, max-age=31536000, immutable
-            X-Content-Type-Options: nosniff
-            X-Frame-Options: DENY
-            X-XSS-Protection: 1; mode=block
-            Referrer-Policy: strict-origin-when-cross-origin
-          
-          /*.html
-            Cache-Control: public, max-age=0, must-revalidate
-          
-          /main.dart.js
-            Cache-Control: public, max-age=31536000, immutable
-            Content-Encoding: gzip
-          
-          /flutter.js
-            Cache-Control: public, max-age=31536000, immutable
-            Content-Encoding: gzip
-          EOL
-          
-          # Optimize images and assets
-          echo "Optimizing build output..."
-          
-          # Create sw.js with better caching strategy
-          cat > build/web/sw.js << 'EOL'
-          const CACHE_NAME = 'spaced-v1';
-          const urlsToCache = [
-            '/',
-            '/main.dart.js',
-            '/flutter.js',
-            '/manifest.json',
-            '/icons/favicon_circle.ico'
-          ];
-          
-          self.addEventListener('install', event => {
-            event.waitUntil(
-              caches.open(CACHE_NAME)
-                .then(cache => cache.addAll(urlsToCache))
-            );
-          });
-          
-          self.addEventListener('fetch', event => {
-            event.respondWith(
-              caches.match(event.request)
-                .then(response => {
-                  if (response) {
-                    return response;
-                  }
-                  return fetch(event.request);
-                })
-            );
-          });
+          # Simple 404.html for SPA routing
+          cat > build/web/404.html << 'EOL'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Spaced</title>
+            <script>
+              var l = window.location;
+              l.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + l.pathname.split('/').slice(0, 1).join('/') + '/' + l.pathname.slice(1).split('/').slice(0).join('/') + (l.search || '') + l.hash);
+            </script>
+          </head>
+          <body><p>Redirecting...</p></body>
+          </html>
           EOL
           
       - name: Setup Pages

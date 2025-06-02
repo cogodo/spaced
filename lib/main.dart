@@ -23,6 +23,13 @@ const String THEME_PREF_KEY = 'selectedThemeKey';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Performance optimization: Set up error handling early
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (!bool.fromEnvironment('dart.vm.product')) {
+      FlutterError.dumpErrorToConsole(details);
+    }
+  };
+
   // Initialize logging service based on environment
   const bool isProduction = bool.fromEnvironment('dart.vm.product');
   if (isProduction) {
