@@ -19,8 +19,8 @@ class ThemeMetadata {
 TextTheme _createFiraCodeTextTheme(Color textColor, Brightness brightness) {
   final Color secondaryTextColor =
       brightness == Brightness.light
-          ? textColor.withAlpha(208)
-          : textColor.withAlpha(230);
+          ? textColor.withValues(alpha: 208 / 255.0)
+          : textColor.withValues(alpha: 230 / 255.0);
 
   return TextTheme(
     // Headings
@@ -178,13 +178,13 @@ final Map<String, ThemeMetadata> appThemes = {
         fillColor: Colors.white,
         border: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF0078D7).withOpacity(0.5),
+            color: const Color(0xFF0078D7).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF0078D7).withOpacity(0.5),
+            color: const Color(0xFF0078D7).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -193,7 +193,7 @@ final Map<String, ThemeMetadata> appThemes = {
           borderRadius: BorderRadius.circular(8),
         ),
         hintStyle: GoogleFonts.firaCode(
-          color: const Color(0xFF0078D7).withOpacity(0.6),
+          color: const Color(0xFF0078D7).withValues(alpha: 0.6),
           fontStyle: FontStyle.italic,
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -278,13 +278,13 @@ final Map<String, ThemeMetadata> appThemes = {
         fillColor: const Color(0xFF2D2D40),
         border: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF7B68EE).withOpacity(0.5),
+            color: const Color(0xFF7B68EE).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF7B68EE).withOpacity(0.5),
+            color: const Color(0xFF7B68EE).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -404,20 +404,16 @@ final Map<String, ThemeMetadata> appThemes = {
       ),
 
       // Styled cards with red shadows
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 4, // More elevation
         shadowColor: const Color(
           0xFFEF5350,
-        ).withOpacity(0.3), // Red tinted shadow
+        ).withValues(alpha: 0.3), // Red tinted shadow
         color: Colors.white,
-        margin: const EdgeInsets.symmetric(
-          vertical: 8,
-          horizontal: 12,
-        ), // Default margins
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16.0), // More rounded
           side: BorderSide(
-            color: const Color(0xFFFFCDD2).withOpacity(0.5),
+            color: const Color(0xFFFFCDD2).withValues(alpha: 0.5),
             width: 1,
           ), // Subtle border
         ),
@@ -425,8 +421,8 @@ final Map<String, ThemeMetadata> appThemes = {
 
       // Checkboxes and selectable items
       checkboxTheme: CheckboxThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const Color(0xFFD32F2F); // Scarlet when selected
           }
           return Colors.white; // White when not selected
@@ -436,15 +432,17 @@ final Map<String, ThemeMetadata> appThemes = {
 
       // Switch theme
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const Color(0xFFD32F2F); // Scarlet when selected
           }
           return Colors.grey[400]; // Grey when not selected
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
-            return const Color(0xFFEF5350).withOpacity(0.5); // Light red track
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(
+              0xFFEF5350,
+            ).withValues(alpha: 0.5); // Light red track
           }
           return Colors.grey[300]; // Grey track when not selected
         }),
@@ -571,13 +569,13 @@ final Map<String, ThemeMetadata> appThemes = {
         fillColor: const Color(0xFF1B3726),
         border: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF4CAF50).withOpacity(0.5),
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF4CAF50).withOpacity(0.5),
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -586,7 +584,7 @@ final Map<String, ThemeMetadata> appThemes = {
           borderRadius: BorderRadius.circular(8),
         ),
         hintStyle: GoogleFonts.firaCode(
-          color: const Color(0xFFA5D6A7).withOpacity(0.7),
+          color: const Color(0xFFA5D6A7).withValues(alpha: 0.7),
           fontStyle: FontStyle.italic,
         ),
         contentPadding: const EdgeInsets.symmetric(
