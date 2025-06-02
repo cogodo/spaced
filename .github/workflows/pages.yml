@@ -69,9 +69,9 @@ jobs:
             cp web/CNAME build/web/CNAME
           fi
           
-          # Use alternative index.html if it exists
+          # Always use the optimized alt-index.html as the main index
           if [ -f "alt-index.html" ]; then
-            echo "Using optimized index.html"
+            echo "Using optimized alt-index.html as main index"
             cp alt-index.html build/web/index.html
           fi
           
