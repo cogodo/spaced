@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:spaced/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
+import 'chat_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
@@ -83,6 +84,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
       ),
       SettingsScreen(),
       AboutScreen(),
+      ChatScreen(),
     ];
 
     return Scaffold(
@@ -96,7 +98,9 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
               ? 'All Items'
               : _currentIndex == 3
               ? 'Settings'
-              : 'About',
+              : _currentIndex == 4
+              ? 'About'
+              : 'Chat',
         ),
         centerTitle: true,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -137,6 +141,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 NavigationRailDestination(
                   icon: Icon(Icons.info_outline),
                   label: Text('About'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.chat),
+                  label: Text('Chat'),
                 ),
               ],
               // Make the rail wider for better visibility
@@ -228,6 +236,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                   BottomNavigationBarItem(
                     icon: Icon(Icons.info_outline),
                     label: 'About',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.chat),
+                    label: 'Chat',
                   ),
                 ],
                 // Ensure it's large enough for easy touch
