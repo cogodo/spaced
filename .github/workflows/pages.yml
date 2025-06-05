@@ -44,42 +44,48 @@ jobs:
           dart --version
           
       - name: Get dependencies
-        run: flutter pub get
+        run: |
+          cd flutter_app
+          flutter pub get
         
       - name: Enable web
         run: flutter config --enable-web
         
       - name: Build web with optimizations
         run: |
+          cd flutter_app
           # Build with basic performance optimizations
           flutter build web --release --tree-shake-icons
           
       - name: Verify build output
         run: |
           echo "Checking build directory contents:"
-          ls -la build/web/
+          ls -la flutter_app/build/web/
           echo "Checking main.dart.js exists:"
-          ls -la build/web/main.dart.js || echo "main.dart.js is missing!"
+          ls -la flutter_app/build/web/main.dart.js || echo "main.dart.js is missing!"
         
       - name: Prepare web files
         run: |
-          # Copy CNAME file for custom domain
-          if [ -f "web/CNAME" ]; then
-            echo "Copying CNAME file for custom domain"
-            cp web/CNAME build/web/CNAME
+          # Copy CNAME file for custom domain (if it exists in flutter_app/web)
+          if [ -f "flutter_app/web/CNAME" ]; then
+            echo "Copying CNAME file from flutter_app/web for custom domain"
+            cp flutter_app/web/CNAME flutter_app/build/web/CNAME
+          elif [ -f "CNAME" ]; then
+            echo "Copying CNAME file from root for custom domain"
+            cp CNAME flutter_app/build/web/CNAME
           fi
           
           # Always use the optimized alt-index.html as the main index
           if [ -f "alt-index.html" ]; then
             echo "Using optimized alt-index.html as main index"
-            cp alt-index.html build/web/index.html
+            cp alt-index.html flutter_app/build/web/index.html
           fi
           
           # Create .nojekyll file to bypass Jekyll processing
-          touch build/web/.nojekyll
+          touch flutter_app/build/web/.nojekyll
           
           # Simple 404.html for SPA routing
-          cat > build/web/404.html << 'EOL'
+          cat > flutter_app/build/web/404.html << 'EOL'
           <!DOCTYPE html>
           <html>
           <head>
@@ -100,7 +106,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './build/web'
+          path: './flutter_app/build/web'
           
       - name: Deploy to GitHub Pages
         id: deployment
