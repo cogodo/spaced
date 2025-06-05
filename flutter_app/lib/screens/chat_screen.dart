@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../services/logger_service.dart';
 import '../services/langgraph_api.dart';
 
@@ -33,8 +32,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Map<String, int>? _finalScores;
 
   // Session configuration
-  int _maxTopics = 3;
-  int _maxQuestions = 7;
+  final int _maxTopics = 3;
+  final int _maxQuestions = 7;
 
   @override
   void initState() {
@@ -402,8 +401,11 @@ class _ChatScreenState extends State<ChatScreen> {
           _buildSessionStatusBar(),
           // Chat messages area
           Expanded(child: _buildMessagesArea()),
-          // Input area
-          _buildInputArea(),
+          // Input area - with bottom margin to move it up a bit
+          Container(
+            margin: const EdgeInsets.only(bottom: 24),
+            child: _buildInputArea(),
+          ),
         ],
       ),
     );
@@ -415,7 +417,6 @@ class _ChatScreenState extends State<ChatScreen> {
       return const SizedBox.shrink();
     }
 
-    final theme = Theme.of(context);
     String statusText;
     Color statusColor;
 
