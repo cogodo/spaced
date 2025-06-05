@@ -1,0 +1,12 @@
+{
+  "name": "study-bot",
+  "entrypoint": "my_agent.agent",
+  "env": ["OPENAI_API_KEY"],
+  "dependencies": [
+    "langgraph",
+    "langchain-openai",
+    "fastapi",
+    "uvicorn",
+    "python-dotenv"
+  ]
+}
