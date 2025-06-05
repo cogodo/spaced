@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/logger_service.dart';
+import '../services/langgraph_api.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -9,89 +10,365 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+enum SessionState {
+  initial, // No session started yet
+  collectingTopics, // Waiting for user to provide topics
+  active, // Session running, asking questions
+  completed, // Session finished, showing scores
+  error, // Error state
+}
+
 class _ChatScreenState extends State<ChatScreen> {
   final _logger = getLogger('ChatScreen');
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _textFieldFocusNode = FocusNode();
   final List<ChatMessage> _messages = [];
-  bool _isTyping = false;
+
+  // LangGraph API integration
+  late final LangGraphApi _api;
+  SessionState _sessionState = SessionState.initial;
+  String? _currentSessionId;
+  bool _isLoading = false;
+  Map<String, int>? _finalScores;
+
+  // Session configuration
+  int _maxTopics = 3;
+  int _maxQuestions = 7;
 
   @override
   void initState() {
     super.initState();
-    // Add a welcome message
-    _messages.add(
-      ChatMessage(
-        text:
-            "Hello! I'm your AI assistant. How can I help you with your spaced repetition learning today?",
-        isUser: false,
-        timestamp: DateTime.now(),
-      ),
+
+    // Initialize API client
+    // TODO: Update this URL based on your environment
+    _api = LangGraphApi(
+      baseUrl: 'http://localhost:8000', // Change for your setup
     );
+
+    // Add welcome message and prompt for topics
+    _addSystemMessage(
+      "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
+      "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
+      "To get started, please tell me what topics you'd like to study today. "
+      "You can list multiple topics separated by commas.\n\n"
+      "For example: 'Flutter widgets, Dart programming, Mobile development'",
+    );
+
+    _sessionState = SessionState.collectingTopics;
   }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _textFieldFocusNode.dispose();
     super.dispose();
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+  void _addSystemMessage(String text) {
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: text,
+          isUser: false,
+          timestamp: DateTime.now(),
+          isSystem: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
 
-    // Add user message
+  void _addUserMessage(String text) {
     setState(() {
       _messages.add(
         ChatMessage(text: text, isUser: true, timestamp: DateTime.now()),
       );
-      _isTyping = true;
     });
-
-    _messageController.clear();
     _scrollToBottom();
-
-    // Simulate AI response
-    _simulateAIResponse(text);
   }
 
-  Future<void> _simulateAIResponse(String userMessage) async {
-    // Simulate typing delay
-    await Future.delayed(const Duration(milliseconds: 1500));
-
-    if (!mounted) return;
-
-    // Generate a mock response based on user input
-    String response = _generateMockResponse(userMessage);
-
+  void _addAIMessage(String text) {
     setState(() {
       _messages.add(
-        ChatMessage(text: response, isUser: false, timestamp: DateTime.now()),
+        ChatMessage(text: text, isUser: false, timestamp: DateTime.now()),
       );
-      _isTyping = false;
     });
-
     _scrollToBottom();
   }
 
-  String _generateMockResponse(String userMessage) {
-    final lowerMessage = userMessage.toLowerCase();
+  void _sendMessage() {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _isLoading) return;
 
-    if (lowerMessage.contains('spaced repetition') ||
-        lowerMessage.contains('learning')) {
-      return "Spaced repetition is a highly effective learning technique! It's based on the psychological spacing effect, where information is reviewed at increasing intervals. This helps move knowledge from short-term to long-term memory more efficiently.";
-    } else if (lowerMessage.contains('memory') ||
-        lowerMessage.contains('remember')) {
-      return "Memory formation involves three key processes: encoding, storage, and retrieval. Spaced repetition optimizes all three by:\n\n1. **Encoding**: Active recall strengthens neural pathways\n2. **Storage**: Spaced intervals prevent forgetting\n3. **Retrieval**: Regular practice improves access to memories";
-    } else if (lowerMessage.contains('help') || lowerMessage.contains('how')) {
-      return "I'm here to help you optimize your learning! I can assist with:\n\n• Understanding spaced repetition principles\n• Tips for effective review sessions\n• Memory techniques and mnemonics\n• Study scheduling strategies\n• Learning psychology insights\n\nWhat specific aspect would you like to explore?";
-    } else if (lowerMessage.contains('difficulty') ||
-        lowerMessage.contains('hard')) {
-      return "Finding something challenging? That's actually good for learning! Research shows that 'desirable difficulties' strengthen memory formation. Try breaking complex topics into smaller chunks and review them more frequently initially.";
-    } else {
-      return "That's an interesting question! Based on cognitive science research, effective learning often involves active recall, spaced practice, and connecting new information to existing knowledge. Could you tell me more about what specific learning challenge you're facing?";
+    _addUserMessage(text);
+    _messageController.clear();
+
+    // Keep focus on text field for better UX
+    if (!_textFieldFocusNode.hasFocus) {
+      _textFieldFocusNode.requestFocus();
     }
+
+    _handleUserInput(text);
+  }
+
+  Future<void> _handleUserInput(String userInput) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      switch (_sessionState) {
+        case SessionState.initial:
+        case SessionState.collectingTopics:
+          await _handleTopicsInput(userInput);
+          break;
+
+        case SessionState.active:
+          await _handleAnswerInput(userInput);
+          break;
+
+        case SessionState.completed:
+          await _handleCompletedState(userInput);
+          break;
+
+        case SessionState.error:
+          await _handleErrorState(userInput);
+          break;
+      }
+    } catch (e) {
+      _logger.severe('Error handling user input: $e');
+      await _handleError(e);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleTopicsInput(String input) async {
+    // Parse topics from user input
+    List<String> topics =
+        input
+            .split(',')
+            .map((topic) => topic.trim())
+            .where((topic) => topic.isNotEmpty)
+            .toList();
+
+    if (topics.isEmpty) {
+      _addAIMessage(
+        "I couldn't find any topics in your message. Please list the topics you'd like to study, separated by commas.\n\n"
+        "For example: 'Machine Learning, Python, Data Science'",
+      );
+      return;
+    }
+
+    if (topics.length > 10) {
+      _addAIMessage(
+        "That's quite a lot of topics! For the best learning experience, I recommend starting with 3-5 topics. "
+        "Could you please select your most important topics?",
+      );
+      return;
+    }
+
+    // Start the session
+    try {
+      _addAIMessage(
+        "Great! I'll create a learning session for: ${topics.join(', ')}\n\nStarting your session...",
+      );
+
+      final response = await _api.startSession(
+        topics: topics,
+        maxTopics: _maxTopics,
+        maxQuestions: _maxQuestions,
+      );
+
+      _currentSessionId = response.sessionId;
+      _sessionState = SessionState.active;
+
+      await Future.delayed(
+        const Duration(milliseconds: 500),
+      ); // Brief pause for UX
+
+      _addAIMessage(
+        "📚 **Session Started!**\n\n"
+        "I'll ask you up to $_maxQuestions questions per topic to assess your knowledge. "
+        "Answer as best as you can - this helps me understand what you know and what needs more practice.\n\n"
+        "**Question 1:**\n${response.nextQuestion}",
+      );
+    } on LangGraphApiException catch (e) {
+      _sessionState = SessionState.error;
+      _addAIMessage(
+        "Sorry, I encountered an error starting your session: ${e.message}\n\n"
+        "Would you like to try again with different topics?",
+      );
+    }
+  }
+
+  Future<void> _handleAnswerInput(String answer) async {
+    if (_currentSessionId == null) {
+      _addAIMessage("Session error: No active session ID. Let's start over.");
+      _resetSession();
+      return;
+    }
+
+    try {
+      final response = await _api.answer(
+        sessionId: _currentSessionId!,
+        userInput: answer,
+      );
+
+      if (response.isDone) {
+        // Session completed
+        _sessionState = SessionState.completed;
+        _finalScores = response.scores;
+
+        _addAIMessage(_buildCompletionMessage(response.scores!));
+      } else {
+        // Continue with next question
+        _addAIMessage("**Next Question:**\n${response.nextQuestion!}");
+      }
+    } on LangGraphApiException catch (e) {
+      if (e.statusCode == 404) {
+        _addAIMessage(
+          "Your session has expired or is no longer valid. Let's start a new one!\n\n"
+          "Please tell me what topics you'd like to study.",
+        );
+        _resetSession();
+      } else {
+        _sessionState = SessionState.error;
+        _addAIMessage(
+          "I encountered an error: ${e.message}\n\n"
+          "Would you like to try answering again, or start a new session?",
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCompletedState(String input) async {
+    final lowerInput = input.toLowerCase();
+
+    if (lowerInput.contains('new') ||
+        lowerInput.contains('again') ||
+        lowerInput.contains('restart')) {
+      _addAIMessage(
+        "Starting a new session! What topics would you like to study this time?",
+      );
+      _resetSession();
+    } else if (lowerInput.contains('score') || lowerInput.contains('result')) {
+      if (_finalScores != null) {
+        _addAIMessage(_buildCompletionMessage(_finalScores!));
+      }
+    } else {
+      _addAIMessage(
+        "Your learning session is complete! 🎉\n\n"
+        "Would you like to:\n"
+        "• Start a **new session** with different topics\n"
+        "• **Review** your scores again\n"
+        "• Ask me anything about spaced repetition learning",
+      );
+    }
+  }
+
+  Future<void> _handleErrorState(String input) async {
+    final lowerInput = input.toLowerCase();
+
+    if (lowerInput.contains('try') ||
+        lowerInput.contains('again') ||
+        lowerInput.contains('restart')) {
+      _addAIMessage("Let's start fresh! What topics would you like to study?");
+      _resetSession();
+    } else {
+      _addAIMessage(
+        "I'm still having issues. Would you like to **try again** or **restart** with new topics?",
+      );
+    }
+  }
+
+  Future<void> _handleError(dynamic error) async {
+    _sessionState = SessionState.error;
+    String errorMessage = "I encountered an unexpected error.";
+
+    if (error is LangGraphApiException) {
+      errorMessage = "API Error: ${error.message}";
+    } else {
+      errorMessage = "Error: ${error.toString()}";
+    }
+
+    _addAIMessage(
+      "$errorMessage\n\n"
+      "Would you like to try again or start a new session?",
+    );
+  }
+
+  String _buildCompletionMessage(Map<String, int> scores) {
+    final buffer = StringBuffer();
+    buffer.writeln("🎉 **Session Complete!**");
+    buffer.writeln();
+    buffer.writeln("Here are your learning scores (0-5 scale):");
+    buffer.writeln();
+
+    scores.forEach((topic, score) {
+      String emoji;
+      String feedback;
+
+      if (score >= 4) {
+        emoji = "🌟";
+        feedback = "Excellent!";
+      } else if (score >= 3) {
+        emoji = "✅";
+        feedback = "Good progress";
+      } else if (score >= 2) {
+        emoji = "📚";
+        feedback = "Needs practice";
+      } else {
+        emoji = "🔄";
+        feedback = "Review recommended";
+      }
+
+      buffer.writeln("$emoji **$topic**: $score/5 - $feedback");
+    });
+
+    buffer.writeln();
+    buffer.writeln("**Spaced Repetition Recommendations:**");
+
+    final lowScores = scores.entries.where((e) => e.value < 3).toList();
+    if (lowScores.isNotEmpty) {
+      buffer.writeln(
+        "• Review these topics in 1 day: ${lowScores.map((e) => e.key).join(', ')}",
+      );
+    }
+
+    final mediumScores =
+        scores.entries.where((e) => e.value >= 3 && e.value < 4).toList();
+    if (mediumScores.isNotEmpty) {
+      buffer.writeln(
+        "• Review these topics in 3 days: ${mediumScores.map((e) => e.key).join(', ')}",
+      );
+    }
+
+    final highScores = scores.entries.where((e) => e.value >= 4).toList();
+    if (highScores.isNotEmpty) {
+      buffer.writeln(
+        "• Review these topics in 1 week: ${highScores.map((e) => e.key).join(', ')}",
+      );
+    }
+
+    buffer.writeln();
+    buffer.writeln(
+      "Would you like to start a **new session** with different topics?",
+    );
+
+    return buffer.toString();
+  }
+
+  void _resetSession() {
+    setState(() {
+      _sessionState = SessionState.collectingTopics;
+      _currentSessionId = null;
+      _finalScores = null;
+    });
   }
 
   void _scrollToBottom() {
@@ -108,13 +385,115 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Chat messages area
-        Expanded(child: _buildMessagesArea()),
-        // Input area
-        _buildInputArea(),
-      ],
+    return GestureDetector(
+      // Dismiss keyboard when tapping outside text field
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Column(
+        children: [
+          // Session status bar
+          _buildSessionStatusBar(),
+          // Chat messages area
+          Expanded(child: _buildMessagesArea()),
+          // Input area
+          _buildInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionStatusBar() {
+    if (_sessionState == SessionState.initial ||
+        _sessionState == SessionState.collectingTopics) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    String statusText;
+    Color statusColor;
+
+    switch (_sessionState) {
+      case SessionState.active:
+        statusText = "Learning Session Active";
+        statusColor = Colors.green;
+        break;
+      case SessionState.completed:
+        statusText = "Session Completed";
+        statusColor = Colors.blue;
+        break;
+      case SessionState.error:
+        statusText = "Session Error";
+        statusColor = Colors.red;
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _sessionState == SessionState.active
+                ? Icons.psychology
+                : _sessionState == SessionState.completed
+                ? Icons.check_circle
+                : Icons.error,
+            color: statusColor,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            statusText,
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const Spacer(),
+          if (_sessionState == SessionState.active)
+            TextButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        title: const Text('End Session'),
+                        content: const Text(
+                          'Are you sure you want to end the current learning session?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _resetSession();
+                              _addSystemMessage(
+                                'Session ended. What topics would you like to study next?',
+                              );
+                            },
+                            child: const Text('End Session'),
+                          ),
+                        ],
+                      ),
+                );
+              },
+              child: const Text('End Session'),
+            ),
+        ],
+      ),
     );
   }
 
@@ -129,10 +508,10 @@ class _ChatScreenState extends State<ChatScreen> {
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _messages.length + (_isTyping ? 1 : 0),
+        itemCount: _messages.length + (_isLoading ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == _messages.length && _isTyping) {
-            return _buildTypingIndicator();
+          if (index == _messages.length && _isLoading) {
+            return _buildLoadingIndicator();
           }
           return _buildMessageBubble(_messages[index]);
         },
@@ -158,7 +537,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
               decoration: BoxDecoration(
-                color: isUser ? theme.colorScheme.primary : theme.cardColor,
+                color:
+                    message.isSystem
+                        ? theme.colorScheme.secondaryContainer
+                        : isUser
+                        ? theme.colorScheme.primary
+                        : theme.cardColor,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -181,7 +565,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     message.text,
                     style: TextStyle(
                       color:
-                          isUser
+                          message.isSystem
+                              ? theme.colorScheme.onSecondaryContainer
+                              : isUser
                               ? theme.colorScheme.onPrimary
                               : theme.textTheme.bodyLarge?.color,
                       fontSize: 16,
@@ -192,7 +578,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     _formatTimestamp(message.timestamp),
                     style: TextStyle(
-                      color: (isUser
+                      color: (message.isSystem
+                              ? theme.colorScheme.onSecondaryContainer
+                              : isUser
                               ? theme.colorScheme.onPrimary
                               : theme.textTheme.bodyLarge?.color)
                           ?.withValues(alpha: 0.7),
@@ -226,7 +614,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildTypingIndicator() {
+  Widget _buildLoadingIndicator() {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -247,11 +635,24 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildTypingDot(0),
-                const SizedBox(width: 4),
-                _buildTypingDot(1),
-                const SizedBox(width: 4),
-                _buildTypingDot(2),
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  _getLoadingText(),
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                    fontSize: 14,
+                  ),
+                ),
               ],
             ),
           ),
@@ -260,24 +661,18 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildTypingDot(int index) {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 600),
-      tween: Tween(begin: 0.4, end: 1.0),
-      builder: (context, value, child) {
-        return AnimatedContainer(
-          duration: Duration(milliseconds: 300 + (index * 150)),
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.color?.withValues(alpha: value),
-            shape: BoxShape.circle,
-          ),
-        );
-      },
-    );
+  String _getLoadingText() {
+    switch (_sessionState) {
+      case SessionState.collectingTopics:
+        return "Starting your session...";
+      case SessionState.active:
+        return "Processing your answer...";
+      case SessionState.completed:
+      case SessionState.error:
+        return "Thinking...";
+      default:
+        return "Loading...";
+    }
   }
 
   Widget _buildInputArea() {
@@ -288,49 +683,112 @@ class _ChatScreenState extends State<ChatScreen> {
         color: theme.cardColor,
         border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Ask me anything about learning and memory...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+      child: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(
+                  minHeight: 48, // Ensure minimum touch target
                 ),
-                filled: true,
-                fillColor: theme.scaffoldBackgroundColor,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+                child: TextField(
+                  controller: _messageController,
+                  enabled: !_isLoading,
+                  decoration: InputDecoration(
+                    hintText: _getInputHint(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: theme.scaffoldBackgroundColor,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14, // Increased for better touch target
+                    ),
+                    // Add focus border for better visual feedback
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(
+                        color: theme.colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  maxLines: 5, // Allow multi-line input
+                  minLines: 1,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) {
+                    if (!_isLoading) {
+                      _sendMessage();
+                    }
+                  },
+                  // Auto-focus on certain states for better UX
+                  autofocus: _sessionState == SessionState.collectingTopics,
+                  focusNode: _textFieldFocusNode,
                 ),
               ),
-              maxLines: null,
-              textCapitalization: TextCapitalization.sentences,
-              onSubmitted: (_) => _sendMessage(),
             ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: _sendMessage,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.send,
-                color: theme.colorScheme.onPrimary,
-                size: 24,
+            const SizedBox(width: 12),
+            // Use Material button for better touch handling and ripple effect
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isLoading ? null : _sendMessage,
+                borderRadius: BorderRadius.circular(
+                  28,
+                ), // Larger radius for better touch
+                child: Container(
+                  width: 56, // Increased from 48 for better touch target
+                  height: 56, // Increased from 48 for better touch target
+                  decoration: BoxDecoration(
+                    color:
+                        _isLoading
+                            ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                            : theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                    // Add shadow for better visual depth
+                    boxShadow:
+                        _isLoading
+                            ? null
+                            : [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                  ),
+                  child: Icon(
+                    Icons.send_rounded, // Rounded icon for better aesthetics
+                    color: theme.colorScheme.onPrimary,
+                    size: 24,
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  String _getInputHint() {
+    switch (_sessionState) {
+      case SessionState.initial:
+      case SessionState.collectingTopics:
+        return 'Enter topics to study (e.g., "Flutter, Dart")...';
+      case SessionState.active:
+        return 'Type your answer...';
+      case SessionState.completed:
+        return 'Ask for new session or review scores...';
+      case SessionState.error:
+        return 'Type "try again" or "restart"...';
+    }
   }
 
   String _formatTimestamp(DateTime timestamp) {
@@ -353,10 +811,12 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
+  final bool isSystem;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
+    this.isSystem = false,
   });
 }
