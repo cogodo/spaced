@@ -386,10 +386,16 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      // Dismiss keyboard when tapping outside text field
+      // Dismiss keyboard when tapping outside interactive elements
       onTap: () {
-        FocusScope.of(context).unfocus();
+        // Only unfocus if the tap isn't on the text field or button
+        final FocusScopeNode currentScope = FocusScope.of(context);
+        if (!currentScope.hasPrimaryFocus && currentScope.hasFocus) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
       },
+      // Make sure this doesn't interfere with child interactions
+      behavior: HitTestBehavior.translucent,
       child: Column(
         children: [
           // Session status bar
@@ -688,88 +694,81 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: 48, // Ensure minimum touch target
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  enabled: !_isLoading,
-                  decoration: InputDecoration(
-                    hintText: _getInputHint(),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
+              child: TextField(
+                controller: _messageController,
+                enabled: !_isLoading,
+                focusNode: _textFieldFocusNode,
+                decoration: InputDecoration(
+                  hintText: _getInputHint(),
+                  hintStyle: TextStyle(
+                    color: theme.textTheme.bodyMedium?.color?.withValues(
+                      alpha: 0.6,
                     ),
-                    filled: true,
-                    fillColor: theme.scaffoldBackgroundColor,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14, // Increased for better touch target
-                    ),
-                    // Add focus border for better visual feedback
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.primary,
-                        width: 2,
-                      ),
+                    fontSize: 16,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: theme.scaffoldBackgroundColor,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  // Add focus border for better visual feedback
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 2,
                     ),
                   ),
-                  maxLines: 5, // Allow multi-line input
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) {
-                    if (!_isLoading) {
-                      _sendMessage();
-                    }
-                  },
-                  // Auto-focus on certain states for better UX
-                  autofocus: _sessionState == SessionState.collectingTopics,
-                  focusNode: _textFieldFocusNode,
+                  // Ensure hint doesn't interfere with touch
+                  isDense: false,
                 ),
+                maxLines: 5,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) {
+                  if (!_isLoading) {
+                    _sendMessage();
+                  }
+                },
+                // Auto-focus on certain states for better UX
+                autofocus: _sessionState == SessionState.collectingTopics,
+                // Ensure text field captures all tap events
+                onTap: () {
+                  if (!_textFieldFocusNode.hasFocus) {
+                    _textFieldFocusNode.requestFocus();
+                  }
+                },
               ),
             ),
             const SizedBox(width: 12),
-            // Use Material button for better touch handling and ripple effect
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _isLoading ? null : _sendMessage,
-                borderRadius: BorderRadius.circular(
-                  28,
-                ), // Larger radius for better touch
-                child: Container(
-                  width: 56, // Increased from 48 for better touch target
-                  height: 56, // Increased from 48 for better touch target
-                  decoration: BoxDecoration(
-                    color:
-                        _isLoading
-                            ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                            : theme.colorScheme.primary,
-                    shape: BoxShape.circle,
-                    // Add shadow for better visual depth
-                    boxShadow:
-                        _isLoading
-                            ? null
-                            : [
-                              BoxShadow(
-                                color: theme.colorScheme.primary.withValues(
-                                  alpha: 0.3,
-                                ),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                  ),
-                  child: Icon(
-                    Icons.send_rounded, // Rounded icon for better aesthetics
-                    color: theme.colorScheme.onPrimary,
-                    size: 24,
-                  ),
+            // Use IconButton for better integration and accessibility
+            IconButton(
+              onPressed: _isLoading ? null : _sendMessage,
+              style: IconButton.styleFrom(
+                backgroundColor:
+                    _isLoading
+                        ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                        : theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+                disabledBackgroundColor: theme.colorScheme.primary.withValues(
+                  alpha: 0.5,
                 ),
+                disabledForegroundColor: theme.colorScheme.onPrimary.withValues(
+                  alpha: 0.7,
+                ),
+                fixedSize: const Size(56, 56), // Consistent size
+                shape: const CircleBorder(),
+                elevation: _isLoading ? 0 : 2,
+                shadowColor: theme.colorScheme.primary.withValues(alpha: 0.3),
               ),
+              icon: const Icon(Icons.send_rounded, size: 24),
+              tooltip: 'Send message',
             ),
           ],
         ),
