@@ -27,6 +27,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<AuthProvider>(context, listen: false).clearError();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -38,16 +49,32 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleEmailSignIn() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
-      await authProvider.signInWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+
+      try {
+        await authProvider.signInWithEmail(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        // Force a rebuild to trigger navigation
+        if (mounted) setState(() {});
+      } catch (e) {
+        // Error is handled by AuthProvider
+      }
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     final authProvider = context.read<AuthProvider>();
-    await authProvider.signInWithGoogle();
+
+    try {
+      await authProvider.signInWithGoogle();
+
+      // Force a rebuild to trigger navigation
+      if (mounted) setState(() {});
+    } catch (e) {
+      // Error is handled by AuthProvider
+    }
   }
 
   void _navigateToSignUp() {
