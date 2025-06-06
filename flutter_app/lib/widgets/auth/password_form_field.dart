@@ -32,7 +32,6 @@ class PasswordFormField extends StatefulWidget {
 }
 
 class _PasswordFormFieldState extends State<PasswordFormField> {
-  bool _isFocused = false;
   String _currentPassword = '';
 
   @override
@@ -40,13 +39,11 @@ class _PasswordFormFieldState extends State<PasswordFormField> {
     super.initState();
     _currentPassword = widget.controller.text;
     widget.controller.addListener(_onPasswordChanged);
-    widget.focusNode?.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onPasswordChanged);
-    widget.focusNode?.removeListener(_onFocusChanged);
     super.dispose();
   }
 
@@ -58,13 +55,7 @@ class _PasswordFormFieldState extends State<PasswordFormField> {
     }
   }
 
-  void _onFocusChanged() {
-    if (mounted) {
-      setState(() {
-        _isFocused = widget.focusNode?.hasFocus ?? false;
-      });
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -127,8 +118,8 @@ class _PasswordFormFieldState extends State<PasswordFormField> {
           validator: widget.validator ?? _defaultPasswordValidator,
         ),
 
-        // Show password requirements when focused or if showRequirements is true
-        if ((_isFocused || widget.showRequirements) &&
+        // Show password requirements only when explicitly enabled via showRequirements
+        if (widget.showRequirements &&
             widget.labelText.contains('Password') &&
             !widget.labelText.contains('Confirm'))
           _buildPasswordRequirements(context),

@@ -40,9 +40,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
 
     // Initialize API client
-    // TODO: Update this URL based on your environment
     _api = LangGraphApi(
-      baseUrl: 'http://localhost:8000', // Change for your setup
+      baseUrl: 'https://getspaced.app', // Change for your setup
     );
 
     // Add welcome message and prompt for topics

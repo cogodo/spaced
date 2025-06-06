@@ -70,6 +70,8 @@ class AuthProvider with ChangeNotifier {
         final bool isNowSignedIn = user != null;
 
         _user = user;
+
+        // Clear errors on auth state changes to prevent stale error messages
         _clearError();
 
         if (!_isInitialized) {
@@ -118,6 +120,7 @@ class AuthProvider with ChangeNotifier {
       // Force update the user state immediately after successful sign up
       _user = userCredential.user;
       _logger.info('Updated local user state after sign up');
+      notifyListeners(); // Immediately notify listeners for faster UI response
     });
   }
 
@@ -136,6 +139,7 @@ class AuthProvider with ChangeNotifier {
       // Force update the user state immediately after successful sign in
       _user = userCredential.user;
       _logger.info('Updated local user state after sign in');
+      notifyListeners(); // Immediately notify listeners for faster UI response
     });
   }
 
@@ -150,6 +154,7 @@ class AuthProvider with ChangeNotifier {
       // Force update the user state immediately after successful Google sign in
       _user = userCredential.user;
       _logger.info('Updated local user state after Google sign in');
+      notifyListeners(); // Immediately notify listeners for faster UI response
     });
   }
 
@@ -166,6 +171,8 @@ class AuthProvider with ChangeNotifier {
     await _performAuthOperation(() async {
       await _authService.signOut();
       _logger.info('User signed out successfully');
+      // Clear any existing errors after successful sign out
+      _clearError();
     });
   }
 

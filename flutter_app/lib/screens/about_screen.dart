@@ -11,6 +11,13 @@ class AboutScreen extends StatelessWidget {
     final contentWidth = isDesktop ? 800.0 : double.infinity;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('About'),
+        centerTitle: true,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

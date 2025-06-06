@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:spaced/models/schedule_manager.dart';
-import 'package:spaced/screens/landing_screen.dart';
 import 'package:spaced/screens/tab_navigation_screen.dart';
 import 'package:spaced/screens/auth/login_screen.dart';
 import 'package:spaced/providers/auth_provider.dart';
@@ -158,21 +157,12 @@ class MyApp extends StatelessWidget {
 
 /// Wrapper widget that determines whether to show landing page or authenticated app
 class AuthWrapper extends StatelessWidget {
-  static final _logger = getLogger('AuthWrapper');
-
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        _logger.info(
-          'AuthWrapper build - isInitialized: ${authProvider.isInitialized}, '
-          'isSignedIn: ${authProvider.isSignedIn}, '
-          'isLoading: ${authProvider.isLoading}, '
-          'user: ${authProvider.user?.email ?? 'null'}',
-        );
-
         // Show loading screen while auth provider is initializing
         if (!authProvider.isInitialized) {
           return const Scaffold(
@@ -182,15 +172,11 @@ class AuthWrapper extends StatelessWidget {
 
         // Show the main app if user is signed in
         if (authProvider.isSignedIn) {
-          _logger.info(
-            'Redirecting to main app for user: ${authProvider.user?.email}',
-          );
           return const AuthenticatedApp();
         }
 
-        // Show landing page if user is not signed in
-        _logger.info('Showing landing page - user not signed in');
-        return const LandingScreen();
+        // Show login screen if user is not signed in
+        return const LoginScreen();
       },
     );
   }
@@ -217,7 +203,14 @@ class AuthenticatedApp extends StatelessWidget {
         return FutureBuilder<ScheduleManager>(
           future: _createScheduleManager(context, user.uid),
           builder: (context, snapshot) {
+            _logger.info(
+              'FutureBuilder state: ${snapshot.connectionState}, hasError: ${snapshot.hasError}, hasData: ${snapshot.hasData}',
+            );
+
             if (snapshot.connectionState == ConnectionState.waiting) {
+              _logger.info(
+                'FutureBuilder: Still waiting for ScheduleManager...',
+              );
               return const Scaffold(
                 body: Center(
                   child: Column(
@@ -254,12 +247,36 @@ class AuthenticatedApp extends StatelessWidget {
 
             final scheduleManager = snapshot.data!;
             _logger.info(
-              'ScheduleManager created successfully for user: ${user.uid}',
+              'FutureBuilder: About to display TabNavigationScreen with ScheduleManager for user: ${user.uid}',
             );
 
             return ChangeNotifierProvider<ScheduleManager>.value(
               value: scheduleManager,
-              child: const TabNavigationScreen(),
+              child: Builder(
+                builder: (context) {
+                  _logger.info(
+                    'Provider Builder: About to render TabNavigationScreen',
+                  );
+
+                  // Test if Provider is working
+                  try {
+                    final testManager = Provider.of<ScheduleManager>(
+                      context,
+                      listen: false,
+                    );
+                    _logger.info(
+                      'Provider test successful: ${testManager.userId}',
+                    );
+                  } catch (e) {
+                    _logger.severe('Provider test failed: $e');
+                  }
+
+                  return const TabNavigationScreen();
+
+                  // Original TabNavigationScreen (temporarily commented):
+                  // return const TabNavigationScreen();
+                },
+              ),
             );
           },
         );

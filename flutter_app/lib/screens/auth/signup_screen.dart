@@ -29,6 +29,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _obscureConfirmPassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    // Clear any existing errors when entering the signup screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AuthProvider>(context, listen: false).clearError();
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -210,6 +219,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 focusNode: _passwordFocusNode,
                 obscureText: _obscurePassword,
                 validator: _validatePassword,
+                showRequirements: true,
                 onToggleObscure: () {
                   setState(() {
                     _obscurePassword = !_obscurePassword;

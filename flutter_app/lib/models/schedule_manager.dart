@@ -147,6 +147,9 @@ class ScheduleManager with ChangeNotifier {
   // Getter for all tasks (optional, maybe only expose today's tasks?)
   List<Task> get allTasks => _allTasks;
 
+  // Getter for storage interface (to check sync capabilities)
+  StorageInterface get storage => _storage;
+
   // --- Load User Data --- (Called internally)
   Future<void> _loadUserData() async {
     _logger.info("Loading data for user: $userId");

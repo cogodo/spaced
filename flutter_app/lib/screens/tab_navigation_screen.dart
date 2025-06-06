@@ -3,8 +3,7 @@ import 'package:spaced/screens/all_review_items_screen.dart';
 import 'home_screen.dart';
 import 'add_screen.dart';
 import 'chat_screen.dart';
-import 'settings_screen.dart';
-import 'about_screen.dart';
+import 'user_profile_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -21,6 +20,11 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
   bool _showConfirmation = false;
   String _confirmationText = "Review Added!";
   Timer? _confirmationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   // Method to show a confirmation message
   void _showConfirmationMessage(String text) {
@@ -82,32 +86,11 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         allTasks: scheduleManager.allTasks,
         onDeleteTask: scheduleManager.removeTask,
       ),
-      SettingsScreen(),
-      AboutScreen(),
+      UserProfileScreen(),
       ChatScreen(),
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _currentIndex == 0
-              ? 'Today\'s Reviews'
-              : _currentIndex == 1
-              ? 'Add New Item'
-              : _currentIndex == 2
-              ? 'All Items'
-              : _currentIndex == 3
-              ? 'Settings'
-              : _currentIndex == 4
-              ? 'About'
-              : 'Chat',
-        ),
-        centerTitle: true,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        // Use primary for text/icons to match theme
-        foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
-        elevation: 0, // No elevation to blend with scaffold
-      ),
       body: Row(
         children: [
           // For desktop layouts, show the navigation rail
@@ -135,12 +118,8 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                   label: Text('All Items'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.settings),
-                  label: Text('Settings'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.info_outline),
-                  label: Text('About'),
+                  icon: Icon(Icons.person),
+                  label: Text('Profile'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.chat),
@@ -230,12 +209,8 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     label: 'All Items',
                   ),
                   BottomNavigationBarItem(
-                    icon: Icon(Icons.settings),
-                    label: 'Settings',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.info_outline),
-                    label: 'About',
+                    icon: Icon(Icons.person),
+                    label: 'Profile',
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.chat),

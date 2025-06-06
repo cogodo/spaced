@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/screens/tab_navigation_screen.dart';
 import 'package:spaced/test_firebase.dart';
 import 'package:spaced/themes/theme_data.dart';
 import 'package:provider/provider.dart';
 import 'package:spaced/main.dart';
 import 'package:spaced/screens/auth/login_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/logger_service.dart';
 
 class LandingScreen extends StatelessWidget {
+  static final _logger = getLogger('LandingScreen');
+
   const LandingScreen({super.key});
 
   @override
@@ -38,6 +41,9 @@ class LandingScreen extends StatelessWidget {
 
                 // Features Section
                 _buildFeaturesSection(context, isDesktop, isMobile),
+
+                // About Section
+                _buildAboutSection(context, isDesktop),
 
                 // Call to Action Section
                 _buildCallToActionSection(context, isDesktop),
@@ -127,7 +133,7 @@ class LandingScreen extends StatelessWidget {
               OutlinedButton(
                 onPressed: () {
                   // Navigate to login screen
-                  Navigator.of(context).push(
+                  Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
                       builder: (context) => const LoginScreen(),
                     ),
@@ -343,9 +349,9 @@ class LandingScreen extends StatelessWidget {
       ),
       child: ElevatedButton(
         onPressed: () {
-          Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (context) => const LoginScreen()));
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: Theme.of(context).colorScheme.primary,
@@ -524,6 +530,186 @@ class LandingScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildAboutSection(BuildContext context, bool isDesktop) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 80 : 20,
+        vertical: 80,
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Powered by Science',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: 16),
+
+          Text(
+            'Built on the Free Spaced Repetition Scheduler (FSRS)',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: 32),
+
+          Text(
+            'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
+              height: 1.6,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: 40),
+
+          // Key benefits grid
+          if (isDesktop)
+            Row(
+              children: [
+                Expanded(
+                  child: _buildFSRSBenefit(
+                    context,
+                    Icons.science,
+                    'Research-Backed',
+                    'Validated by peer-reviewed studies and real-world data from millions of reviews',
+                  ),
+                ),
+                const SizedBox(width: 30),
+                Expanded(
+                  child: _buildFSRSBenefit(
+                    context,
+                    Icons.psychology,
+                    'Adaptive Learning',
+                    'Personalizes to your memory patterns and adjusts difficulty dynamically',
+                  ),
+                ),
+                const SizedBox(width: 30),
+                Expanded(
+                  child: _buildFSRSBenefit(
+                    context,
+                    Icons.trending_up,
+                    'Proven Results',
+                    'Users report 40% better retention compared to traditional flashcard methods',
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                _buildFSRSBenefit(
+                  context,
+                  Icons.science,
+                  'Research-Backed',
+                  'Validated by peer-reviewed studies and real-world data from millions of reviews',
+                ),
+                const SizedBox(height: 20),
+                _buildFSRSBenefit(
+                  context,
+                  Icons.psychology,
+                  'Adaptive Learning',
+                  'Personalizes to your memory patterns and adjusts difficulty dynamically',
+                ),
+                const SizedBox(height: 20),
+                _buildFSRSBenefit(
+                  context,
+                  Icons.trending_up,
+                  'Proven Results',
+                  'Users report 40% better retention compared to traditional flashcard methods',
+                ),
+              ],
+            ),
+
+          const SizedBox(height: 40),
+
+          // Learn more button
+          OutlinedButton.icon(
+            onPressed:
+                () => _launchURL(
+                  'https://github.com/open-spaced-repetition/fsrs4anki/wiki',
+                ),
+            icon: const Icon(Icons.launch),
+            label: const Text('Learn More About FSRS'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFSRSBenefit(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String description,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to launch URLs
+  void _launchURL(String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $url';
+      }
+    } catch (e) {
+      // Log error - URL launching failed
+      _logger.severe('Failed to launch URL: $e');
+    }
+  }
+
   Widget _buildCallToActionSection(BuildContext context, bool isDesktop) {
     return Container(
       padding: EdgeInsets.symmetric(
@@ -577,7 +763,7 @@ class LandingScreen extends StatelessWidget {
 
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).push(
+                Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
               },
@@ -617,7 +803,7 @@ class LandingScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           Text(
-            '© 2024 Spaced. Built with ❤️ for learners everywhere.',
+            '© 2025 Spaced. Built with ❤️ for learners everywhere.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(
                 context,
