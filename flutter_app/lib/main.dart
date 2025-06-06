@@ -7,17 +7,16 @@ import 'package:spaced/providers/auth_provider.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
 import 'services/local_storage_service.dart';
+import 'services/firestore_service.dart';
 import 'services/logger_service.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'dart:async';
 
 // Define a global key for the root ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
-
-// Use a fixed user ID for local storage - no auth needed
-const String LOCAL_USER_ID = "local_user";
 
 // Logger for main.dart
 final _logger = getLogger('Main');
@@ -48,20 +47,17 @@ void main() async {
     _logger.info('Running in development mode with debug logs enabled');
   }
 
-  // Initialize local storage service
+  // Initialize local storage service for fallback
   final localStorageService = LocalStorageService();
   _logger.info('LocalStorageService initialized');
+
+  // Initialize Firestore service for authenticated users
+  final firestoreService = FirestoreService();
+  _logger.info('FirestoreService initialized');
 
   // Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();
   _logger.info('SharedPreferences initialized');
-
-  // Create a schedule manager directly with the fixed user ID
-  final scheduleManager = ScheduleManager(
-    userId: LOCAL_USER_ID,
-    storage: localStorageService,
-  );
-  _logger.info('ScheduleManager initialized with user ID: $LOCAL_USER_ID');
 
   runApp(
     MultiProvider(
@@ -69,14 +65,14 @@ void main() async {
         // Provide LocalStorageService
         Provider<LocalStorageService>.value(value: localStorageService),
 
+        // Provide FirestoreService
+        Provider<FirestoreService>.value(value: firestoreService),
+
         // Provide SharedPreferences instance
         Provider<SharedPreferences>.value(value: prefs),
 
         // Authentication Provider
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-
-        // Directly provide fully initialized ScheduleManager
-        ChangeNotifierProvider<ScheduleManager>.value(value: scheduleManager),
 
         // Theme Notifier now depends on SharedPreferences
         ChangeNotifierProvider(create: (_) => ThemeNotifier(prefs)),
@@ -189,7 +185,7 @@ class AuthWrapper extends StatelessWidget {
           _logger.info(
             'Redirecting to main app for user: ${authProvider.user?.email}',
           );
-          return const TabNavigationScreen();
+          return const AuthenticatedApp();
         }
 
         // Show landing page if user is not signed in
@@ -197,5 +193,145 @@ class AuthWrapper extends StatelessWidget {
         return const LandingScreen();
       },
     );
+  }
+}
+
+/// Main app for authenticated users with Firebase integration
+class AuthenticatedApp extends StatelessWidget {
+  static final _logger = getLogger('AuthenticatedApp');
+
+  const AuthenticatedApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final user = authProvider.user;
+        if (user == null) {
+          _logger.warning('AuthenticatedApp rendered with null user');
+          return const Scaffold(
+            body: Center(child: Text('Authentication error')),
+          );
+        }
+
+        return FutureBuilder<ScheduleManager>(
+          future: _createScheduleManager(context, user.uid),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Setting up your workspace...'),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              _logger.severe(
+                'Error creating ScheduleManager: ${snapshot.error}',
+              );
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      SizedBox(height: 16),
+                      Text('Error setting up workspace'),
+                      SizedBox(height: 8),
+                      Text('${snapshot.error}', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            final scheduleManager = snapshot.data!;
+            _logger.info(
+              'ScheduleManager created successfully for user: ${user.uid}',
+            );
+
+            return ChangeNotifierProvider<ScheduleManager>.value(
+              value: scheduleManager,
+              child: const TabNavigationScreen(),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Creates a ScheduleManager with Firestore, falls back to LocalStorage if needed
+  Future<ScheduleManager> _createScheduleManager(
+    BuildContext context,
+    String userId,
+  ) async {
+    _logger.info('Creating ScheduleManager for user: $userId');
+
+    final firestoreService = Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    );
+    final localStorageService = Provider.of<LocalStorageService>(
+      context,
+      listen: false,
+    );
+
+    try {
+      // Try to use Firestore first
+      _logger.info('Testing Firestore connectivity...');
+      await firestoreService.getUserDocument(userId).get();
+
+      _logger.info('Firestore available - using FirestoreService');
+      return ScheduleManager(userId: userId, storage: firestoreService);
+    } catch (e) {
+      _logger.warning(
+        'Firestore not available, falling back to LocalStorage: $e',
+      );
+
+      // Create ScheduleManager with local storage
+      final scheduleManager = ScheduleManager(
+        userId: userId,
+        storage: localStorageService,
+      );
+
+      // Set up background sync when Firestore becomes available
+      _setupBackgroundSync(scheduleManager, firestoreService, userId);
+
+      return scheduleManager;
+    }
+  }
+
+  /// Set up background sync to retry Firestore connection
+  void _setupBackgroundSync(
+    ScheduleManager scheduleManager,
+    FirestoreService firestoreService,
+    String userId,
+  ) {
+    _logger.info('Setting up background sync for user: $userId');
+
+    // Retry Firestore connection every 30 seconds
+    Timer.periodic(const Duration(seconds: 30), (timer) async {
+      try {
+        // Test if Firestore is now available
+        await firestoreService.getUserDocument(userId).get();
+
+        _logger.info('Firestore connection restored! Enabling sync...');
+
+        // Enable cloud storage for syncing
+        scheduleManager.setCloudStorage(firestoreService);
+
+        // Cancel the timer since we're now connected
+        timer.cancel();
+      } catch (e) {
+        _logger.info('Firestore still unavailable, will retry...');
+      }
+    });
   }
 }
