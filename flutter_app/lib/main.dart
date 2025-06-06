@@ -171,15 +171,29 @@ class AuthWrapper extends StatelessWidget {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         _logger.info(
-          'Auth state changed: isSignedIn=${authProvider.isSignedIn}',
+          'AuthWrapper build - isInitialized: ${authProvider.isInitialized}, '
+          'isSignedIn: ${authProvider.isSignedIn}, '
+          'isLoading: ${authProvider.isLoading}, '
+          'user: ${authProvider.user?.email ?? 'null'}',
         );
+
+        // Show loading screen while auth provider is initializing
+        if (!authProvider.isInitialized) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
         // Show the main app if user is signed in
         if (authProvider.isSignedIn) {
+          _logger.info(
+            'Redirecting to main app for user: ${authProvider.user?.email}',
+          );
           return const TabNavigationScreen();
         }
 
         // Show landing page if user is not signed in
+        _logger.info('Showing landing page - user not signed in');
         return const LandingScreen();
       },
     );
