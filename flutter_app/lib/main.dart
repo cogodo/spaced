@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:spaced/models/schedule_manager.dart';
+import 'package:spaced/screens/landing_screen.dart';
 import 'package:spaced/screens/tab_navigation_screen.dart';
+import 'package:spaced/screens/auth/login_screen.dart';
+import 'package:spaced/providers/auth_provider.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
 import 'services/local_storage_service.dart';
 import 'services/logger_service.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 // Define a global key for the root ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
@@ -23,6 +28,9 @@ const String THEME_PREF_KEY = 'selectedThemeKey';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Firebase
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   // Performance optimization: Set up error handling early
   FlutterError.onError = (FlutterErrorDetails details) {
     if (!bool.fromEnvironment('dart.vm.product')) {
@@ -33,10 +41,10 @@ void main() async {
   // Initialize logging service based on environment
   const bool isProduction = bool.fromEnvironment('dart.vm.product');
   if (isProduction) {
-    loggerService.enableProductionLogs();
+    // loggerService.enableProductionLogs();
     _logger.info('Running in production mode');
   } else {
-    loggerService.enableDebugLogs();
+    // loggerService.enableDebugLogs();
     _logger.info('Running in development mode with debug logs enabled');
   }
 
@@ -63,6 +71,9 @@ void main() async {
 
         // Provide SharedPreferences instance
         Provider<SharedPreferences>.value(value: prefs),
+
+        // Authentication Provider
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
 
         // Directly provide fully initialized ScheduleManager
         ChangeNotifierProvider<ScheduleManager>.value(value: scheduleManager),
@@ -138,13 +149,39 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
-    _logger.fine('Building app with theme: ${themeNotifier.currentThemeKey}');
+    _logger.info('Building app with theme: ${themeNotifier.currentThemeKey}');
 
     return MaterialApp(
       title: 'Spaced',
       theme: themeNotifier.currentTheme,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      home: const TabNavigationScreen(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+/// Wrapper widget that determines whether to show landing page or authenticated app
+class AuthWrapper extends StatelessWidget {
+  static final _logger = getLogger('AuthWrapper');
+
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        _logger.info(
+          'Auth state changed: isSignedIn=${authProvider.isSignedIn}',
+        );
+
+        // Show the main app if user is signed in
+        if (authProvider.isSignedIn) {
+          return const TabNavigationScreen();
+        }
+
+        // Show landing page if user is not signed in
+        return const LandingScreen();
+      },
     );
   }
 }
