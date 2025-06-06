@@ -10,7 +10,14 @@ import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
 class SignUpScreen extends StatefulWidget {
-  const SignUpScreen({super.key});
+  final VoidCallback onNavigateToLogin;
+  final VoidCallback onBackToLanding;
+
+  const SignUpScreen({
+    super.key,
+    required this.onNavigateToLogin,
+    required this.onBackToLanding,
+  });
 
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();
@@ -64,9 +71,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   void _navigateToLogin() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
+    widget.onNavigateToLogin();
   }
 
   String? _validateConfirmPassword(String? value) {

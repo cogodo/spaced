@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:spaced/screens/tab_navigation_screen.dart';
 import 'package:spaced/screens/auth/login_screen.dart';
+import 'package:spaced/screens/landing_screen.dart';
+import 'package:spaced/screens/auth/signup_screen.dart';
 import 'package:spaced/providers/auth_provider.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
@@ -156,13 +158,71 @@ class MyApp extends StatelessWidget {
 }
 
 /// Wrapper widget that determines whether to show landing page or authenticated app
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  static final _logger = getLogger('AuthWrapper');
+  static int buildCount = 0;
+
+  bool showLoginScreen = false;
+  bool showSignUpScreen = false;
+  bool showLandingWhileSignedIn =
+      false; // New state for landing ↔ app navigation
+
+  void _navigateToLogin() {
+    setState(() {
+      showLoginScreen = true;
+      showSignUpScreen = false;
+      showLandingWhileSignedIn = false;
+    });
+  }
+
+  void _navigateToSignUp() {
+    setState(() {
+      showLoginScreen = false;
+      showSignUpScreen = true;
+      showLandingWhileSignedIn = false;
+    });
+  }
+
+  void _navigateToLanding() {
+    setState(() {
+      showLoginScreen = false;
+      showSignUpScreen = false;
+      showLandingWhileSignedIn = false;
+    });
+  }
+
+  void _navigateToLandingWhileSignedIn() {
+    setState(() {
+      showLoginScreen = false;
+      showSignUpScreen = false;
+      showLandingWhileSignedIn = true;
+    });
+  }
+
+  void _navigateBackToApp() {
+    setState(() {
+      showLoginScreen = false;
+      showSignUpScreen = false;
+      showLandingWhileSignedIn = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
+        buildCount++;
+        _logger.info(
+          '🔍 AuthWrapper Consumer BUILD #$buildCount - isSignedIn: ${authProvider.isSignedIn}',
+        );
+
         // Show loading screen while auth provider is initializing
         if (!authProvider.isInitialized) {
           return const Scaffold(
@@ -172,11 +232,41 @@ class AuthWrapper extends StatelessWidget {
 
         // Show the main app if user is signed in
         if (authProvider.isSignedIn) {
-          return const AuthenticatedApp();
+          // Check if user wants to see landing page while signed in
+          if (showLandingWhileSignedIn) {
+            _logger.info('📱 Showing LandingScreen (while signed in)');
+            return LandingScreen(
+              onNavigateToLogin:
+                  _navigateBackToApp, // "Back to App" functionality
+            );
+          }
+
+          _logger.info('✅ User IS SIGNED IN - showing AuthenticatedApp');
+          return AuthenticatedApp(
+            onNavigateToLanding: _navigateToLandingWhileSignedIn,
+          );
         }
 
-        // Show login screen if user is not signed in
-        return const LoginScreen();
+        // State-based rendering - NO NAVIGATION!
+        if (showSignUpScreen) {
+          _logger.info('📱 Showing SignUpScreen');
+          return SignUpScreen(
+            onNavigateToLogin: _navigateToLogin,
+            onBackToLanding: _navigateToLanding,
+          );
+        }
+
+        if (showLoginScreen) {
+          _logger.info('📱 Showing LoginScreen');
+          return LoginScreen(
+            onNavigateToSignUp: _navigateToSignUp,
+            onBackToLanding: _navigateToLanding,
+          );
+        }
+
+        // Show landing page by default
+        _logger.info('📱 Showing LandingScreen');
+        return LandingScreen(onNavigateToLogin: _navigateToLogin);
       },
     );
   }
@@ -185,8 +275,9 @@ class AuthWrapper extends StatelessWidget {
 /// Main app for authenticated users with Firebase integration
 class AuthenticatedApp extends StatelessWidget {
   static final _logger = getLogger('AuthenticatedApp');
+  final VoidCallback onNavigateToLanding;
 
-  const AuthenticatedApp({super.key});
+  const AuthenticatedApp({super.key, required this.onNavigateToLanding});
 
   @override
   Widget build(BuildContext context) {
@@ -271,10 +362,9 @@ class AuthenticatedApp extends StatelessWidget {
                     _logger.severe('Provider test failed: $e');
                   }
 
-                  return const TabNavigationScreen();
-
-                  // Original TabNavigationScreen (temporarily commented):
-                  // return const TabNavigationScreen();
+                  return TabNavigationScreen(
+                    onNavigateToLanding: onNavigateToLanding,
+                  );
                 },
               ),
             );

@@ -9,7 +9,9 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 
 class TabNavigationScreen extends StatefulWidget {
-  const TabNavigationScreen({super.key});
+  final VoidCallback onNavigateToLanding;
+
+  const TabNavigationScreen({super.key, required this.onNavigateToLanding});
 
   @override
   State<TabNavigationScreen> createState() => _TabNavigationScreenState();
@@ -91,6 +93,30 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
     ];
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: widget.onNavigateToLanding,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.psychology,
+                color: Theme.of(context).colorScheme.primary,
+                size: 32,
+              ),
+            ),
+          ),
+        ),
+        automaticallyImplyLeading: false,
+      ),
       body: Row(
         children: [
           // For desktop layouts, show the navigation rail
