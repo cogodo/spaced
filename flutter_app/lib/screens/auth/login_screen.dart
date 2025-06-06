@@ -11,7 +11,14 @@ import 'forgot_password_screen.dart';
 
 /// Login screen with email/password and Google OAuth options
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback onNavigateToSignUp;
+  final VoidCallback onBackToLanding;
+
+  const LoginScreen({
+    super.key,
+    required this.onNavigateToSignUp,
+    required this.onBackToLanding,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -78,9 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateToSignUp() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const SignUpScreen()),
-    );
+    widget.onNavigateToSignUp();
   }
 
   void _navigateToForgotPassword() {

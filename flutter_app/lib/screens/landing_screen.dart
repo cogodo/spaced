@@ -6,11 +6,13 @@ import 'package:spaced/main.dart';
 import 'package:spaced/screens/auth/login_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/logger_service.dart';
+import '../providers/auth_provider.dart';
 
 class LandingScreen extends StatelessWidget {
   static final _logger = getLogger('LandingScreen');
+  final VoidCallback onNavigateToLogin;
 
-  const LandingScreen({super.key});
+  const LandingScreen({super.key, required this.onNavigateToLogin});
 
   @override
   Widget build(BuildContext context) {
@@ -59,92 +61,93 @@ class LandingScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, bool isDesktop) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isDesktop ? 80 : 20,
-        vertical: 20,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Logo/Brand
-          Row(
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isDesktop ? 80 : 20,
+            vertical: 20,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                Icons.psychology,
-                size: 32,
-                color: Theme.of(context).colorScheme.primary,
+              // Logo/Brand
+              Row(
+                children: [
+                  Icon(
+                    Icons.psychology,
+                    size: 32,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Spaced',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                'Spaced',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+
+              // Header buttons
+              Row(
+                children: [
+                  // Theme Test Button (for testing Phase 2)
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.palette),
+                    tooltip: 'Test Themes',
+                    onSelected: (String themeKey) {
+                      Provider.of<ThemeNotifier>(
+                        context,
+                        listen: false,
+                      ).setTheme(themeKey);
+                    },
+                    itemBuilder: (BuildContext context) {
+                      return appThemes.keys.map((String themeKey) {
+                        return PopupMenuItem<String>(
+                          value: themeKey,
+                          child: Text('$themeKey Theme'),
+                        );
+                      }).toList();
+                    },
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Firebase Test Button (for testing Phase 1)
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const FirebaseTestScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.bug_report, size: 16),
+                    label: const Text('Test Firebase'),
+                    style: TextButton.styleFrom(
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  // Dynamic button based on auth status
+                  OutlinedButton(
+                    onPressed: onNavigateToLogin,
+                    child: Text(
+                      authProvider.isSignedIn
+                          ? 'Back to App'
+                          : 'Login / Sign Up',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-
-          // Header buttons
-          Row(
-            children: [
-              // Theme Test Button (for testing Phase 2)
-              PopupMenuButton<String>(
-                icon: Icon(Icons.palette),
-                tooltip: 'Test Themes',
-                onSelected: (String themeKey) {
-                  Provider.of<ThemeNotifier>(
-                    context,
-                    listen: false,
-                  ).setTheme(themeKey);
-                },
-                itemBuilder: (BuildContext context) {
-                  return appThemes.keys.map((String themeKey) {
-                    return PopupMenuItem<String>(
-                      value: themeKey,
-                      child: Text('$themeKey Theme'),
-                    );
-                  }).toList();
-                },
-              ),
-
-              const SizedBox(width: 8),
-
-              // Firebase Test Button (for testing Phase 1)
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const FirebaseTestScreen(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.bug_report, size: 16),
-                label: const Text('Test Firebase'),
-                style: TextButton.styleFrom(
-                  textStyle: const TextStyle(fontSize: 12),
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              // Login button placeholder (for future auth implementation)
-              OutlinedButton(
-                onPressed: () {
-                  // Navigate to login screen
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                },
-                child: const Text('Login / Sign Up'),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -336,45 +339,52 @@ class LandingScreen extends StatelessWidget {
   }
 
   Widget _buildGetSpacedButton(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-          textStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-          shape: RoundedRectangleBorder(
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final buttonText =
+            authProvider.isSignedIn ? 'BACK TO APP' : 'GET SPACED';
+        final iconData =
+            authProvider.isSignedIn ? Icons.arrow_back : Icons.arrow_forward;
+
+        return Container(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-          elevation: 0,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('GET SPACED'),
-            const SizedBox(width: 12),
-            Icon(Icons.arrow_forward, size: 24),
-          ],
-        ),
-      ),
+          child: ElevatedButton(
+            onPressed: onNavigateToLogin,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              textStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+              elevation: 0,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(buttonText),
+                const SizedBox(width: 12),
+                Icon(iconData, size: 24),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -762,11 +772,7 @@ class LandingScreen extends StatelessWidget {
             const SizedBox(height: 40),
 
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              },
+              onPressed: onNavigateToLogin,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).colorScheme.primary,
@@ -783,7 +789,15 @@ class LandingScreen extends StatelessWidget {
                 ),
                 elevation: 0,
               ),
-              child: const Text('START LEARNING TODAY'),
+              child: Consumer<AuthProvider>(
+                builder: (context, authProvider, child) {
+                  return Text(
+                    authProvider.isSignedIn
+                        ? 'BACK TO APP'
+                        : 'START LEARNING TODAY',
+                  );
+                },
+              ),
             ),
           ],
         ),
