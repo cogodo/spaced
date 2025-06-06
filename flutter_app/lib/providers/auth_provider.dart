@@ -16,6 +16,7 @@ class AuthProvider with ChangeNotifier {
   User? _user;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isInitialized = false;
 
   /// Current authenticated user
   User? get user => _user;
@@ -28,6 +29,9 @@ class AuthProvider with ChangeNotifier {
 
   /// Current error message, if any
   String? get errorMessage => _errorMessage;
+
+  /// Whether the auth provider has been initialized
+  bool get isInitialized => _isInitialized;
 
   /// User display name (fallback to email if no display name)
   String get displayName {
@@ -49,18 +53,54 @@ class AuthProvider with ChangeNotifier {
 
   /// Initialize authentication state listener
   void _initializeAuthState() {
+    _logger.info('Initializing auth state listener');
+
+    // Get the current user immediately
+    _user = _authService.currentUser;
+    _logger.info('Initial user state: ${_user?.uid ?? 'null'}');
+
+    // Set up the stream listener
     _authStateSubscription = _authService.authStateChanges.listen(
       (User? user) {
-        _logger.info('Auth state changed: ${user?.uid ?? 'null'}');
+        _logger.info(
+          'Auth state changed: ${user?.uid ?? 'null'} (email: ${user?.email ?? 'null'})',
+        );
+
+        final bool wasSignedIn = _user != null;
+        final bool isNowSignedIn = user != null;
+
         _user = user;
         _clearError();
+
+        if (!_isInitialized) {
+          _isInitialized = true;
+          _logger.info('Auth provider initialized');
+        }
+
+        // Log state transition for debugging
+        if (wasSignedIn != isNowSignedIn) {
+          _logger.info(
+            'Auth state transition: wasSignedIn=$wasSignedIn -> isNowSignedIn=$isNowSignedIn',
+          );
+        }
+
         notifyListeners();
       },
       onError: (error) {
         _logger.severe('Auth state stream error: $error');
         _setError('Authentication state error');
+        if (!_isInitialized) {
+          _isInitialized = true;
+        }
+        notifyListeners();
       },
     );
+
+    // If we already have a user, mark as initialized
+    if (_user != null) {
+      _isInitialized = true;
+      notifyListeners();
+    }
   }
 
   /// Sign up with email and password
@@ -69,8 +109,15 @@ class AuthProvider with ChangeNotifier {
     required String password,
   }) async {
     await _performAuthOperation(() async {
-      await _authService.signUpWithEmail(email: email, password: password);
-      _logger.info('User signed up successfully');
+      final userCredential = await _authService.signUpWithEmail(
+        email: email,
+        password: password,
+      );
+      _logger.info('User signed up successfully: ${userCredential.user?.uid}');
+
+      // Force update the user state immediately after successful sign up
+      _user = userCredential.user;
+      _logger.info('Updated local user state after sign up');
     });
   }
 
@@ -80,16 +127,29 @@ class AuthProvider with ChangeNotifier {
     required String password,
   }) async {
     await _performAuthOperation(() async {
-      await _authService.signInWithEmail(email: email, password: password);
-      _logger.info('User signed in successfully');
+      final userCredential = await _authService.signInWithEmail(
+        email: email,
+        password: password,
+      );
+      _logger.info('User signed in successfully: ${userCredential.user?.uid}');
+
+      // Force update the user state immediately after successful sign in
+      _user = userCredential.user;
+      _logger.info('Updated local user state after sign in');
     });
   }
 
   /// Sign in with Google OAuth
   Future<void> signInWithGoogle() async {
     await _performAuthOperation(() async {
-      await _authService.signInWithGoogle();
-      _logger.info('User signed in with Google successfully');
+      final userCredential = await _authService.signInWithGoogle();
+      _logger.info(
+        'User signed in with Google successfully: ${userCredential.user?.uid}',
+      );
+
+      // Force update the user state immediately after successful Google sign in
+      _user = userCredential.user;
+      _logger.info('Updated local user state after Google sign in');
     });
   }
 
