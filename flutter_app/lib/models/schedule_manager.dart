@@ -4,7 +4,7 @@ import 'package:spaced/models/task_holder.dart'; // Assuming Task is here
 import '../services/logger_service.dart'; // Import our logger service
 // Removed algorithm import as SM-2 logic is now in Task
 // For max()
-import '../services/local_storage_service.dart'; // Import local storage instead of Firestore
+import '../services/storage_interface.dart'; // Import storage interface
 
 // Make ScheduleManager a ChangeNotifier to notify listeners of updates
 class ScheduleManager with ChangeNotifier {
@@ -12,17 +12,21 @@ class ScheduleManager with ChangeNotifier {
   final _logger = getLogger('ScheduleManager');
 
   final String userId; // Each instance is tied to a user
-  final LocalStorageService _storage; // Local storage instead of Firestore
+  final StorageInterface _storage; // Abstract storage interface
 
   List<Task> _allTasks = []; // Changed from List<List<Task>> _schedule
   int maxRepetitions = 10; // Default value
 
-  // Local Storage Paths references
-  late final LocalDocumentReference _userDocRef;
-  late final LocalCollectionReference _tasksCollectionRef;
+  // Storage references
+  late final StorageDocumentReference _userDocRef;
+  late final StorageCollectionReference _tasksCollectionRef;
 
-  // Constructor now requires UID and LocalStorageService instance
-  ScheduleManager({required this.userId, required LocalStorageService storage})
+  // Sync management
+  StorageInterface? _cloudStorage; // Reference to Firestore for syncing
+  bool _isSyncing = false;
+
+  // Constructor now requires UID and StorageInterface instance
+  ScheduleManager({required this.userId, required StorageInterface storage})
     : _storage = storage {
     _logger.info("Constructor called with userId: $userId");
     if (userId.isEmpty) {
@@ -33,6 +37,111 @@ class ScheduleManager with ChangeNotifier {
     _logger.info("Initialized for user: $userId");
     // Don't block constructor with async call
     Future.microtask(() => _loadUserData());
+  }
+
+  /// Set cloud storage for syncing (call this when Firestore becomes available)
+  void setCloudStorage(StorageInterface cloudStorage) {
+    _cloudStorage = cloudStorage;
+    _logger.info('Cloud storage set, triggering sync...');
+    _attemptSync();
+  }
+
+  /// Check if there are pending sync operations
+  Future<bool> hasPendingSync() async {
+    if (_storage.supportsSync) return false; // Already synced
+    final pending = await _storage.getPendingSyncOperations(userId);
+    return pending.isNotEmpty;
+  }
+
+  /// Manually trigger sync (useful for retry buttons or connectivity restored)
+  Future<void> triggerSync() async {
+    if (_cloudStorage != null && !_isSyncing) {
+      await _attemptSync();
+    }
+  }
+
+  /// Attempt to sync pending operations to cloud storage
+  Future<void> _attemptSync() async {
+    if (_isSyncing || _cloudStorage == null || _storage.supportsSync) return;
+
+    _isSyncing = true;
+    _logger.info('Starting sync process...');
+
+    try {
+      final pendingOps = await _storage.getPendingSyncOperations(userId);
+      _logger.info('Found ${pendingOps.length} pending sync operations');
+
+      for (final operation in pendingOps) {
+        await _syncOperation(operation);
+      }
+
+      _logger.info('Sync completed successfully');
+    } catch (e, s) {
+      _logger.severe('Sync failed: $e', e, s);
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  /// Sync a single operation to cloud storage
+  Future<void> _syncOperation(SyncOperation operation) async {
+    if (_cloudStorage == null) return;
+
+    try {
+      final cloudUserDoc = _cloudStorage!.getUserDocument(userId);
+      final cloudTasksCollection = _cloudStorage!.getUserTasksCollection(
+        userId,
+      );
+
+      switch (operation.type) {
+        case SyncOperationType.create:
+        case SyncOperationType.update:
+          if (operation.collection == 'users') {
+            await cloudUserDoc.set(
+              operation.data!,
+              options: UniversalSetOptions.mergeOption,
+            );
+          } else if (operation.collection == 'tasks') {
+            await cloudTasksCollection
+                .doc(operation.documentId)
+                .set(operation.data!);
+          }
+          break;
+        case SyncOperationType.delete:
+          if (operation.collection == 'tasks') {
+            await cloudTasksCollection.doc(operation.documentId).delete();
+          }
+          break;
+      }
+
+      // Mark as synced
+      await _storage.markAsSynced(userId, operation.id);
+      _logger.info('Synced operation: ${operation.id}');
+    } catch (e) {
+      _logger.warning('Failed to sync operation ${operation.id}: $e');
+      rethrow; // Re-throw to stop sync process on error
+    }
+  }
+
+  /// Add pending sync operation (for local storage)
+  Future<void> _addPendingSync(
+    SyncOperationType type,
+    String collection,
+    String documentId, [
+    Map<String, dynamic>? data,
+  ]) async {
+    if (_storage.supportsSync) return; // No need to track for Firestore
+
+    final operation = SyncOperation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: type,
+      collection: collection,
+      documentId: documentId,
+      data: data,
+      timestamp: DateTime.now(),
+    );
+
+    await _storage.addPendingSyncOperation(userId, operation);
   }
 
   // Getter for all tasks (optional, maybe only expose today's tasks?)
@@ -88,7 +197,7 @@ class ScheduleManager with ChangeNotifier {
       await _userDocRef.set({
         'maxRepetitions': maxRepetitions,
         // Add other settings like theme preference, pro status etc.
-      }, options: LocalSetOptions(merge: true));
+      }, options: UniversalSetOptions.mergeOption);
       _logger.info("Settings saved.");
     } catch (e, s) {
       _logger.severe("Error saving user settings", e, s);
@@ -117,15 +226,19 @@ class ScheduleManager with ChangeNotifier {
   // Adds a new task if no task with the same description exists.
   // Returns true if the task was added successfully, false otherwise.
   Future<bool> addTask(String taskDescription) async {
+    _logger.info("Starting addTask for user $userId: $taskDescription");
+
     final descriptionLower = taskDescription.toLowerCase().trim();
-    if (descriptionLower.isEmpty) return false;
+    if (descriptionLower.isEmpty) {
+      _logger.warning("Empty task description provided");
+      return false;
+    }
+
     final exists = _allTasks.any(
       (task) => task.task.toLowerCase().trim() == descriptionLower,
     );
     if (exists) {
-      _logger.info(
-        "Task already exists locally for user $userId: $taskDescription",
-      );
+      _logger.info("Task already exists for user $userId: $taskDescription");
       return false;
     }
 
@@ -137,22 +250,37 @@ class ScheduleManager with ChangeNotifier {
       now.day,
     ).add(Duration(days: 1));
     newTask.nextReviewDate = tomorrow;
-    _allTasks.add(newTask); // Add locally first for immediate UI update
 
+    // Add locally first for immediate UI update
+    _allTasks.add(newTask);
     _logger.info("Added task locally for user $userId: ${newTask.task}");
     notifyListeners(); // Notify UI immediately
 
     try {
-      // Save specifically this task to local storage
+      // Try to save to storage (Firestore or Local)
+      _logger.info("Attempting to save task to storage...");
       await _tasksCollectionRef.doc(newTask.task).set(newTask.toJson());
-      _logger.info("Saved new task to local storage for user $userId.");
+      _logger.info("Successfully saved task to storage for user $userId");
       return true;
     } catch (e, s) {
-      _logger.severe("Error saving new task to local storage", e, s);
-      // Revert local change if save fails
-      _allTasks.removeWhere((t) => t.task == newTask.task);
-      notifyListeners();
-      return false;
+      _logger.severe("Error saving task to storage for user $userId: $e", e, s);
+
+      // Add to pending sync if using local storage
+      await _addPendingSync(
+        SyncOperationType.create,
+        'tasks',
+        newTask.task,
+        newTask.toJson(),
+      );
+
+      // Don't revert the local change - let the user keep the task even if save fails
+      // This prevents data loss and provides better UX
+      _logger.warning(
+        "Task saved locally but failed to sync to storage. Will retry later.",
+      );
+
+      // Return true because the task was added locally successfully
+      return true;
     }
   }
 
@@ -175,6 +303,14 @@ class ScheduleManager with ChangeNotifier {
         _logger.info("Updated task in local storage for user $userId.");
       } catch (e, s) {
         _logger.severe("Error updating task in local storage", e, s);
+
+        // Add to pending sync if using local storage
+        await _addPendingSync(
+          SyncOperationType.update,
+          'tasks',
+          updatedTask.task,
+          updatedTask.toJson(),
+        );
       }
     } else {
       _logger.warning(
@@ -199,6 +335,13 @@ class ScheduleManager with ChangeNotifier {
         _logger.info("Deleted task from local storage for user $userId.");
       } catch (e, s) {
         _logger.severe("Error deleting task from local storage", e, s);
+
+        // Add to pending sync if using local storage
+        await _addPendingSync(
+          SyncOperationType.delete,
+          'tasks',
+          taskToRemove.task,
+        );
       }
     } else {
       _logger.warning(
