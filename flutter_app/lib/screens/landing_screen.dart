@@ -74,10 +74,24 @@ class LandingScreen extends StatelessWidget {
               // Logo/Brand
               Row(
                 children: [
-                  Icon(
-                    Icons.psychology,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.primary,
+                  Container(
+                    width: 32,
+                    height: 32,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.asset(
+                        '../../../assets/images/logo_gradient.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          // Fallback to icon if image fails to load
+                          return Icon(
+                            Icons.psychology,
+                            size: 32,
+                            color: Theme.of(context).colorScheme.primary,
+                          );
+                        },
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(

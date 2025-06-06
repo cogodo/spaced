@@ -93,110 +93,156 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: GestureDetector(
-            onTap: widget.onNavigateToLanding,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.psychology,
-                color: Theme.of(context).colorScheme.primary,
-                size: 32,
-              ),
-            ),
-          ),
-        ),
-        automaticallyImplyLeading: false,
-      ),
-      body: Row(
+      body: Column(
         children: [
-          // For desktop layouts, show the navigation rail
-          if (isDesktop)
-            NavigationRail(
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
-              labelType: NavigationRailLabelType.all,
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-              destinations: [
-                NavigationRailDestination(
-                  icon: Icon(Icons.home),
-                  label: Text('Today'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.add_circle_outline),
-                  label: Text('Add'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.list),
-                  label: Text('All Items'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.person),
-                  label: Text('Profile'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.chat),
-                  label: Text('Chat'),
-                ),
-              ],
-              // Make the rail wider for better visibility
-              minWidth: 120,
-              useIndicator: true,
-            ),
-
-          // Main content area
-          Expanded(
-            child: Stack(
+          // Top section with logo aligned with nav bar
+          Container(
+            height: 80,
+            child: Row(
               children: [
-                // Main content
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isDesktop ? 80 : 20,
-                    vertical: 20,
-                  ),
-                  child: screens[_currentIndex],
-                ),
-
-                // Confirmation message
-                Positioned(
-                  bottom: 20,
-                  left: 20,
-                  right: 20,
-                  child: AnimatedOpacity(
-                    duration: Duration(milliseconds: 300),
-                    opacity: _showConfirmation ? 1.0 : 0.0,
-                    child: Material(
-                      borderRadius: BorderRadius.circular(12),
-                      elevation: 6,
-                      color: Theme.of(context).colorScheme.primary,
+                // Logo button aligned with nav bar width
+                if (isDesktop)
+                  Container(
+                    width: 120, // Same width as NavigationRail minWidth
+                    child: Center(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 16.0,
-                          horizontal: 24.0,
-                        ),
-                        child: Text(
-                          _confirmationText,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontSize: 16,
+                        padding: const EdgeInsets.all(12.0),
+                        child: GestureDetector(
+                          onTap: widget.onNavigateToLanding,
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.asset(
+                                'assets/images/logo_gradient.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  // Fallback to icon if image fails to load
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.psychology,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      size: 32,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
+                  ),
+                // Spacer for mobile
+                if (!isDesktop) const SizedBox(width: 16),
+              ],
+            ),
+          ),
+          // Main content area
+          Expanded(
+            child: Row(
+              children: [
+                // For desktop layouts, show the navigation rail
+                if (isDesktop)
+                  Container(
+                    width: 120, // Fixed width to match logo section
+                    height: double.infinity,
+                    child: Center(
+                      child: NavigationRail(
+                        selectedIndex: _currentIndex,
+                        onDestinationSelected: (index) {
+                          setState(() {
+                            _currentIndex = index;
+                          });
+                        },
+                        labelType: NavigationRailLabelType.all,
+                        backgroundColor:
+                            Theme.of(context).scaffoldBackgroundColor,
+                        destinations: [
+                          NavigationRailDestination(
+                            icon: Icon(Icons.home),
+                            label: Text('Today'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.add_circle_outline),
+                            label: Text('Add'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.list),
+                            label: Text('All Items'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.person),
+                            label: Text('Profile'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.chat),
+                            label: Text('Chat'),
+                          ),
+                        ],
+                        // Make the rail same width as logo section
+                        minWidth: 120,
+                        useIndicator: true,
+                      ),
+                    ),
+                  ),
+
+                // Main content area
+                Expanded(
+                  child: Stack(
+                    children: [
+                      // Main content
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isDesktop ? 80 : 20,
+                          vertical: 20,
+                        ),
+                        child: screens[_currentIndex],
+                      ),
+
+                      // Confirmation message
+                      Positioned(
+                        bottom: 20,
+                        left: 20,
+                        right: 20,
+                        child: AnimatedOpacity(
+                          duration: Duration(milliseconds: 300),
+                          opacity: _showConfirmation ? 1.0 : 0.0,
+                          child: Material(
+                            borderRadius: BorderRadius.circular(12),
+                            elevation: 6,
+                            color: Theme.of(context).colorScheme.primary,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16.0,
+                                horizontal: 24.0,
+                              ),
+                              child: Text(
+                                _confirmationText,
+                                style: TextStyle(
+                                  color:
+                                      Theme.of(context).colorScheme.onPrimary,
+                                  fontSize: 16,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
