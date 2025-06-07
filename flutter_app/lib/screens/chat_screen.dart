@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import '../services/logger_service.dart';
 import '../services/langgraph_api.dart';
 
@@ -568,19 +569,72 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message.text,
-                    style: TextStyle(
-                      color:
-                          message.isSystem
-                              ? theme.colorScheme.onSecondaryContainer
-                              : isUser
-                              ? theme.colorScheme.onPrimary
-                              : theme.textTheme.bodyLarge?.color,
-                      fontSize: 16,
-                      height: 1.4,
+                  // Use markdown rendering for AI/system messages, plain text for user messages
+                  if (isUser)
+                    Text(
+                      message.text,
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontSize: 16,
+                        height: 1.4,
+                      ),
+                    )
+                  else
+                    MarkdownWidget(
+                      data: message.text,
+                      config: MarkdownConfig(
+                        configs: [
+                          // Configure basic text styles to match theme
+                          PConfig(
+                            textStyle: TextStyle(
+                              color:
+                                  message.isSystem
+                                      ? theme.colorScheme.onSecondaryContainer
+                                      : theme.textTheme.bodyLarge?.color,
+                              fontSize: 16,
+                              height: 1.4,
+                            ),
+                          ),
+                          // Configure headers
+                          H1Config(
+                            style: TextStyle(
+                              color:
+                                  message.isSystem
+                                      ? theme.colorScheme.onSecondaryContainer
+                                      : theme.textTheme.bodyLarge?.color,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          H2Config(
+                            style: TextStyle(
+                              color:
+                                  message.isSystem
+                                      ? theme.colorScheme.onSecondaryContainer
+                                      : theme.textTheme.bodyLarge?.color,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          // Configure code blocks
+                          PreConfig(
+                            textStyle: TextStyle(
+                              color:
+                                  message.isSystem
+                                      ? theme.colorScheme.onSecondaryContainer
+                                      : theme.textTheme.bodyLarge?.color,
+                              fontSize: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.scaffoldBackgroundColor.withValues(
+                                alpha: 0.5,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 4),
                   Text(
                     _formatTimestamp(message.timestamp),
