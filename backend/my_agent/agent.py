@@ -63,7 +63,7 @@ class AnswerPayload(BaseModel):
 # Get environment variables
 PORT = int(os.getenv("PORT", 8000))
 HOST = os.getenv("HOST", "0.0.0.0")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "https://getspaced.app,https://www.getspaced.app,http://localhost:3000,http://localhost:8080").split(",")
 
 app = FastAPI(
     title="Spaced Learning API",
