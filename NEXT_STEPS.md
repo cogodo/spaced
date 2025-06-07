@@ -2,11 +2,14 @@
 
 ## 🚨 **Current Status**
 - ✅ **Backend API**: Live and working at `https://spaced-x2o1.onrender.com`
-- ✅ **Frontend**: Deployed at `https://getspaced.app`
+- ✅ **Frontend**: Deployed at `https://getspaced.app` (redirects to `https://www.getspaced.app`)
 - ✅ **Logo paths**: Fixed
 - ✅ **Light theme**: Updated to match dark theme purple colors with white background
-- ❌ **Google OAuth**: Not working
-- ❌ **Chat**: Backend works, but Flutter app integration needs verification
+- ✅ **Markdown support**: Added to chat messages with MarkdownWidget package
+- ✅ **CORS configuration**: Updated to support both getspaced.app and www.getspaced.app
+- ✅ **Local backend**: Fixed with root main.py entry point
+- ❌ **Google OAuth**: Needs Firebase console configuration
+- ❌ **Chat**: Backend working, needs end-to-end testing on deployed app
 
 ---
 
@@ -14,79 +17,86 @@
 
 ### 1. **Google OAuth Sign-in Not Working**
 
-**Current Problem**: Google sign-in button probably shows error or doesn't work
+**Current Configuration**:
+- ✅ Firebase project: `spaced-b571d`
+- ✅ Web client ID: `605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com`
+- ✅ iosClientId configured in firebase_options.dart
+- ❌ Domain authorization likely missing
 
-**Root Causes**:
-- Missing web client ID configuration
-- Firebase console setup incomplete
-- CORS/domain authorization issues
+**Required Steps**:
 
-**Fix Steps**:
-1. **Check Firebase Console**:
-   - Go to [Firebase Console](https://console.firebase.google.com/)
-   - Select project `spaced-b571d`
-   - Go to **Authentication** → **Sign-in method**
-   - Enable **Google** provider if not already enabled
-   - Add authorized domains: `getspaced.app`, `localhost`
+#### A. Firebase Console Configuration
+1. **Go to**: [Firebase Console](https://console.firebase.google.com/project/spaced-b571d)
+2. **Authentication** → **Sign-in method**
+3. **Google provider**:
+   - ✅ Should already be enabled
+   - **Authorized domains**: Add `getspaced.app` and `www.getspaced.app`
 
-2. **Google Cloud Console**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Select project linked to Firebase
-   - Go to **APIs & Services** → **Credentials**
-   - Find the **Web client** OAuth 2.0 client
-   - Add to **Authorized JavaScript origins**: 
+#### B. Google Cloud Console Configuration  
+1. **Go to**: [Google Cloud Console](https://console.cloud.google.com/)
+2. **Select project**: `spaced-b571d` (or associated project)
+3. **APIs & Services** → **Credentials**
+4. **Find OAuth 2.0 Client**: `605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com`
+5. **Edit and add**:
+   - **Authorized JavaScript origins**: 
      - `https://getspaced.app`
-     - `http://localhost`
-   - Add to **Authorized redirect URIs**:
+     - `https://www.getspaced.app`
+   - **Authorized redirect URIs**:
      - `https://getspaced.app/__/auth/handler`
+     - `https://www.getspaced.app/__/auth/handler`
 
-3. **Verify Firebase Config**:
-   ```dart
-   // In firebase_options.dart, ensure web config has:
-   iosClientId: '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
-   ```
-
-4. **Test in Browser Console**:
-   - Open dev tools on `getspaced.app`
-   - Try Google sign-in
-   - Check for CORS or auth errors
+#### C. Test OAuth Flow
+```bash
+# After configuration, test on:
+# https://www.getspaced.app
+# 1. Click "Login / Sign Up"
+# 2. Click "Sign in with Google"
+# 3. Should open Google auth popup
+# 4. No CORS or domain errors in console
+```
 
 ---
 
-### 2. **Chat Feature Not Working in Flutter App**
+### 2. **Chat Feature End-to-End Testing**
 
-**Current Problem**: Chat may show connection errors or 405/404 responses
+**Current Status**:
+- ✅ Backend API working at `https://spaced-x2o1.onrender.com`
+- ✅ CORS configured for `getspaced.app` and `www.getspaced.app`
+- ✅ Markdown rendering added to chat messages
+- ❌ End-to-end testing on deployed app needed
 
-**Root Causes**:
-- CORS issues between frontend and backend
-- Network connectivity issues
-- API response format mismatches
+**Testing Steps**:
 
-**Fix Steps**:
-1. **Test Chat in Browser**:
-   - Go to `https://getspaced.app`
-   - Navigate to Chat tab
-   - Try typing: "Flutter, Dart programming"
-   - Check browser dev tools for errors
+#### A. Test API Endpoints (Backend verification)
+```bash
+# Start session test
+curl -X POST https://spaced-x2o1.onrender.com/start_session \
+     -H "Content-Type: application/json" \
+     -H "Origin: https://www.getspaced.app" \
+     -d '{"topics": ["Flutter", "Dart"], "max_topics": 2, "max_questions": 3}'
 
-2. **Check CORS Configuration**:
-   - Backend should allow `https://getspaced.app`
-   - Current config: `CORS_ORIGINS=https://getspaced.app,http://localhost:3000,http://localhost:8080`
-   - May need to add `https://getspaced.app` explicitly in Render env vars
+# Answer question test (use session_id from above)
+curl -X POST https://spaced-x2o1.onrender.com/answer \
+     -H "Content-Type: application/json" \
+     -H "Origin: https://www.getspaced.app" \
+     -d '{"session_id": "YOUR_SESSION_ID", "user_input": "Flutter is a UI toolkit"}'
+```
 
-3. **Verify API Endpoints**:
-   ```bash
-   # Test from command line:
-   curl -X POST https://spaced-x2o1.onrender.com/start_session \
-        -H "Content-Type: application/json" \
-        -H "Origin: https://getspaced.app" \
-        -d '{"topics": ["test"], "max_topics": 1, "max_questions": 1}'
-   ```
+#### B. Test Frontend Integration
+1. **Go to**: [www.getspaced.app](https://www.getspaced.app)
+2. **Navigate to Chat tab**
+3. **Test flow**:
+   - Enter topics: "Flutter, Dart programming"
+   - Send message
+   - Should receive AI response with markdown formatting
+   - Answer questions until completion
+   - Should see final scores
 
-4. **Flutter App Debugging**:
-   - Check `chat_screen.dart` API URL: `https://spaced-x2o1.onrender.com`
-   - Add debug logging to see actual error messages
-   - Verify network permissions in web build
+#### C. Debug if Issues Found
+- **Open browser dev tools** (F12)
+- **Check Console tab** for JavaScript errors
+- **Check Network tab** for failed API calls
+- **Look for**: CORS errors, 404/405 responses, network timeouts
 
 ---
 
@@ -122,38 +132,47 @@
 1. **Google OAuth** (High Priority)
    - Affects user authentication
    - Blocks full app functionality
+   - Needs Firebase Console + Google Cloud Console configuration
 
-2. **Chat Feature** (High Priority)  
-   - Core learning feature
-   - Backend is working, likely frontend integration issue
+2. **End-to-End Chat Testing** (Medium Priority)
+   - Backend API working ✅
+   - CORS configured ✅ 
+   - Markdown support added ✅
+   - Needs testing on deployed app at www.getspaced.app
 
-3. **Local Development** (Medium Priority)
-   - For future development
-   - Current production deployment is working
+3. **~~Local Development~~** ✅ (COMPLETED)
+   - ~~For future development~~
+   - ✅ Fixed with root main.py entry point
 
 ---
 
 ## 📋 **Testing Checklist**
 
 ### Google OAuth:
-- [ ] Can click "Sign in with Google"
-- [ ] Google popup appears
-- [ ] Can select Google account
-- [ ] Successfully returns to app signed in
+- [ ] Firebase Console: Authorized domains added (getspaced.app, www.getspaced.app)
+- [ ] Google Cloud Console: JavaScript origins and redirect URIs updated
+- [ ] Can click "Sign in with Google" button
+- [ ] Google auth popup opens without errors
+- [ ] Can select Google account and complete sign-in
+- [ ] Successfully returns to app in signed-in state
 - [ ] No CORS errors in browser console
 
 ### Chat Feature:
-- [ ] Can navigate to Chat tab
-- [ ] Can type message and send
-- [ ] Receives AI response
-- [ ] Session flow works (topics → questions → scores)
-- [ ] No 404/405 errors
+- [ ] ✅ Backend API responds to curl tests
+- [ ] ✅ CORS headers configured correctly
+- [ ] Can navigate to Chat tab on www.getspaced.app
+- [ ] Can type topics and send initial message
+- [ ] Receives AI response with markdown formatting (**bold**, *italic*, etc.)
+- [ ] Session flow works: topics → questions → final scores
+- [ ] No 404/405/CORS errors in browser dev tools
 
 ### General App:
-- [ ] Logo displays correctly
-- [ ] All navigation works
-- [ ] Responsive design on mobile/desktop
-- [ ] No console errors
+- [ ] ✅ Logo displays correctly  
+- [ ] ✅ All navigation tabs work
+- [ ] ✅ Responsive design on mobile/desktop
+- [ ] ✅ Light/dark theme switching works
+- [ ] Landing page displays properly
+- [ ] No critical console errors
 
 ---
 
