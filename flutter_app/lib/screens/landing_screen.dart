@@ -79,7 +79,7 @@ class LandingScreen extends StatelessWidget {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: Image.asset(
-                        '../../../assets/images/logo_gradient.png',
+                        'assets/images/logo_gradient.png',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           // Fallback to icon if image fails to load
