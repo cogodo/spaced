@@ -65,6 +65,29 @@
 
 ---
 
+## **📋 Phase 2.1: Landing Page Visual Enhancements** 🔄 **UPCOMING**
+**Goal:** Enhance the landing page with improved visual design and animations
+
+**Tasks:**
+- [ ] Make the logo match the text color it is next to (dynamic color theming)
+- [ ] Set the default color theme to be the dark theme
+- [ ] Update the visual on the landing page to be an animation of the logo (replace current hero visual)
+- [ ] Add smooth fade-in/out transitions when scrolling the landing page (scroll-triggered animations)
+
+**Deliverables:**
+- [ ] Logo colors dynamically match adjacent text colors
+- [ ] Dark theme as default application theme
+- [ ] Animated logo visual in hero section
+- [ ] Smooth scroll-based fade transitions throughout landing page
+
+**Technical Notes:**
+- Logo color matching may require SVG logo assets or dynamic color filters
+- Default theme change requires updating theme initialization in main.dart
+- Logo animation will replace the current floating elements visual
+- Scroll transitions will use Flutter's animation controllers with scroll listeners
+
+---
+
 ## **📋 Phase 3: Authentication Implementation** ✅ **COMPLETED**
 **Goal:** Add Firebase authentication with email and Google OAuth
 

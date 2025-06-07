@@ -118,7 +118,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.asset(
-                                'assets/images/logo_gradient.png',
+                                '../../../assets/images/logo_gradient.png',
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
                                   // Fallback to icon if image fails to load
