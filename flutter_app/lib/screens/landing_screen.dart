@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/test_firebase.dart';
 import 'package:spaced/themes/theme_data.dart';
 import 'package:provider/provider.dart';
 import 'package:spaced/main.dart';
@@ -128,24 +127,6 @@ class LandingScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(width: 8),
-
-                  // Firebase Test Button (for testing Phase 1)
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const FirebaseTestScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.bug_report, size: 16),
-                    label: const Text('Test Firebase'),
-                    style: TextButton.styleFrom(
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-
-                  const SizedBox(width: 16),
 
                   // Dynamic button based on auth status
                   OutlinedButton(
