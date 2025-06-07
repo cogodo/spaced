@@ -48,6 +48,8 @@ class DefaultFirebaseOptions {
     authDomain: 'spaced-b571d.firebaseapp.com',
     storageBucket: 'spaced-b571d.firebasestorage.app',
     measurementId: 'G-BQP86B87HD',
+    iosClientId:
+        '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -64,7 +66,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '605253712819',
     projectId: 'spaced-b571d',
     storageBucket: 'spaced-b571d.firebasestorage.app',
-    iosClientId: '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
+    iosClientId:
+        '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
     iosBundleId: 'com.example.lrScheduler',
   );
 
@@ -74,7 +77,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '605253712819',
     projectId: 'spaced-b571d',
     storageBucket: 'spaced-b571d.firebasestorage.app',
-    iosClientId: '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
+    iosClientId:
+        '605253712819-fnst7pbbgu88p8m7bbk8oq5hohibsamr.apps.googleusercontent.com',
     iosBundleId: 'com.example.lrScheduler',
   );
 

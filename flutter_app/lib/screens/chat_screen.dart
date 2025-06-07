@@ -41,7 +41,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Initialize API client
     _api = LangGraphApi(
-      baseUrl: 'https://getspaced.app', // Change for your setup
+      baseUrl:
+          'https://spaced-x2o1.onrender.com', // Production backend on Render
     );
 
     // Add welcome message and prompt for topics
