@@ -116,9 +116,9 @@ final Map<String, ThemeMetadata> appThemes = {
     name: 'Light',
     data: ThemeData(
       brightness: Brightness.light,
-      // Use ColorScheme.fromSeed for better cohesive colors
+      // Use ColorScheme.fromSeed with the same purple seed as dark theme
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF0078D7), // Windows blue as seed
+        seedColor: const Color(0xFF6750A4), // Same deep purple as dark theme
         brightness: Brightness.light,
       ),
       // Apply our custom text theme with dark text for readability
@@ -130,19 +130,18 @@ final Map<String, ThemeMetadata> appThemes = {
 
       // System UI overlay
       appBarTheme: AppBarTheme(
-        systemOverlayStyle: SystemUiOverlayStyle.light,
-        backgroundColor: const Color(0xFF0078D7),
+        systemOverlayStyle:
+            SystemUiOverlayStyle.dark, // Dark status bar for light theme
+        backgroundColor: const Color(0xFF6750A4), // Purple app bar
       ),
 
-      // More harmonious card and background colors
+      // White background with purple accents
       cardColor: Colors.white,
-      scaffoldBackgroundColor: const Color(
-        0xFFE4F0F6,
-      ), // Light blue-gray background
-      // Cohesive buttons
+      scaffoldBackgroundColor: Colors.white, // Pure white background
+      // Purple buttons matching dark theme
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0078D7), // Primary blue
+          backgroundColor: const Color(0xFF6750A4), // Same purple as dark theme
           foregroundColor: Colors.white, // White text for contrast
           elevation: 1, // Slight elevation
           textStyle: GoogleFonts.firaCode(
@@ -159,8 +158,11 @@ final Map<String, ThemeMetadata> appThemes = {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF0078D7),
-          side: const BorderSide(color: Color(0xFF0078D7), width: 1.5),
+          foregroundColor: const Color(0xFF6750A4), // Purple text
+          side: const BorderSide(
+            color: Color(0xFF6750A4),
+            width: 1.5,
+          ), // Purple border
           textStyle: GoogleFonts.firaCode(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -172,28 +174,33 @@ final Map<String, ThemeMetadata> appThemes = {
         ),
       ),
 
-      // Input decoration
+      // Input decoration with purple accents
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF0078D7).withValues(alpha: 0.5),
+            color: const Color(
+              0xFF6750A4,
+            ).withValues(alpha: 0.5), // Light purple border
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: const Color(0xFF0078D7).withValues(alpha: 0.5),
+            color: const Color(0xFF6750A4).withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Color(0xFF0078D7), width: 1.5),
+          borderSide: const BorderSide(
+            color: Color(0xFF6750A4),
+            width: 1.5,
+          ), // Purple focus
           borderRadius: BorderRadius.circular(8),
         ),
         hintStyle: GoogleFonts.firaCode(
-          color: const Color(0xFF0078D7).withValues(alpha: 0.6),
+          color: const Color(0xFF6750A4).withValues(alpha: 0.6),
           fontStyle: FontStyle.italic,
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -202,11 +209,11 @@ final Map<String, ThemeMetadata> appThemes = {
         ),
       ),
 
-      // Add divider color
-      dividerColor: const Color(0xFFBEE6FD),
-
-      // Add icon theme
-      iconTheme: const IconThemeData(color: Color(0xFF0078D7)),
+      // Purple dividers and icons
+      dividerColor: const Color(
+        0xFF6750A4,
+      ).withValues(alpha: 0.2), // Light purple divider
+      iconTheme: const IconThemeData(color: Color(0xFF6750A4)), // Purple icons
 
       useMaterial3: true,
       fontFamily: GoogleFonts.firaCode().fontFamily,
