@@ -6,6 +6,8 @@ import 'package:spaced/screens/auth/login_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/logger_service.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/theme_logo.dart';
+import '../widgets/theme_toggle.dart';
 
 class LandingScreen extends StatelessWidget {
   static final _logger = getLogger('LandingScreen');
@@ -73,25 +75,7 @@ class LandingScreen extends StatelessWidget {
               // Logo/Brand
               Row(
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.asset(
-                        'assets/images/logo_gradient.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          // Fallback to icon if image fails to load
-                          return Icon(
-                            Icons.psychology,
-                            size: 32,
-                            color: Theme.of(context).colorScheme.primary,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+                  ThemeLogo(size: 32),
                   const SizedBox(width: 12),
                   Text(
                     'Spaced',
@@ -106,27 +90,10 @@ class LandingScreen extends StatelessWidget {
               // Header buttons
               Row(
                 children: [
-                  // Theme Test Button (for testing Phase 2)
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.palette),
-                    tooltip: 'Test Themes',
-                    onSelected: (String themeKey) {
-                      Provider.of<ThemeNotifier>(
-                        context,
-                        listen: false,
-                      ).setTheme(themeKey);
-                    },
-                    itemBuilder: (BuildContext context) {
-                      return appThemes.keys.map((String themeKey) {
-                        return PopupMenuItem<String>(
-                          value: themeKey,
-                          child: Text('$themeKey Theme'),
-                        );
-                      }).toList();
-                    },
-                  ),
+                  // Theme Toggle (replace the dropdown)
+                  ThemeToggle(),
 
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 16),
 
                   // Dynamic button based on auth status
                   OutlinedButton(

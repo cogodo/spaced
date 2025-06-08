@@ -108,11 +108,11 @@ class ThemeNotifier with ChangeNotifier {
     final String? storedThemeKey = _prefs.getString(THEME_PREF_KEY);
     _logger.info('Loading theme preference: $storedThemeKey');
 
-    // Default to 'Light' if no preference is stored or the key is invalid
+    // Default to 'Dark' if no preference is stored or the key is invalid
     final String initialThemeKey =
         storedThemeKey != null && appThemes.containsKey(storedThemeKey)
             ? storedThemeKey
-            : 'Light';
+            : 'Dark';
 
     _currentThemeMeta = appThemes[initialThemeKey]!;
     _logger.info('Initial theme set to: $currentThemeKey');
