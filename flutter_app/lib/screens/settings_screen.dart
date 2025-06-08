@@ -5,7 +5,7 @@ import '../services/logger_service.dart';
 import '../themes/theme_data.dart';
 import '../main.dart';
 import '../models/schedule_manager.dart'; // Import ScheduleManager
-import '../widgets/theme_preview_card.dart'; // Import the new widget
+import '../widgets/theme_toggle.dart'; // Import the theme toggle widget
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -114,35 +114,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // --- App Theme Section ---
             Text('App Theme', style: Theme.of(context).textTheme.titleLarge),
             SizedBox(height: 12),
-            // Horizontal ListView for Themes
-            SizedBox(
-              height: 150, // Define a height for the horizontal list
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: appThemes.length,
-                itemBuilder: (context, index) {
-                  final themeKey = appThemes.keys.elementAt(index);
-                  final themeMeta = appThemes[themeKey]!;
-                  final bool isSelected =
-                      themeNotifier.currentTheme == themeMeta.data;
-
-                  return Container(
-                    width: 130, // Define a width for each theme card
-                    margin: EdgeInsets.only(right: 10), // Spacing between cards
-                    child: GestureDetector(
-                      onTap: () {
-                        themeNotifier.setTheme(themeMeta.name);
-                      },
-                      child: ThemePreviewCard(
-                        themeMeta: themeMeta,
-                        isSelected: isSelected,
-                      ),
-                    ),
-                  );
-                },
+            // Simple theme toggle instead of preview cards
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Row(
+                children: [
+                  Text(
+                    'Dark Mode:',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(width: 16),
+                  ThemeToggle(),
+                ],
               ),
             ),
-            // Divider removed from here
           ],
         ),
       ),

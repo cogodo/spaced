@@ -7,6 +7,7 @@ import 'user_profile_screen.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import '../widgets/theme_logo.dart';
 
 class TabNavigationScreen extends StatefulWidget {
   final VoidCallback onNavigateToLanding;
@@ -88,68 +89,55 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         allTasks: scheduleManager.allTasks,
         onDeleteTask: scheduleManager.removeTask,
       ),
-      UserProfileScreen(),
       ChatScreen(),
+      // Removed profile screen from main navigation
     ];
 
     return Scaffold(
       body: Column(
         children: [
-          // Top section with logo aligned with nav bar
+          // New vertical bar with logo left, profile right
           Container(
-            height: 80,
+            height: 60,
+            color: Theme.of(context).scaffoldBackgroundColor,
             child: Row(
               children: [
-                // Logo button aligned with nav bar width
-                if (isDesktop)
-                  Container(
-                    width: 120, // Same width as NavigationRail minWidth
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: GestureDetector(
-                          onTap: widget.onNavigateToLanding,
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.asset(
-                                'assets/images/logo_gradient.png',
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  // Fallback to icon if image fails to load
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.psychology,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                      size: 32,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                // Logo on the left
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: GestureDetector(
+                    onTap: widget.onNavigateToLanding,
+                    child: ThemeLogo(size: 36),
                   ),
-                // Spacer for mobile
-                if (!isDesktop) const SizedBox(width: 16),
+                ),
+
+                // Spacer to push profile icon to the right
+                const Spacer(),
+
+                // Profile icon on the right
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: IconButton(
+                    onPressed: () {
+                      // Navigate to profile screen
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const UserProfileScreen(),
+                        ),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.account_circle,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    tooltip: 'Profile',
+                  ),
+                ),
               ],
             ),
           ),
+
           // Main content area
           Expanded(
             child: Row(
@@ -157,7 +145,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 // For desktop layouts, show the navigation rail
                 if (isDesktop)
                   Container(
-                    width: 120, // Fixed width to match logo section
+                    width: 120, // Fixed width
                     height: double.infinity,
                     child: Center(
                       child: NavigationRail(
@@ -184,15 +172,12 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                             label: Text('All Items'),
                           ),
                           NavigationRailDestination(
-                            icon: Icon(Icons.person),
-                            label: Text('Profile'),
-                          ),
-                          NavigationRailDestination(
                             icon: Icon(Icons.chat),
                             label: Text('Chat'),
                           ),
+                          // Removed profile from navigation rail
                         ],
-                        // Make the rail same width as logo section
+                        // Make the rail same width as before
                         minWidth: 120,
                         useIndicator: true,
                       ),
@@ -281,13 +266,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     label: 'All Items',
                   ),
                   BottomNavigationBarItem(
-                    icon: Icon(Icons.person),
-                    label: 'Profile',
-                  ),
-                  BottomNavigationBarItem(
                     icon: Icon(Icons.chat),
                     label: 'Chat',
                   ),
+                  // Removed profile from bottom navigation
                 ],
                 // Ensure it's large enough for easy touch
                 selectedFontSize: 14,

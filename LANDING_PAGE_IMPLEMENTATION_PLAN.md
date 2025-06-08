@@ -65,26 +65,54 @@
 
 ---
 
-## **📋 Phase 2.1: Landing Page Visual Enhancements** 🔄 **UPCOMING**
-**Goal:** Enhance the landing page with improved visual design and animations
+## **📋 Phase 2.1: Landing Page Visual Enhancements** ✅ **COMPLETED**
+**Goal:** Enhance the landing page with improved visual design and theme management
 
 **Tasks:**
-- [ ] Make the logo match the text color it is next to (dynamic color theming)
-- [ ] Set the default color theme to be the dark theme
+- ✅ Make the logo match the text color it is next to (dynamic color theming)
+- ✅ Set the default color theme to be the dark theme
+- ✅ Remove red and green theme options to simplify to light/dark toggle
+- ✅ Replace theme dropdown with light/dark toggle button on landing page
+- ✅ Create new app header design with vertical bar layout
+- ✅ Add logo on left side of app header with dynamic theming
+- ✅ Add profile icon on right side of app header for navigation
+- ✅ Remove profile from main navigation tabs
 - [ ] Update the visual on the landing page to be an animation of the logo (replace current hero visual)
 - [ ] Add smooth fade-in/out transitions when scrolling the landing page (scroll-triggered animations)
 
 **Deliverables:**
-- [ ] Logo colors dynamically match adjacent text colors
-- [ ] Dark theme as default application theme
+- ✅ Logo colors dynamically match theme colors (light/dark mode)
+- ✅ Dark theme as default application theme
+- ✅ Simplified theme system with only light/dark options
+- ✅ Theme toggle widget replacing dropdown menus
+- ✅ New vertical bar app header design
+- ✅ Profile navigation moved to header icon
 - [ ] Animated logo visual in hero section
 - [ ] Smooth scroll-based fade transitions throughout landing page
 
+**Completion Summary:**
+- **Dynamic Logo Theming**: Created `ThemeLogo` widget that automatically adjusts colors based on current theme (lighter for dark mode, standard for light mode)
+- **Default Theme Change**: Updated `ThemeNotifier` to default to 'Dark' theme instead of 'Light'
+- **Simplified Theme System**: Removed 'Red' and 'Green' themes from `appThemes` map, keeping only 'Light' and 'Dark'
+- **Theme Toggle Widget**: Created `ThemeToggle` widget with light/dark mode switch and visual indicators
+- **Landing Page Update**: Replaced theme dropdown with theme toggle in landing page header
+- **New App Header Design**: Implemented vertical bar layout in `TabNavigationScreen` with:
+  - Logo positioned on the left using `ThemeLogo` widget
+  - Profile icon positioned on the right with navigation to profile screen
+  - Removed profile from main navigation tabs (desktop rail and mobile bottom nav)
+- **Settings Screen Update**: Replaced theme preview cards with simple theme toggle
+- **Consistent Theming**: All logo instances now use dynamic theming throughout the app
+
 **Technical Notes:**
-- Logo color matching may require SVG logo assets or dynamic color filters
-- Default theme change requires updating theme initialization in main.dart
-- Logo animation will replace the current floating elements visual
-- Scroll transitions will use Flutter's animation controllers with scroll listeners
+- Logo color matching implemented using `ColorFiltered` widget with `BlendMode.srcIn`
+- Theme toggle uses Switch widget with light/dark mode icons for clear visual feedback
+- App header maintains consistent height (60px) and integrates seamlessly with existing navigation
+- Profile navigation changed from tab to header icon for improved UX
+- All theme-related widgets properly listen to theme changes via Provider pattern
+
+**Remaining Tasks for Future:**
+- Logo animation in hero section (will replace current floating elements)
+- Scroll-triggered fade transitions throughout landing page
 
 ---
 
