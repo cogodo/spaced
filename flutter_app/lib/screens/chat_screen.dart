@@ -580,13 +580,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     )
                   else
-                    // Simple MarkdownWidget without complex config to avoid crashes
+                    // Simple MarkdownWidget with basic theme-aware styling
                     MarkdownWidget(
                       data: message.text,
-                      config:
-                          message.isSystem
-                              ? MarkdownConfig.darkConfig
-                              : MarkdownConfig.defaultConfig,
+                      config: _buildMarkdownConfig(theme, message.isSystem),
                     ),
                   const SizedBox(height: 4),
                   Text(
@@ -811,6 +808,27 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
     }
+  }
+
+  MarkdownConfig _buildMarkdownConfig(ThemeData theme, bool isSystem) {
+    final baseConfig =
+        isSystem ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
+
+    // Copy the base config but with theme-appropriate text colors
+    return baseConfig.copy(
+      configs: [
+        PConfig(
+          textStyle: TextStyle(
+            color:
+                isSystem
+                    ? theme.colorScheme.onSecondaryContainer
+                    : theme.textTheme.bodyLarge?.color,
+            fontSize: 16,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
   }
 }
 
