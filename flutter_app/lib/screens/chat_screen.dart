@@ -580,60 +580,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     )
                   else
+                    // Simple MarkdownWidget without complex config to avoid crashes
                     MarkdownWidget(
                       data: message.text,
-                      config: MarkdownConfig(
-                        configs: [
-                          // Configure basic text styles to match theme
-                          PConfig(
-                            textStyle: TextStyle(
-                              color:
-                                  message.isSystem
-                                      ? theme.colorScheme.onSecondaryContainer
-                                      : theme.textTheme.bodyLarge?.color,
-                              fontSize: 16,
-                              height: 1.4,
-                            ),
-                          ),
-                          // Configure headers
-                          H1Config(
-                            style: TextStyle(
-                              color:
-                                  message.isSystem
-                                      ? theme.colorScheme.onSecondaryContainer
-                                      : theme.textTheme.bodyLarge?.color,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          H2Config(
-                            style: TextStyle(
-                              color:
-                                  message.isSystem
-                                      ? theme.colorScheme.onSecondaryContainer
-                                      : theme.textTheme.bodyLarge?.color,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          // Configure code blocks
-                          PreConfig(
-                            textStyle: TextStyle(
-                              color:
-                                  message.isSystem
-                                      ? theme.colorScheme.onSecondaryContainer
-                                      : theme.textTheme.bodyLarge?.color,
-                              fontSize: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.scaffoldBackgroundColor.withValues(
-                                alpha: 0.5,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ],
-                      ),
+                      config:
+                          message.isSystem
+                              ? MarkdownConfig.darkConfig
+                              : MarkdownConfig.defaultConfig,
                     ),
                   const SizedBox(height: 4),
                   Text(
