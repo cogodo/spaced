@@ -30,6 +30,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
 
         return Scaffold(
+          appBar: AppBar(
+            title: const Text('Profile'),
+            centerTitle: true,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+            elevation: 0,
+          ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(

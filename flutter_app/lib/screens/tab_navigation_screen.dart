@@ -119,10 +119,19 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                   padding: const EdgeInsets.all(12.0),
                   child: IconButton(
                     onPressed: () {
-                      // Navigate to profile screen
+                      // Navigate to profile screen with ScheduleManager provider
+                      final scheduleManager = Provider.of<ScheduleManager>(
+                        context,
+                        listen: false,
+                      );
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => const UserProfileScreen(),
+                          builder:
+                              (context) =>
+                                  ChangeNotifierProvider<ScheduleManager>.value(
+                                    value: scheduleManager,
+                                    child: const UserProfileScreen(),
+                                  ),
                         ),
                       );
                     },
