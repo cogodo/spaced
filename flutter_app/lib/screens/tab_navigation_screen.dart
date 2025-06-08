@@ -106,18 +106,15 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 // Logo on the left
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(40),
+                  child: Container(
+                    width: 100,
+                    height: 100,
                     child: Tooltip(
                       message: 'Return to landing page',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(40),
-                        onTap: widget.onNavigateToLanding,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(shape: BoxShape.circle),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: widget.onNavigateToLanding,
                           child: Center(child: ThemeLogo(size: 60)),
                         ),
                       ),
@@ -131,39 +128,39 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                 // Profile icon on the right
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(40),
+                  child: Container(
+                    width: 100,
+                    height: 100,
                     child: Tooltip(
                       message: 'Profile',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(40),
-                        onTap: () {
-                          // Navigate to profile screen with ScheduleManager provider
-                          final scheduleManager = Provider.of<ScheduleManager>(
-                            context,
-                            listen: false,
-                          );
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => ChangeNotifierProvider<
-                                    ScheduleManager
-                                  >.value(
-                                    value: scheduleManager,
-                                    child: const UserProfileScreen(),
-                                  ),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () {
+                            // Navigate to profile screen with ScheduleManager provider
+                            final scheduleManager =
+                                Provider.of<ScheduleManager>(
+                                  context,
+                                  listen: false,
+                                );
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => ChangeNotifierProvider<
+                                      ScheduleManager
+                                    >.value(
+                                      value: scheduleManager,
+                                      child: const UserProfileScreen(),
+                                    ),
+                              ),
+                            );
+                          },
+                          child: Center(
+                            child: Icon(
+                              Icons.account_circle,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                          );
-                        },
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(shape: BoxShape.circle),
-                          child: Icon(
-                            Icons.account_circle,
-                            size: 60,
-                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ),

@@ -1,19 +1,162 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/themes/theme_data.dart';
 import 'package:provider/provider.dart';
-import 'package:spaced/main.dart';
-import 'package:spaced/screens/auth/login_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/logger_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/theme_logo.dart';
 import '../widgets/theme_toggle.dart';
+import 'dart:math' as math;
 
-class LandingScreen extends StatelessWidget {
-  static final _logger = getLogger('LandingScreen');
+class LandingScreen extends StatefulWidget {
   final VoidCallback onNavigateToLogin;
 
   const LandingScreen({super.key, required this.onNavigateToLogin});
+
+  @override
+  State<LandingScreen> createState() => _LandingScreenState();
+}
+
+class _LandingScreenState extends State<LandingScreen>
+    with TickerProviderStateMixin {
+  late ScrollController _scrollController;
+  late AnimationController _featuresHeaderController;
+  late AnimationController _featuresCardsController;
+  late AnimationController _aboutHeaderController;
+  late AnimationController _aboutCardsController;
+  late AnimationController _logoSpinController;
+
+  late Animation<double> _featuresHeaderAnimation;
+  late Animation<double> _featuresCardsAnimation;
+  late Animation<double> _aboutHeaderAnimation;
+  late Animation<double> _aboutCardsAnimation;
+
+  // Keys to track section positions
+  final GlobalKey _featuresSectionKey = GlobalKey();
+  final GlobalKey _aboutSectionKey = GlobalKey();
+
+  // Animation states
+  bool _featuresHeaderAnimated = false;
+  bool _featuresCardsAnimated = false;
+  bool _aboutHeaderAnimated = false;
+  bool _aboutCardsAnimated = false;
+
+  // Logo interaction
+  double _extraRotation = 0.0;
+  final math.Random _random = math.Random();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+
+    // Initialize animation controllers
+    _featuresHeaderController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _featuresCardsController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _aboutHeaderController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _aboutCardsController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _logoSpinController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    // Create animations
+    _featuresHeaderAnimation = CurvedAnimation(
+      parent: _featuresHeaderController,
+      curve: Curves.easeOutCubic,
+    );
+    _featuresCardsAnimation = CurvedAnimation(
+      parent: _featuresCardsController,
+      curve: Curves.easeOutCubic,
+    );
+    _aboutHeaderAnimation = CurvedAnimation(
+      parent: _aboutHeaderController,
+      curve: Curves.easeOutCubic,
+    );
+    _aboutCardsAnimation = CurvedAnimation(
+      parent: _aboutCardsController,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _featuresHeaderController.dispose();
+    _featuresCardsController.dispose();
+    _aboutHeaderController.dispose();
+    _aboutCardsController.dispose();
+    _logoSpinController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Check if features section is in view
+    if (!_featuresHeaderAnimated) {
+      final featuresRenderBox =
+          _featuresSectionKey.currentContext?.findRenderObject() as RenderBox?;
+      if (featuresRenderBox != null) {
+        final featuresPosition = featuresRenderBox.localToGlobal(Offset.zero);
+        if (featuresPosition.dy < screenHeight * 0.8) {
+          _featuresHeaderAnimated = true;
+          _featuresHeaderController.forward();
+
+          // Start cards animation 300ms after header
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!_featuresCardsAnimated) {
+              _featuresCardsAnimated = true;
+              _featuresCardsController.forward();
+            }
+          });
+        }
+      }
+    }
+
+    // Check if about section is in view
+    if (!_aboutHeaderAnimated) {
+      final aboutRenderBox =
+          _aboutSectionKey.currentContext?.findRenderObject() as RenderBox?;
+      if (aboutRenderBox != null) {
+        final aboutPosition = aboutRenderBox.localToGlobal(Offset.zero);
+        if (aboutPosition.dy < screenHeight * 0.8) {
+          _aboutHeaderAnimated = true;
+          _aboutHeaderController.forward();
+
+          // Start cards animation 300ms after header
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!_aboutCardsAnimated) {
+              _aboutCardsAnimated = true;
+              _aboutCardsController.forward();
+            }
+          });
+        }
+      }
+    }
+  }
+
+  void _onLogoTap() {
+    // Generate very small random rotation between 0.2-0.5 rotations (keep under 2 total)
+    final randomRotations = 0.2 + (_random.nextDouble() * 0.3);
+    _extraRotation += randomRotations;
+
+    _logoSpinController.reset();
+    _logoSpinController.forward();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +177,7 @@ class LandingScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
+            controller: _scrollController,
             child: Column(
               children: [
                 // Header
@@ -97,7 +241,7 @@ class LandingScreen extends StatelessWidget {
 
                   // Dynamic button based on auth status
                   OutlinedButton(
-                    onPressed: onNavigateToLogin,
+                    onPressed: widget.onNavigateToLogin,
                     child: Text(
                       authProvider.isSignedIn
                           ? 'Back to App'
@@ -129,9 +273,9 @@ class LandingScreen extends StatelessWidget {
           if (isDesktop)
             Row(
               children: [
-                Expanded(flex: 3, child: _buildHeroText(context, isDesktop)),
-                const SizedBox(width: 60),
-                Expanded(flex: 2, child: _buildHeroVisual(context)),
+                Expanded(flex: 2, child: _buildHeroText(context, isDesktop)),
+                const SizedBox(width: 40),
+                Expanded(flex: 3, child: _buildHeroVisual(context)),
               ],
             )
           else
@@ -217,86 +361,93 @@ class LandingScreen extends StatelessWidget {
 
   Widget _buildHeroVisual(BuildContext context) {
     return Container(
-      height: 300,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2),
-              ],
-            ),
-          ),
-          child: Stack(
-            children: [
-              // Animated floating elements representing spaced repetition
-              ...List.generate(
-                5,
-                (index) => TweenAnimationBuilder<double>(
-                  duration: Duration(milliseconds: 2000 + (index * 200)),
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    return Positioned(
-                      left: 50 + (index * 40.0),
-                      top: 50 + (value * 100) + (index * 30.0),
-                      child: Transform.scale(
-                        scale: 0.5 + (value * 0.5),
-                        child: Container(
-                          width: 60,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.lightbulb_outline,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+      height: 500,
+      child: Center(child: _buildAnimatedLogo(context)),
+    );
+  }
 
-              // Central brain icon
-              Center(
-                child: TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 1500),
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: Icon(
-                        Icons.psychology,
-                        size: 80,
-                        color: Theme.of(context).colorScheme.primary,
+  Widget _buildAnimatedLogo(BuildContext context) {
+    return _buildRotatingLogoAnimation(context);
+  }
+
+  Widget _buildRotatingLogoAnimation(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(
+        milliseconds: 3000,
+      ), // Total: 1s appear + 0.5s wait + 1.5s rotate
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutBack,
+      builder: (context, animationValue, child) {
+        // Phase 1 (0-0.33): Logo appears and scales up
+        // Phase 2 (0.33-0.5): Logo waits in static position (0.5s)
+        // Phase 3 (0.5-1.0): Logo rotates
+
+        double opacity;
+        double logoScale;
+        double rotationProgress;
+
+        if (animationValue <= 0.33) {
+          // Phase 1: Appearing (1s)
+          final phaseProgress = animationValue / 0.33;
+          opacity = phaseProgress;
+          logoScale = 0.2 + (phaseProgress * 0.8);
+          rotationProgress = 0.0;
+        } else if (animationValue <= 0.5) {
+          // Phase 2: Waiting (0.5s)
+          opacity = 1.0;
+          logoScale = 1.0;
+          rotationProgress = 0.0;
+        } else {
+          // Phase 3: Rotating (1.5s)
+          final phaseProgress = (animationValue - 0.5) / 0.5;
+          opacity = 1.0;
+          logoScale = 1.0;
+          rotationProgress = phaseProgress * 1.0; // 1 full rotation
+        }
+
+        return AnimatedBuilder(
+          animation: _logoSpinController,
+          builder: (context, child) {
+            // Apply deceleration curve to the interactive spin for natural slowdown
+            final curvedValue = Curves.easeOutQuart.transform(
+              _logoSpinController.value,
+            );
+            final totalRotation =
+                rotationProgress + (_extraRotation * curvedValue);
+
+            return GestureDetector(
+              onTap: _onLogoTap,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Transform.scale(
+                  scale: logoScale,
+                  child: Transform.rotate(
+                    angle: totalRotation * 2 * math.pi,
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.3),
+                              blurRadius: 30 * opacity,
+                              spreadRadius: 10 * opacity,
+                            ),
+                          ],
+                        ),
+                        child: ThemeLogo(size: 500),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -322,7 +473,7 @@ class LandingScreen extends StatelessWidget {
             ],
           ),
           child: ElevatedButton(
-            onPressed: onNavigateToLogin,
+            onPressed: widget.onNavigateToLogin,
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
@@ -383,241 +534,349 @@ class LandingScreen extends StatelessWidget {
     ];
 
     return Container(
+      key: _featuresSectionKey,
       padding: EdgeInsets.symmetric(
         horizontal: isDesktop ? 80 : 20,
-        vertical: 80,
+        vertical: 120, // Increased padding to push section down initially
       ),
       child: Column(
         children: [
-          // Section header
-          Text(
-            'Why Choose Spaced?',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            textAlign: TextAlign.center,
-          ),
+          // Animated section header
+          AnimatedBuilder(
+            animation: _featuresHeaderAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(0, 30 * (1 - _featuresHeaderAnimation.value)),
+                child: Opacity(
+                  opacity: _featuresHeaderAnimation.value,
+                  child: Column(
+                    children: [
+                      Text(
+                        'Why Choose Spaced?',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
 
-          const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-          Text(
-            'Built on decades of cognitive science research',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
-            ),
-            textAlign: TextAlign.center,
+                      Text(
+                        'Built on decades of cognitive science research',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 60),
 
-          // Features grid
-          if (isDesktop)
-            Row(
-              children:
-                  features
-                      .map(
-                        (feature) => Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: _buildFeatureCard(context, feature),
+          // Animated features grid
+          AnimatedBuilder(
+            animation: _featuresCardsAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(0, 40 * (1 - _featuresCardsAnimation.value)),
+                child: Opacity(
+                  opacity: _featuresCardsAnimation.value,
+                  child:
+                      isDesktop
+                          ? Row(
+                            children:
+                                features
+                                    .asMap()
+                                    .entries
+                                    .map(
+                                      (entry) => Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                          ),
+                                          child: _buildFeatureCard(
+                                            context,
+                                            entry.value,
+                                            entry.key,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                          )
+                          : Column(
+                            children:
+                                features
+                                    .asMap()
+                                    .entries
+                                    .map(
+                                      (entry) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 30,
+                                        ),
+                                        child: _buildFeatureCard(
+                                          context,
+                                          entry.value,
+                                          entry.key,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
                           ),
-                        ),
-                      )
-                      .toList(),
-            )
-          else
-            Column(
-              children:
-                  features
-                      .map(
-                        (feature) => Padding(
-                          padding: const EdgeInsets.only(bottom: 30),
-                          child: _buildFeatureCard(context, feature),
-                        ),
-                      )
-                      .toList(),
-            ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFeatureCard(BuildContext context, Map<String, dynamic> feature) {
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).cardColor.withValues(alpha: 0.7),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.1),
+  Widget _buildFeatureCard(
+    BuildContext context,
+    Map<String, dynamic> feature,
+    int index,
+  ) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(
+        milliseconds: 300 + (index * 100),
+      ), // Stagger animation
+      tween: Tween(begin: 0.0, end: _featuresCardsAnimation.value),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Card(
+              elevation: 0,
+              color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
+                ),
               ),
-              child: Icon(
-                feature['icon'],
-                size: 40,
-                color: Theme.of(context).colorScheme.primary,
+              child: Padding(
+                padding: const EdgeInsets.all(30),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        feature['icon'],
+                        size: 40,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Text(
+                      feature['title'],
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Text(
+                      feature['description'],
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            Text(
-              feature['title'],
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: 12),
-
-            Text(
-              feature['description'],
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildAboutSection(BuildContext context, bool isDesktop) {
     return Container(
+      key: _aboutSectionKey,
       padding: EdgeInsets.symmetric(
         horizontal: isDesktop ? 80 : 20,
-        vertical: 80,
+        vertical: 120, // Increased padding to push section down initially
       ),
       child: Column(
         children: [
-          Text(
-            'Powered by Science',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            textAlign: TextAlign.center,
-          ),
+          // Animated section header
+          AnimatedBuilder(
+            animation: _aboutHeaderAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(0, 30 * (1 - _aboutHeaderAnimation.value)),
+                child: Opacity(
+                  opacity: _aboutHeaderAnimation.value,
+                  child: Column(
+                    children: [
+                      Text(
+                        'Powered by Science',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
 
-          const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-          Text(
-            'Built on the Free Spaced Repetition Scheduler (FSRS)',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
+                      Text(
+                        'Built on the Free Spaced Repetition Scheduler (FSRS)',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
 
-          const SizedBox(height: 32),
+                      const SizedBox(height: 32),
 
-          Text(
-            'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
-              height: 1.6,
-            ),
-            textAlign: TextAlign.center,
+                      Text(
+                        'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
+                          height: 1.6,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 40),
 
-          // Key benefits grid
-          if (isDesktop)
-            Row(
-              children: [
-                Expanded(
-                  child: _buildFSRSBenefit(
-                    context,
-                    Icons.science,
-                    'Research-Backed',
-                    'Validated by peer-reviewed studies and real-world data from millions of reviews',
-                  ),
-                ),
-                const SizedBox(width: 30),
-                Expanded(
-                  child: _buildFSRSBenefit(
-                    context,
-                    Icons.psychology,
-                    'Adaptive Learning',
-                    'Personalizes to your memory patterns and adjusts difficulty dynamically',
-                  ),
-                ),
-                const SizedBox(width: 30),
-                Expanded(
-                  child: _buildFSRSBenefit(
-                    context,
-                    Icons.trending_up,
-                    'Proven Results',
-                    'Users report 40% better retention compared to traditional flashcard methods',
-                  ),
-                ),
-              ],
-            )
-          else
-            Column(
-              children: [
-                _buildFSRSBenefit(
-                  context,
-                  Icons.science,
-                  'Research-Backed',
-                  'Validated by peer-reviewed studies and real-world data from millions of reviews',
-                ),
-                const SizedBox(height: 20),
-                _buildFSRSBenefit(
-                  context,
-                  Icons.psychology,
-                  'Adaptive Learning',
-                  'Personalizes to your memory patterns and adjusts difficulty dynamically',
-                ),
-                const SizedBox(height: 20),
-                _buildFSRSBenefit(
-                  context,
-                  Icons.trending_up,
-                  'Proven Results',
-                  'Users report 40% better retention compared to traditional flashcard methods',
-                ),
-              ],
-            ),
+          // Animated key benefits grid
+          AnimatedBuilder(
+            animation: _aboutCardsAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(0, 40 * (1 - _aboutCardsAnimation.value)),
+                child: Opacity(
+                  opacity: _aboutCardsAnimation.value,
+                  child: Column(
+                    children: [
+                      // Key benefits grid
+                      if (isDesktop)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildFSRSBenefit(
+                                context,
+                                Icons.science,
+                                'Research-Backed',
+                                'Validated by peer-reviewed studies and real-world data from millions of reviews',
+                              ),
+                            ),
+                            const SizedBox(width: 30),
+                            Expanded(
+                              child: _buildFSRSBenefit(
+                                context,
+                                Icons.psychology,
+                                'Adaptive Learning',
+                                'Personalizes to your memory patterns and adjusts difficulty dynamically',
+                              ),
+                            ),
+                            const SizedBox(width: 30),
+                            Expanded(
+                              child: _buildFSRSBenefit(
+                                context,
+                                Icons.trending_up,
+                                'Proven Results',
+                                'Users report 40% better retention compared to traditional flashcard methods',
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          children: [
+                            _buildFSRSBenefit(
+                              context,
+                              Icons.science,
+                              'Research-Backed',
+                              'Validated by peer-reviewed studies and real-world data from millions of reviews',
+                            ),
+                            const SizedBox(height: 20),
+                            _buildFSRSBenefit(
+                              context,
+                              Icons.psychology,
+                              'Adaptive Learning',
+                              'Personalizes to your memory patterns and adjusts difficulty dynamically',
+                            ),
+                            const SizedBox(height: 20),
+                            _buildFSRSBenefit(
+                              context,
+                              Icons.trending_up,
+                              'Proven Results',
+                              'Users report 40% better retention compared to traditional flashcard methods',
+                            ),
+                          ],
+                        ),
 
-          const SizedBox(height: 40),
+                      const SizedBox(height: 40),
 
-          // Learn more button
-          OutlinedButton.icon(
-            onPressed:
-                () => _launchURL(
-                  'https://github.com/open-spaced-repetition/fsrs4anki/wiki',
+                      // Learn more button
+                      OutlinedButton.icon(
+                        onPressed:
+                            () => _launchURL(
+                              'https://github.com/open-spaced-repetition/fsrs4anki/wiki',
+                            ),
+                        icon: const Icon(Icons.launch),
+                        label: const Text('Learn More About FSRS'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-            icon: const Icon(Icons.launch),
-            label: const Text('Learn More About FSRS'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.primary,
-              side: BorderSide(color: Theme.of(context).colorScheme.primary),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            ),
+              );
+            },
           ),
         ],
       ),
@@ -678,7 +937,7 @@ class LandingScreen extends StatelessWidget {
       }
     } catch (e) {
       // Log error - URL launching failed
-      _logger.severe('Failed to launch URL: $e');
+      print('Failed to launch URL: $e');
     }
   }
 
@@ -734,7 +993,7 @@ class LandingScreen extends StatelessWidget {
             const SizedBox(height: 40),
 
             ElevatedButton(
-              onPressed: onNavigateToLogin,
+              onPressed: widget.onNavigateToLogin,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).colorScheme.primary,
