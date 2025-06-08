@@ -98,16 +98,17 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         children: [
           // New vertical bar with logo left, profile right
           Container(
-            height: 60,
+            height: 70,
             color: Theme.of(context).scaffoldBackgroundColor,
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
               children: [
                 // Logo on the left
                 Padding(
-                  padding: const EdgeInsets.all(12.0),
+                  padding: const EdgeInsets.all(8.0),
                   child: GestureDetector(
                     onTap: widget.onNavigateToLanding,
-                    child: ThemeLogo(size: 36),
+                    child: ThemeLogo(size: 44),
                   ),
                 ),
 
@@ -116,7 +117,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
 
                 // Profile icon on the right
                 Padding(
-                  padding: const EdgeInsets.all(12.0),
+                  padding: const EdgeInsets.all(8.0),
                   child: IconButton(
                     onPressed: () {
                       // Navigate to profile screen with ScheduleManager provider
@@ -137,10 +138,12 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     },
                     icon: Icon(
                       Icons.account_circle,
-                      size: 32,
+                      size: 40,
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     tooltip: 'Profile',
+                    padding: EdgeInsets.all(8),
+                    constraints: BoxConstraints(minWidth: 56, minHeight: 56),
                   ),
                 ),
               ],
