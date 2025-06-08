@@ -569,22 +569,20 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Use markdown rendering for AI/system messages, plain text for user messages
-                  if (isUser)
-                    Text(
-                      message.text,
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 16,
-                        height: 1.4,
-                      ),
-                    )
-                  else
-                    // Simple MarkdownWidget with basic theme-aware styling
-                    MarkdownWidget(
-                      data: message.text,
-                      config: _buildMarkdownConfig(theme, message.isSystem),
+                  // Temporarily use plain Text for all messages until markdown is fixed
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      color:
+                          isUser
+                              ? theme.colorScheme.onPrimary
+                              : message.isSystem
+                              ? theme.colorScheme.onSecondaryContainer
+                              : theme.textTheme.bodyLarge?.color,
+                      fontSize: 16,
+                      height: 1.4,
                     ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     _formatTimestamp(message.timestamp),
@@ -808,27 +806,6 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
     }
-  }
-
-  MarkdownConfig _buildMarkdownConfig(ThemeData theme, bool isSystem) {
-    final baseConfig =
-        isSystem ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
-
-    // Copy the base config but with theme-appropriate text colors
-    return baseConfig.copy(
-      configs: [
-        PConfig(
-          textStyle: TextStyle(
-            color:
-                isSystem
-                    ? theme.colorScheme.onSecondaryContainer
-                    : theme.textTheme.bodyLarge?.color,
-            fontSize: 16,
-            height: 1.4,
-          ),
-        ),
-      ],
-    );
   }
 }
 
