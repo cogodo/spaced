@@ -98,17 +98,29 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         children: [
           // New vertical bar with logo left, profile right
           Container(
-            height: 70,
+            height: 100,
             color: Theme.of(context).scaffoldBackgroundColor,
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
             child: Row(
               children: [
                 // Logo on the left
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: GestureDetector(
-                    onTap: widget.onNavigateToLanding,
-                    child: ThemeLogo(size: 44),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Tooltip(
+                      message: 'Return to landing page',
+                      child: GestureDetector(
+                        onTap: widget.onNavigateToLanding,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.transparent,
+                          ),
+                          child: ThemeLogo(size: 60),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
 
@@ -138,7 +150,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     },
                     icon: Icon(
                       Icons.account_circle,
-                      size: 40,
+                      size: 60,
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     tooltip: 'Profile',
