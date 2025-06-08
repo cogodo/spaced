@@ -25,6 +25,9 @@ final _logger = getLogger('Main');
 // Key for storing theme preference
 const String THEME_PREF_KEY = 'selectedThemeKey';
 
+// Fix for web: declare as const at compile time
+const bool kIsProduction = bool.fromEnvironment('dart.vm.product');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -33,14 +36,13 @@ void main() async {
 
   // Performance optimization: Set up error handling early
   FlutterError.onError = (FlutterErrorDetails details) {
-    if (!bool.fromEnvironment('dart.vm.product')) {
+    if (!kIsProduction) {
       FlutterError.dumpErrorToConsole(details);
     }
   };
 
   // Initialize logging service based on environment
-  const bool isProduction = bool.fromEnvironment('dart.vm.product');
-  if (isProduction) {
+  if (kIsProduction) {
     // loggerService.enableProductionLogs();
     _logger.info('Running in production mode');
   } else {
