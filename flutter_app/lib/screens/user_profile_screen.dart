@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For FilteringTextInputFormatter
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
 import '../models/schedule_manager.dart';
-import '../screens/settings_screen.dart';
-import '../screens/about_screen.dart';
+import '../widgets/theme_toggle.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -16,6 +16,25 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final _logger = getLogger('UserProfileScreen');
   bool _isSigningOut = false;
+  late TextEditingController _maxRepsController;
+
+  @override
+  void initState() {
+    super.initState();
+    final scheduleManager = Provider.of<ScheduleManager>(
+      context,
+      listen: false,
+    );
+    _maxRepsController = TextEditingController(
+      text: scheduleManager.maxRepetitions.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _maxRepsController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,13 +71,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                 const SizedBox(height: 32),
 
-                // Account Actions Section
-                _buildAccountActionsSection(context, authProvider),
+                // App Settings Section (inline)
+                _buildAppSettingsSection(context),
 
                 const SizedBox(height: 32),
 
-                // App Actions Section
-                _buildAppActionsSection(context),
+                // Account Actions Section
+                _buildAccountActionsSection(context, authProvider),
               ],
             ),
           ),
@@ -295,6 +314,138 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Widget _buildAppSettingsSection(BuildContext context) {
+    return Consumer<ScheduleManager>(
+      builder: (context, scheduleManager, child) {
+        // Update controller if needed
+        if (_maxRepsController.text !=
+            scheduleManager.maxRepetitions.toString()) {
+          _maxRepsController.text = scheduleManager.maxRepetitions.toString();
+          _maxRepsController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _maxRepsController.text.length),
+          );
+        }
+
+        return Card(
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'App Settings',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Theme Toggle
+                Row(
+                  children: [
+                    Icon(
+                      Icons.palette,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Theme:',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const Spacer(),
+                    ThemeToggle(),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Max Repetitions Setting
+                Row(
+                  children: [
+                    Icon(
+                      Icons.repeat,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Max Repetitions',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          Text(
+                            'Task is considered learned after this many successful reviews',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        controller: _maxRepsController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 12,
+                          ),
+                          isDense: true,
+                        ),
+                        onSubmitted: (String value) {
+                          final int? newValue = int.tryParse(value);
+                          if (newValue != null) {
+                            _logger.info("Submitting max reps: $newValue");
+                            scheduleManager.setMaxRepetitions(newValue);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Max Repetitions updated to $newValue',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            _logger.warning(
+                              "Invalid input for max reps: $value",
+                            );
+                            _maxRepsController.text =
+                                scheduleManager.maxRepetitions.toString();
+                          }
+                          FocusScope.of(context).unfocus();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAccountActionsSection(
     BuildContext context,
     AuthProvider authProvider,
@@ -354,74 +505,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Refresh Profile'),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppActionsSection(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'App Settings',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // Settings Button
-            ListTile(
-              leading: Icon(
-                Icons.settings,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              title: const Text('Settings'),
-              subtitle: const Text('App preferences and configuration'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                final scheduleManager = Provider.of<ScheduleManager>(
-                  context,
-                  listen: false,
-                );
-                final navigator = Navigator.of(context);
-                navigator.push(
-                  MaterialPageRoute(
-                    builder:
-                        (context) =>
-                            ChangeNotifierProvider<ScheduleManager>.value(
-                              value: scheduleManager,
-                              child: const SettingsScreen(),
-                            ),
-                  ),
-                );
-              },
-            ),
-
-            const Divider(),
-
-            // About Button
-            ListTile(
-              leading: Icon(
-                Icons.info_outline,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              title: const Text('About'),
-              subtitle: const Text('App information and help'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                final navigator = Navigator.of(context);
-                navigator.push(
-                  MaterialPageRoute(builder: (context) => const AboutScreen()),
-                );
-              },
             ),
           ],
         ),
