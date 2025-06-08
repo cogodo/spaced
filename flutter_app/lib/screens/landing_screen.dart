@@ -41,7 +41,8 @@ class _LandingScreenState extends State<LandingScreen>
   bool _aboutCardsAnimated = false;
 
   // Logo interaction
-  double _extraRotation = 0.0;
+  double _baseRotation = 0.0; // Current settled rotation
+  double _additionalRotation = 0.0; // New rotation being animated
   final math.Random _random = math.Random();
 
   @override
@@ -69,9 +70,21 @@ class _LandingScreenState extends State<LandingScreen>
       vsync: this,
     );
     _logoSpinController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(
+        milliseconds: 1500,
+      ), // Longer duration for more natural feel
       vsync: this,
     );
+
+    // Listen for animation completion to update base rotation
+    _logoSpinController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _baseRotation += _additionalRotation;
+          _additionalRotation = 0.0;
+        });
+      }
+    });
 
     // Create animations
     _featuresHeaderAnimation = CurvedAnimation(
@@ -150,9 +163,16 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   void _onLogoTap() {
+    // If animation is running, calculate current position and use as new base
+    if (_logoSpinController.isAnimating) {
+      final curvedValue = Curves.easeOutQuart.transform(
+        _logoSpinController.value,
+      );
+      _baseRotation += (_additionalRotation * curvedValue);
+    }
+
     // Generate very small random rotation between 0.2-0.5 rotations (keep under 2 total)
-    final randomRotations = 0.2 + (_random.nextDouble() * 0.3);
-    _extraRotation += randomRotations;
+    _additionalRotation = 0.2 + (_random.nextDouble() * 0.3);
 
     _logoSpinController.reset();
     _logoSpinController.forward();
@@ -413,7 +433,9 @@ class _LandingScreenState extends State<LandingScreen>
               _logoSpinController.value,
             );
             final totalRotation =
-                rotationProgress + (_extraRotation * curvedValue);
+                rotationProgress +
+                _baseRotation +
+                (_additionalRotation * curvedValue);
 
             return GestureDetector(
               onTap: _onLogoTap,
@@ -421,26 +443,42 @@ class _LandingScreenState extends State<LandingScreen>
                 cursor: SystemMouseCursors.click,
                 child: Transform.scale(
                   scale: logoScale,
-                  child: Transform.rotate(
-                    angle: totalRotation * 2 * math.pi,
-                    child: Opacity(
-                      opacity: opacity,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.3),
-                              blurRadius: 30 * opacity,
-                              spreadRadius: 10 * opacity,
-                            ),
-                          ],
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Stationary glow effect
+                      Opacity(
+                        opacity: opacity,
+                        child: Container(
+                          width: 500,
+                          height: 500,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
+                                blurRadius: 30 * opacity,
+                                spreadRadius: 10 * opacity,
+                              ),
+                            ],
+                          ),
                         ),
-                        child: ThemeLogo(size: 500),
                       ),
-                    ),
+                      // Rotating logo
+                      Transform.rotate(
+                        angle: totalRotation * 2 * math.pi,
+                        origin: Offset(
+                          -5,
+                          10,
+                        ), // Use final coordinates (-5, 10)
+                        child: Opacity(
+                          opacity: opacity,
+                          child: ThemeLogo(size: 500),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
