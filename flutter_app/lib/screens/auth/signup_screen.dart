@@ -6,6 +6,7 @@ import '../../widgets/auth/email_form_field.dart';
 import '../../widgets/auth/password_form_field.dart';
 import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
+import '../../widgets/theme_logo.dart';
 import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
@@ -158,11 +159,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Icon(
-            Icons.psychology,
-            size: 64,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          child: ThemeLogo(size: 64),
         ),
 
         const SizedBox(height: 24),
@@ -225,6 +222,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 obscureText: _obscurePassword,
                 validator: _validatePassword,
                 showRequirements: true,
+                autofillHints: const [AutofillHints.newPassword],
                 onToggleObscure: () {
                   setState(() {
                     _obscurePassword = !_obscurePassword;
@@ -243,6 +241,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 labelText: 'Confirm Password',
                 hintText: 'Confirm your password',
                 validator: _validateConfirmPassword,
+                autofillHints: const [],
                 onToggleObscure: () {
                   setState(() {
                     _obscureConfirmPassword = !_obscureConfirmPassword;

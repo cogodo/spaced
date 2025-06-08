@@ -26,6 +26,7 @@ class EmailFormField extends StatelessWidget {
       keyboardType: TextInputType.emailAddress,
       textInputAction:
           nextFocusNode != null ? TextInputAction.next : TextInputAction.done,
+      autofillHints: const [AutofillHints.email],
       onFieldSubmitted: (_) {
         if (nextFocusNode != null) {
           nextFocusNode!.requestFocus();
