@@ -12,6 +12,7 @@ class PasswordFormField extends StatefulWidget {
   final String labelText;
   final String hintText;
   final bool showRequirements;
+  final List<String>? autofillHints;
 
   const PasswordFormField({
     super.key,
@@ -25,6 +26,7 @@ class PasswordFormField extends StatefulWidget {
     this.labelText = 'Password',
     this.hintText = 'Enter your password',
     this.showRequirements = false,
+    this.autofillHints,
   });
 
   @override
@@ -55,8 +57,6 @@ class _PasswordFormFieldState extends State<PasswordFormField> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -68,6 +68,7 @@ class _PasswordFormFieldState extends State<PasswordFormField> {
           enabled: widget.enabled,
           obscureText: widget.obscureText,
           textInputAction: TextInputAction.done,
+          autofillHints: widget.autofillHints ?? const [AutofillHints.password],
           onFieldSubmitted: widget.onSubmitted,
           decoration: InputDecoration(
             labelText: widget.labelText,

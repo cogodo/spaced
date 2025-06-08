@@ -6,6 +6,7 @@ import '../../widgets/auth/email_form_field.dart';
 import '../../widgets/auth/password_form_field.dart';
 import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
+import '../../widgets/theme_logo.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -155,11 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Icon(
-            Icons.psychology,
-            size: 64,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          child: ThemeLogo(size: 64),
         ),
 
         const SizedBox(height: 24),
