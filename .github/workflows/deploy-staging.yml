@@ -10,29 +10,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # 1) Check out your staging branch
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # 2) Set up Flutter SDK
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.0'  # or your target Flutter version
+          flutter-version: '3.24.0'
+          channel: 'stable'
 
       # 3) Pre-cache flutter dependencies
       - name: Flutter pub get
+        working-directory: ./flutter_app
         run: flutter pub get
 
       # 4) Build the web app
       - name: Build Flutter Web
-        run: flutter build web --release
+        working-directory: ./flutter_app
+        run: flutter build web --release --web-renderer canvaskit
 
       # 5) Deploy the contents of build/web to spaced-staging gh-pages
       - name: Deploy to spaced-staging
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.STAGING_REPO_TOKEN }}
+          personal_token: ${{ secrets.STAGING_REPO_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: build/web
+          publish_dir: ./flutter_app/build/web
           external_repository: cogodo/spaced-staging
           user_name: github-actions
           user_email: actions@github.com
