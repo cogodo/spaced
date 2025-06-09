@@ -1,0 +1,38 @@
+name: Deploy Flutter Web to Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Check out your staging branch
+      - uses: actions/checkout@v3
+
+      # 2) Set up Flutter SDK
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'  # or your target Flutter version
+
+      # 3) Pre-cache flutter dependencies
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # 4) Build the web app
+      - name: Build Flutter Web
+        run: flutter build web --release
+
+      # 5) Deploy the contents of build/web to spaced-staging gh-pages
+      - name: Deploy to spaced-staging
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.STAGING_REPO_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: build/web
+          external_repository: cogodo/spaced-staging
+          user_name: github-actions
+          user_email: actions@github.com
