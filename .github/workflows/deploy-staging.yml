@@ -27,7 +27,7 @@ jobs:
       # 4) Build the web app
       - name: Build Flutter Web
         working-directory: ./flutter_app
-        run: flutter build web --release --web-renderer canvaskit
+        run: flutter build web --release 
 
       # 5) Deploy the contents of build/web to spaced-staging gh-pages
       - name: Deploy to spaced-staging
