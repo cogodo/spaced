@@ -8,6 +8,10 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       # 1) Check out your staging branch
       - uses: actions/checkout@v4
@@ -27,15 +31,15 @@ jobs:
       # 4) Build the web app
       - name: Build Flutter Web
         working-directory: ./flutter_app
-        run: flutter build web --release 
+        run: flutter build web --release
 
       # 5) Deploy the contents of build/web to spaced-staging gh-pages
       - name: Deploy to spaced-staging
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.STAGING_REPO_TOKEN }}
           publish_branch: gh-pages
           publish_dir: ./flutter_app/build/web
           external_repository: cogodo/spaced-staging
-          user_name: github-actions
-          user_email: actions@github.com
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
