@@ -232,6 +232,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
+        // Reset navigation state when user signs out
+        if (!authProvider.isSignedIn &&
+            (showLoginScreen || showSignUpScreen || showLandingWhileSignedIn)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() {
+              showLoginScreen = false;
+              showSignUpScreen = false;
+              showLandingWhileSignedIn = false;
+            });
+          });
+        }
+
         // Show the main app if user is signed in
         if (authProvider.isSignedIn) {
           // Check if user wants to see landing page while signed in
