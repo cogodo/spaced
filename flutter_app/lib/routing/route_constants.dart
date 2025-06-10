@@ -1,7 +1,7 @@
-/// Route constants for dual-domain routing structure
+/// Route constants for clean URL structure
 ///
 /// getspaced.app: Landing and authentication routes
-/// app.getspaced.app: Main application routes (no /app prefix)
+/// getspaced.app/app/*: Main application routes
 class Routes {
   // Landing domain routes (getspaced.app)
   static const String landing = '/';
@@ -9,20 +9,19 @@ class Routes {
   static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
 
-  // App domain routes (app.getspaced.app) - NO /app prefix!
-  static const String appHome = '/'; // app.getspaced.app/
-  static const String appAdd = '/add'; // app.getspaced.app/add
-  static const String appAll = '/all'; // app.getspaced.app/all
-  static const String appChat = '/chat'; // app.getspaced.app/chat
-  static const String appProfile = '/profile'; // app.getspaced.app/profile
+  // App routes (getspaced.app/app/*)
+  static const String appHome = '/app'; // getspaced.app/app
+  static const String appAdd = '/app/add'; // getspaced.app/app/add
+  static const String appAll = '/app/all'; // getspaced.app/app/all
+  static const String appChat = '/app/chat'; // getspaced.app/app/chat
+  static const String appProfile = '/app/profile'; // getspaced.app/app/profile
 }
 
 class Domains {
   static const String landing = 'getspaced.app';
-  static const String app = 'app.getspaced.app';
+  static const String app = 'getspaced.app'; // Same domain now
 
   // Helper methods
-  static bool isAppDomain(String host) => host.startsWith('app.');
-  static bool isLandingDomain(String host) =>
-      host == landing || host == 'www.$landing';
+  static bool isAppDomain(String host) => host.contains('getspaced.app');
+  static bool isLandingDomain(String host) => host.contains('getspaced.app');
 }
