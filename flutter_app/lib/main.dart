@@ -64,13 +64,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+
     _logger.info('Building app with theme: ${themeNotifier.currentThemeKey}');
 
     return MaterialApp.router(
       title: 'Spaced',
       theme: themeNotifier.currentTheme,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      routerConfig: appRouter, // Single line replaces entire AuthWrapper!
+      routerConfig: createAppRouter(
+        authProvider,
+      ), // Pass auth provider to router
     );
   }
 }

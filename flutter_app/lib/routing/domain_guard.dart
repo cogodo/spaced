@@ -7,7 +7,7 @@ import '../providers/auth_provider.dart';
 import 'route_constants.dart';
 
 /// Domain-aware authentication guard
-/// Handles authentication state and routing
+/// Handles authentication state and routing with return URL support
 class DomainGuard {
   static String? handleDomainRouting(
     BuildContext context,
@@ -25,14 +25,20 @@ class DomainGuard {
     // Production mode - all routes on same domain
     // Use /app prefix for main app routes to maintain clean separation
 
-    // User is not authenticated and trying to access app routes → redirect to login
+    // User is not authenticated and trying to access app routes → redirect to login with return URL
     if (!authProvider.isSignedIn && _isAppRoute(state.matchedLocation)) {
-      return Routes.login;
+      final returnUrl = Uri.encodeComponent(state.matchedLocation);
+      return '${Routes.login}?returnTo=$returnUrl';
     }
 
-    // User is authenticated and on landing/auth pages → redirect to app
+    // User is authenticated and on landing/auth pages → redirect to app or return URL
     if (authProvider.isSignedIn && _isLandingRoute(state.matchedLocation)) {
-      return Routes.appHome;
+      // Check if there's a return URL from login
+      final returnTo = state.uri.queryParameters['returnTo'];
+      if (returnTo != null && _isAppRoute(returnTo)) {
+        return returnTo; // Redirect to intended destination
+      }
+      return Routes.appHome; // Default to app home
     }
 
     return null; // No redirect needed
@@ -47,12 +53,18 @@ class DomainGuard {
 
     // Simple auth-based routing for development
     if (!authProvider.isSignedIn && _isAppRoute(state.matchedLocation)) {
-      return Routes.login;
+      final returnUrl = Uri.encodeComponent(state.matchedLocation);
+      return '${Routes.login}?returnTo=$returnUrl';
     }
 
     if (authProvider.isSignedIn &&
         [Routes.login, Routes.signup].contains(state.matchedLocation)) {
-      return Routes.appHome;
+      // Check if there's a return URL from login
+      final returnTo = state.uri.queryParameters['returnTo'];
+      if (returnTo != null && _isAppRoute(returnTo)) {
+        return returnTo; // Redirect to intended destination
+      }
+      return Routes.appHome; // Default to app home
     }
 
     return null;

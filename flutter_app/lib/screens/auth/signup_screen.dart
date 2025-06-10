@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../widgets/auth/email_form_field.dart';
@@ -8,6 +9,7 @@ import '../../widgets/auth/password_form_field.dart';
 import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
 import '../../widgets/theme_logo.dart';
+import '../../routing/route_constants.dart';
 import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
@@ -57,6 +59,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
+  /// Get return URL from current route query parameters
+  String? get _returnUrl {
+    final state = GoRouterState.of(context);
+    return state.uri.queryParameters['returnTo'];
+  }
+
   Future<void> _handleEmailSignUp() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
@@ -67,6 +75,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       // Complete autofill context after successful signup
       TextInput.finishAutofillContext();
+
+      // Router will automatically handle redirect to return URL via DomainGuard
+      // No need to manually navigate here - the auth state change will trigger routing
     }
   }
 
@@ -76,10 +87,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     // Complete autofill context after successful login
     TextInput.finishAutofillContext();
+
+    // Router will automatically handle redirect to return URL via DomainGuard
+    // No need to manually navigate here - the auth state change will trigger routing
   }
 
   void _navigateToLogin() {
-    widget.onNavigateToLogin();
+    // Preserve return URL when navigating to login
+    final returnUrl = _returnUrl;
+    if (returnUrl != null) {
+      final encodedReturnUrl = Uri.encodeComponent(returnUrl);
+      context.go('${Routes.login}?returnTo=$encodedReturnUrl');
+    } else {
+      context.go(Routes.login);
+    }
   }
 
   String? _validateConfirmPassword(String? value) {
