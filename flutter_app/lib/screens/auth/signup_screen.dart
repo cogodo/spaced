@@ -120,26 +120,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: isDesktop ? 400 : double.infinity,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeader(context),
-                    const SizedBox(height: 48),
-                    _buildSignUpForm(context),
-                    const SizedBox(height: 24),
-                    _buildDivider(context),
-                    const SizedBox(height: 24),
-                    _buildGoogleSignIn(context),
-                    const SizedBox(height: 32),
-                    _buildLoginPrompt(context),
-                  ],
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isDesktop ? 400 : double.infinity,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildHeader(context),
+                        const SizedBox(height: 48),
+                        _buildSignUpForm(context),
+                        const SizedBox(height: 24),
+                        _buildDivider(context),
+                        const SizedBox(height: 24),
+                        _buildGoogleSignIn(context),
+                        const SizedBox(height: 32),
+                        _buildLoginPrompt(context),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
