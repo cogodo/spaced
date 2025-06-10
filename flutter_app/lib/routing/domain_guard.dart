@@ -7,60 +7,32 @@ import '../providers/auth_provider.dart';
 import 'route_constants.dart';
 
 /// Domain-aware authentication guard
-/// Handles cross-domain redirects and authentication state
+/// Handles authentication state and routing
 class DomainGuard {
   static String? handleDomainRouting(
     BuildContext context,
     GoRouterState state,
   ) {
     final currentHost = html.window.location.host;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    // Development mode - allow localhost routing without domain restrictions
+    // Development mode - simple routing
     if (currentHost.contains('localhost') ||
         currentHost.contains('127.0.0.1')) {
       return _handleLocalDevelopment(context, state);
     }
 
-    final isAppDomain = Domains.isAppDomain(currentHost);
-    final isLandingDomain = Domains.isLandingDomain(currentHost);
+    // Production mode - all routes on same domain
+    // Use /app prefix for main app routes to maintain clean separation
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-    // ===== AUTHENTICATION-BASED REDIRECTS =====
-
-    // User is authenticated and on landing domain → redirect to app domain
-    if (authProvider.isSignedIn &&
-        isLandingDomain &&
-        state.matchedLocation == Routes.landing) {
-      return 'https://${Domains.app}/';
+    // User is not authenticated and trying to access app routes → redirect to login
+    if (!authProvider.isSignedIn && _isAppRoute(state.matchedLocation)) {
+      return Routes.login;
     }
 
-    // User is authenticated and trying to access auth screens → redirect to app
-    if (authProvider.isSignedIn &&
-        isLandingDomain &&
-        [
-          Routes.login,
-          Routes.signup,
-          Routes.forgotPassword,
-        ].contains(state.matchedLocation)) {
-      return 'https://${Domains.app}/';
-    }
-
-    // User is not authenticated and on app domain → redirect to landing login
-    if (!authProvider.isSignedIn && isAppDomain) {
-      return 'https://${Domains.landing}/login';
-    }
-
-    // ===== DOMAIN ENFORCEMENT =====
-
-    // If someone tries to access app routes on landing domain, redirect to app domain
-    if (isLandingDomain && _isAppRoute(state.matchedLocation)) {
-      return 'https://${Domains.app}${state.matchedLocation}';
-    }
-
-    // If someone tries to access landing routes on app domain, redirect to landing domain
-    if (isAppDomain && _isLandingRoute(state.matchedLocation)) {
-      return 'https://${Domains.landing}${state.matchedLocation}';
+    // User is authenticated and on landing/auth pages → redirect to app
+    if (authProvider.isSignedIn && _isLandingRoute(state.matchedLocation)) {
+      return Routes.appHome;
     }
 
     return null; // No redirect needed
@@ -88,14 +60,17 @@ class DomainGuard {
 
   static bool _isAppRoute(String path) {
     return [
-      Routes.appAdd,
-      Routes.appAll,
-      Routes.appChat,
-      Routes.appProfile,
-    ].contains(path);
+          '/app',
+          '/app/',
+          '/app/add',
+          '/app/all',
+          '/app/chat',
+          '/app/profile',
+        ].contains(path) ||
+        path.startsWith('/app/');
   }
 
   static bool _isLandingRoute(String path) {
-    return [Routes.login, Routes.signup, Routes.forgotPassword].contains(path);
+    return ['/', '/login', '/signup', '/forgot-password'].contains(path);
   }
 }

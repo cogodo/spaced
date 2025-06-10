@@ -1,5 +1,5 @@
-# Dual-domain deployment workflow for getspaced.app and app.getspaced.app
-name: Deploy to Dual Domains
+# Deploy Flutter app to GitHub Pages with custom domain
+name: Deploy to GitHub Pages
 
 on:
   # Runs on pushes targeting the default branch
@@ -22,8 +22,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Build job - builds Flutter app once for both domains
-  build:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -63,6 +66,9 @@ jobs:
         
       - name: Prepare web files
         run: |
+          # Create CNAME for main domain (getspaced.app)
+          echo "getspaced.app" > flutter_app/build/web/CNAME
+          
           # Create .nojekyll file to bypass Jekyll processing
           touch flutter_app/build/web/.nojekyll
           
@@ -81,61 +87,15 @@ jobs:
           <body><p>Redirecting...</p></body>
           </html>
           EOL
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-build
-          path: flutter_app/build/web/
-          retention-days: 1
-
-  # Deploy to main domain (getspaced.app)
-  deploy-main:
-    needs: build
-    environment:
-      name: github-pages
-      url: https://getspaced.app
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: flutter-build
-          path: ./web-build
           
-      - name: Create CNAME for main domain
-        run: echo "getspaced.app" > ./web-build/CNAME
-        
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
-      - name: Upload pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './web-build'
+          path: './flutter_app/build/web'
           
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
-
-  # Deploy to app subdomain (app.getspaced.app) 
-  deploy-app:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Download build artifact  
-        uses: actions/download-artifact@v4
-        with:
-          name: flutter-build
-          path: ./web-build
-          
-      - name: Deploy to app subdomain
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./web-build
-          cname: app.getspaced.app
-          force_orphan: true 
+        uses: actions/deploy-pages@v4 
