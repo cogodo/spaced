@@ -232,6 +232,8 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   Widget _buildHeader(BuildContext context, bool isDesktop) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         return Container(
@@ -239,45 +241,93 @@ class _LandingScreenState extends State<LandingScreen>
             horizontal: isDesktop ? 80 : 20,
             vertical: 20,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Logo/Brand
-              Row(
-                children: [
-                  ThemeLogo(size: 32),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Spaced',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+          child:
+              isMobile
+                  ? Column(
+                    children: [
+                      // First row: Logo and Login button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Logo/Brand
+                          Row(
+                            children: [
+                              ThemeLogo(size: 32),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Spaced',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Login button only
+                          OutlinedButton(
+                            onPressed: widget.onNavigateToLogin,
+                            child: Text(
+                              authProvider.isSignedIn
+                                  ? 'Back to App'
+                                  : 'Login / Sign Up',
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Second row: Theme toggle right-aligned
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [ThemeToggle()],
+                      ),
+                    ],
+                  )
+                  : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Logo/Brand
+                      Row(
+                        children: [
+                          ThemeLogo(size: 32),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Spaced',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Header buttons
+                      Row(
+                        children: [
+                          // Theme Toggle (replace the dropdown)
+                          ThemeToggle(),
+
+                          const SizedBox(width: 16),
+
+                          // Dynamic button based on auth status
+                          OutlinedButton(
+                            onPressed: widget.onNavigateToLogin,
+                            child: Text(
+                              authProvider.isSignedIn
+                                  ? 'Back to App'
+                                  : 'Login / Sign Up',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-
-              // Header buttons
-              Row(
-                children: [
-                  // Theme Toggle (replace the dropdown)
-                  ThemeToggle(),
-
-                  const SizedBox(width: 16),
-
-                  // Dynamic button based on auth status
-                  OutlinedButton(
-                    onPressed: widget.onNavigateToLogin,
-                    child: Text(
-                      authProvider.isSignedIn
-                          ? 'Back to App'
-                          : 'Login / Sign Up',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         );
       },
     );
