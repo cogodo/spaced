@@ -6,8 +6,11 @@ import '../services/logger_service.dart';
 import '../models/schedule_manager.dart';
 import '../widgets/theme_toggle.dart';
 
+/// User profile screen showing account information and settings
 class UserProfileScreen extends StatefulWidget {
-  const UserProfileScreen({super.key});
+  final VoidCallback? onNavigateToLanding;
+
+  const UserProfileScreen({super.key, this.onNavigateToLanding});
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -553,6 +556,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _logger.info('User initiated sign out');
         await authProvider.signOut();
         _logger.info('Sign out successful');
+
+        // Navigate to landing page after successful sign out
+        if (widget.onNavigateToLanding != null) {
+          widget.onNavigateToLanding!();
+        }
 
         // Don't show success message since user will be redirected to landing page
         // The success will be evident by the redirect itself

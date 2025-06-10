@@ -150,7 +150,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                                       ScheduleManager
                                     >.value(
                                       value: scheduleManager,
-                                      child: const UserProfileScreen(),
+                                      child: UserProfileScreen(
+                                        onNavigateToLanding:
+                                            widget.onNavigateToLanding,
+                                      ),
                                     ),
                               ),
                             );
