@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
@@ -63,12 +64,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      // Complete autofill context after successful signup
+      TextInput.finishAutofillContext();
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     final authProvider = context.read<AuthProvider>();
     await authProvider.signInWithGoogle();
+
+    // Complete autofill context after successful login
+    TextInput.finishAutofillContext();
   }
 
   void _navigateToLogin() {
@@ -202,104 +209,107 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget _buildSignUpForm(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        return Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Error message
-              if (authProvider.errorMessage != null)
-                AuthErrorMessage(
-                  message: authProvider.errorMessage!,
-                  onDismiss: authProvider.clearError,
+        return AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Error message
+                if (authProvider.errorMessage != null)
+                  AuthErrorMessage(
+                    message: authProvider.errorMessage!,
+                    onDismiss: authProvider.clearError,
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Email field
+                EmailFormField(
+                  controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  nextFocusNode: _passwordFocusNode,
+                  enabled: !authProvider.isLoading,
                 ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Email field
-              EmailFormField(
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                nextFocusNode: _passwordFocusNode,
-                enabled: !authProvider.isLoading,
-              ),
+                // Password field
+                PasswordFormField(
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  obscureText: _obscurePassword,
+                  validator: _validatePassword,
+                  showRequirements: true,
+                  autofillHints: const [AutofillHints.newPassword],
+                  onToggleObscure: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                  enabled: !authProvider.isLoading,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Password field
-              PasswordFormField(
-                controller: _passwordController,
-                focusNode: _passwordFocusNode,
-                obscureText: _obscurePassword,
-                validator: _validatePassword,
-                showRequirements: true,
-                autofillHints: const [AutofillHints.newPassword],
-                onToggleObscure: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-                enabled: !authProvider.isLoading,
-              ),
+                // Confirm password field
+                PasswordFormField(
+                  controller: _confirmPasswordController,
+                  focusNode: _confirmPasswordFocusNode,
+                  obscureText: _obscureConfirmPassword,
+                  labelText: 'Confirm Password',
+                  hintText: 'Confirm your password',
+                  validator: _validateConfirmPassword,
+                  autofillHints: const [],
+                  onToggleObscure: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                  onSubmitted: (_) => _handleEmailSignUp(),
+                  enabled: !authProvider.isLoading,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-              // Confirm password field
-              PasswordFormField(
-                controller: _confirmPasswordController,
-                focusNode: _confirmPasswordFocusNode,
-                obscureText: _obscureConfirmPassword,
-                labelText: 'Confirm Password',
-                hintText: 'Confirm your password',
-                validator: _validateConfirmPassword,
-                autofillHints: const [],
-                onToggleObscure: () {
-                  setState(() {
-                    _obscureConfirmPassword = !_obscureConfirmPassword;
-                  });
-                },
-                onSubmitted: (_) => _handleEmailSignUp(),
-                enabled: !authProvider.isLoading,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Sign up button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: authProvider.isLoading ? null : _handleEmailSignUp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Sign up button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed:
+                        authProvider.isLoading ? null : _handleEmailSignUp,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                  ),
-                  child:
-                      authProvider.isLoading
-                          ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                    child:
+                        authProvider.isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              'Create Account',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
-                          )
-                          : Text(
-                            'Create Account',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
