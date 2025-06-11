@@ -34,7 +34,7 @@ class ThemeLogo extends StatelessWidget {
         child: ColorFiltered(
           colorFilter: ColorFilter.mode(logoColor, BlendMode.srcIn),
           child: Image.asset(
-            'assets/images/logo_gradient.png',
+            'assets/images/logo_purple.png',
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               // Fallback to icon if image fails to load

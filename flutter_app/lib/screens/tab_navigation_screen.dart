@@ -110,19 +110,20 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
     final isDesktop = MediaQuery.of(context).size.width > 600;
     final currentPath = GoRouterState.of(context).matchedLocation;
     final selectedIndex = _getSelectedIndex(currentPath);
+    final isOnProfilePage = currentPath == Routes.appProfile;
 
     return Scaffold(
       body: Column(
         children: [
           // Header with logo and profile
-          _buildHeader(context),
+          _buildHeader(context, isOnProfilePage),
 
           // Main content area
           Expanded(
             child: Row(
               children: [
-                // Desktop navigation rail
-                if (isDesktop)
+                // Desktop navigation rail - HIDDEN on profile page
+                if (isDesktop && !isOnProfilePage)
                   Container(
                     width: 120,
                     height: double.infinity,
@@ -174,9 +175,9 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         ],
       ),
 
-      // Mobile bottom navigation
+      // Mobile bottom navigation - HIDDEN on profile page
       bottomNavigationBar:
-          !isDesktop
+          !isDesktop && !isOnProfilePage
               ? BottomNavigationBar(
                 currentIndex: selectedIndex,
                 onTap: (index) => _navigateToIndex(context, index),
@@ -211,7 +212,7 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, bool isOnProfilePage) {
     return Container(
       height: 100,
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -248,28 +249,50 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
 
           const Spacer(),
 
-          // Profile icon - simple app-domain routing!
+          // Dynamic icon based on page - Profile icon OR Today's Reviews icon
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Container(
               width: 100,
               height: 100,
-              child: Tooltip(
-                message: 'Profile',
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: () => context.go(Routes.appProfile), // /profile
-                    child: Center(
-                      child: Icon(
-                        Icons.account_circle,
-                        size: 60,
-                        color: Theme.of(context).colorScheme.primary,
+              child:
+                  isOnProfilePage
+                      ? Tooltip(
+                        message: "Today's Reviews",
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap:
+                                () => context.go(
+                                  Routes.appHome,
+                                ), // Go to today's reviews
+                            child: Center(
+                              child: Icon(
+                                Icons.home,
+                                size: 60,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      : Tooltip(
+                        message: 'Profile',
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap:
+                                () => context.go(Routes.appProfile), // /profile
+                            child: Center(
+                              child: Icon(
+                                Icons.account_circle,
+                                size: 60,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
             ),
           ),
         ],

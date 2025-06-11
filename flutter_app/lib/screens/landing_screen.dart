@@ -256,6 +256,15 @@ class _LandingScreenState extends State<LandingScreen>
 
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
+        // Check current route to hide profile button when on profile screen
+        final currentLocation = GoRouterState.of(context).matchedLocation;
+        final isOnProfilePage = currentLocation == Routes.appProfile;
+
+        // Debug: Print current location for troubleshooting
+        print(
+          'Landing Header Debug: Current location: $currentLocation, isOnProfilePage: $isOnProfilePage',
+        );
+
         return Container(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? 80 : 20,
@@ -335,15 +344,37 @@ class _LandingScreenState extends State<LandingScreen>
 
                           const SizedBox(width: 16),
 
-                          // Dynamic button based on auth status
-                          OutlinedButton(
-                            onPressed: () => _handleHeaderButtonPress(context),
-                            child: Text(
-                              authProvider.isSignedIn
-                                  ? 'Back to App'
-                                  : 'Login / Sign Up',
+                          // Dynamic button based on auth status and current page
+                          if (authProvider.isSignedIn && !isOnProfilePage)
+                            Container(
+                              width: 70,
+                              height: 70,
+                              child: Tooltip(
+                                message: 'Profile',
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    onTap: () => context.go(Routes.appProfile),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.account_circle,
+                                        size: 60,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (!authProvider.isSignedIn)
+                            OutlinedButton(
+                              onPressed:
+                                  () => _handleHeaderButtonPress(context),
+                              child: const Text('Login'),
                             ),
-                          ),
                         ],
                       ),
                     ],
@@ -520,9 +551,6 @@ class _LandingScreenState extends State<LandingScreen>
 
             // Smaller logo size on mobile to prevent clipping
             final logoSize = isMobile ? 300.0 : 500.0;
-            final glowSize = isMobile ? 320.0 : 500.0;
-            final glowBlur = isMobile ? 15.0 : 30.0;
-            final glowSpread = isMobile ? 5.0 : 10.0;
 
             return GestureDetector(
               onTap: _onLogoTap,
@@ -533,22 +561,26 @@ class _LandingScreenState extends State<LandingScreen>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Reduced glow effect on mobile for better performance
+                      // More efficient glow using Container with minimal shadow
                       if (!isMobile) // Only show glow on desktop
                         Opacity(
-                          opacity: opacity,
+                          opacity:
+                              opacity * 0.6, // Reduced opacity for subtlety
                           child: Container(
-                            width: glowSize,
-                            height: glowSize,
+                            width: logoSize + 40,
+                            height: logoSize + 40,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
+                              // Single, optimized shadow instead of heavy blur
                               boxShadow: [
                                 BoxShadow(
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.primary.withValues(alpha: 0.3),
-                                  blurRadius: glowBlur * opacity,
-                                  spreadRadius: glowSpread * opacity,
+                                  ).colorScheme.primary.withValues(alpha: 0.2),
+                                  blurRadius: 20, // Reduced from 30
+                                  spreadRadius:
+                                      0, // Removed spread for performance
+                                  offset: Offset.zero,
                                 ),
                               ],
                             ),
@@ -580,8 +612,7 @@ class _LandingScreenState extends State<LandingScreen>
   Widget _buildGetSpacedButton(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        final buttonText =
-            authProvider.isSignedIn ? 'BACK TO APP' : 'GET SPACED';
+        final buttonText = authProvider.isSignedIn ? 'BACK TO APP' : 'LOGIN';
         final iconData =
             authProvider.isSignedIn ? Icons.arrow_back : Icons.arrow_forward;
 
