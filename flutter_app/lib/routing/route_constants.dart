@@ -8,6 +8,7 @@ class Routes {
   static const String login = '/login';
   static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
+  static const String privacyPolicy = '/privacy-policy';
 
   // App routes (getspaced.app/app/*)
   static const String appHome = '/app'; // getspaced.app/app
