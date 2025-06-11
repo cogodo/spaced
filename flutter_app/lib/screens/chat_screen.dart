@@ -509,9 +509,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1),
-        ),
       ),
       child: ListView.builder(
         controller: _scrollController,
@@ -533,12 +530,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser) ...[_buildAvatar(false), const SizedBox(width: 12)],
           Flexible(
             child: Container(
               constraints: BoxConstraints(
@@ -600,25 +597,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
-          if (isUser) ...[const SizedBox(width: 12), _buildAvatar(true)],
         ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar(bool isUser) {
-    final theme = Theme.of(context);
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        isUser ? Icons.person : Icons.smart_toy,
-        color: Colors.white,
-        size: 20,
       ),
     );
   }
@@ -628,8 +607,6 @@ class _ChatScreenState extends State<ChatScreen> {
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          _buildAvatar(false),
-          const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -688,10 +665,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      // Remove the box decoration completely to eliminate the background rectangle
       child: SafeArea(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -770,7 +745,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 elevation: _isLoading ? 0 : 2,
                 shadowColor: theme.colorScheme.primary.withValues(alpha: 0.3),
               ),
-              icon: const Icon(Icons.send_rounded, size: 24),
+              icon: const Icon(Icons.arrow_upward, size: 24),
               tooltip: 'Send message',
             ),
           ],
