@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../widgets/auth/email_form_field.dart';
@@ -7,18 +9,12 @@ import '../../widgets/auth/password_form_field.dart';
 import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
 import '../../widgets/theme_logo.dart';
+import '../../routing/route_constants.dart';
 import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
 class SignUpScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLogin;
-  final VoidCallback onBackToLanding;
-
-  const SignUpScreen({
-    super.key,
-    required this.onNavigateToLogin,
-    required this.onBackToLanding,
-  });
+  const SignUpScreen({super.key});
 
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();
@@ -56,6 +52,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
+  /// Get return URL from current route query parameters
+  String? get _returnUrl {
+    final state = GoRouterState.of(context);
+    return state.uri.queryParameters['returnTo'];
+  }
+
   Future<void> _handleEmailSignUp() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
@@ -63,16 +65,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      // Complete autofill context after successful signup
+      TextInput.finishAutofillContext();
+
+      // Router will automatically handle redirect to return URL via DomainGuard
+      // No need to manually navigate here - the auth state change will trigger routing
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     final authProvider = context.read<AuthProvider>();
     await authProvider.signInWithGoogle();
+
+    // Complete autofill context after successful login
+    TextInput.finishAutofillContext();
+
+    // Router will automatically handle redirect to return URL via DomainGuard
+    // No need to manually navigate here - the auth state change will trigger routing
   }
 
   void _navigateToLogin() {
-    widget.onNavigateToLogin();
+    // Preserve return URL when navigating to login
+    final returnUrl = _returnUrl;
+    if (returnUrl != null) {
+      final encodedReturnUrl = Uri.encodeComponent(returnUrl);
+      context.go('${Routes.login}?returnTo=$encodedReturnUrl');
+    } else {
+      context.go(Routes.login);
+    }
   }
 
   String? _validateConfirmPassword(String? value) {
@@ -120,26 +141,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: isDesktop ? 400 : double.infinity,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeader(context),
-                    const SizedBox(height: 48),
-                    _buildSignUpForm(context),
-                    const SizedBox(height: 24),
-                    _buildDivider(context),
-                    const SizedBox(height: 24),
-                    _buildGoogleSignIn(context),
-                    const SizedBox(height: 32),
-                    _buildLoginPrompt(context),
-                  ],
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isDesktop ? 400 : double.infinity,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildHeader(context),
+                        const SizedBox(height: 48),
+                        _buildSignUpForm(context),
+                        const SizedBox(height: 24),
+                        _buildDivider(context),
+                        const SizedBox(height: 24),
+                        _buildGoogleSignIn(context),
+                        const SizedBox(height: 32),
+                        _buildLoginPrompt(context),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -192,104 +223,107 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget _buildSignUpForm(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        return Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Error message
-              if (authProvider.errorMessage != null)
-                AuthErrorMessage(
-                  message: authProvider.errorMessage!,
-                  onDismiss: authProvider.clearError,
+        return AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Error message
+                if (authProvider.errorMessage != null)
+                  AuthErrorMessage(
+                    message: authProvider.errorMessage!,
+                    onDismiss: authProvider.clearError,
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Email field
+                EmailFormField(
+                  controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  nextFocusNode: _passwordFocusNode,
+                  enabled: !authProvider.isLoading,
                 ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Email field
-              EmailFormField(
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                nextFocusNode: _passwordFocusNode,
-                enabled: !authProvider.isLoading,
-              ),
+                // Password field
+                PasswordFormField(
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  obscureText: _obscurePassword,
+                  validator: _validatePassword,
+                  showRequirements: true,
+                  autofillHints: const [AutofillHints.newPassword],
+                  onToggleObscure: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                  enabled: !authProvider.isLoading,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Password field
-              PasswordFormField(
-                controller: _passwordController,
-                focusNode: _passwordFocusNode,
-                obscureText: _obscurePassword,
-                validator: _validatePassword,
-                showRequirements: true,
-                autofillHints: const [AutofillHints.newPassword],
-                onToggleObscure: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-                enabled: !authProvider.isLoading,
-              ),
+                // Confirm password field
+                PasswordFormField(
+                  controller: _confirmPasswordController,
+                  focusNode: _confirmPasswordFocusNode,
+                  obscureText: _obscureConfirmPassword,
+                  labelText: 'Confirm Password',
+                  hintText: 'Confirm your password',
+                  validator: _validateConfirmPassword,
+                  autofillHints: const [],
+                  onToggleObscure: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                  onSubmitted: (_) => _handleEmailSignUp(),
+                  enabled: !authProvider.isLoading,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-              // Confirm password field
-              PasswordFormField(
-                controller: _confirmPasswordController,
-                focusNode: _confirmPasswordFocusNode,
-                obscureText: _obscureConfirmPassword,
-                labelText: 'Confirm Password',
-                hintText: 'Confirm your password',
-                validator: _validateConfirmPassword,
-                autofillHints: const [],
-                onToggleObscure: () {
-                  setState(() {
-                    _obscureConfirmPassword = !_obscureConfirmPassword;
-                  });
-                },
-                onSubmitted: (_) => _handleEmailSignUp(),
-                enabled: !authProvider.isLoading,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Sign up button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: authProvider.isLoading ? null : _handleEmailSignUp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Sign up button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed:
+                        authProvider.isLoading ? null : _handleEmailSignUp,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                  ),
-                  child:
-                      authProvider.isLoading
-                          ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                    child:
+                        authProvider.isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              'Create Account',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
-                          )
-                          : Text(
-                            'Create Account',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../widgets/auth/email_form_field.dart';
@@ -7,19 +9,13 @@ import '../../widgets/auth/password_form_field.dart';
 import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
 import '../../widgets/theme_logo.dart';
+import '../../routing/route_constants.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
 /// Login screen with email/password and Google OAuth options
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onNavigateToSignUp;
-  final VoidCallback onBackToLanding;
-
-  const LoginScreen({
-    super.key,
-    required this.onNavigateToSignUp,
-    required this.onBackToLanding,
-  });
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -54,6 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Get return URL from current route query parameters
+  String? get _returnUrl {
+    final state = GoRouterState.of(context);
+    return state.uri.queryParameters['returnTo'];
+  }
+
   Future<void> _handleEmailSignIn() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
@@ -64,8 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text,
         );
 
-        // Force a rebuild to trigger navigation
-        if (mounted) setState(() {});
+        // Complete autofill context after successful login
+        TextInput.finishAutofillContext();
+
+        // Router will automatically handle redirect to return URL via DomainGuard
+        // No need to manually navigate here - the auth state change will trigger routing
       } catch (e) {
         // Error is handled by AuthProvider
       }
@@ -78,15 +83,25 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await authProvider.signInWithGoogle();
 
-      // Force a rebuild to trigger navigation
-      if (mounted) setState(() {});
+      // Complete autofill context after successful login
+      TextInput.finishAutofillContext();
+
+      // Router will automatically handle redirect to return URL via DomainGuard
+      // No need to manually navigate here - the auth state change will trigger routing
     } catch (e) {
       // Error is handled by AuthProvider
     }
   }
 
   void _navigateToSignUp() {
-    widget.onNavigateToSignUp();
+    // Preserve return URL when navigating to signup
+    final returnUrl = _returnUrl;
+    if (returnUrl != null) {
+      final encodedReturnUrl = Uri.encodeComponent(returnUrl);
+      context.go('${Routes.signup}?returnTo=$encodedReturnUrl');
+    } else {
+      context.go(Routes.signup);
+    }
   }
 
   void _navigateToForgotPassword() {
@@ -117,26 +132,36 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: isDesktop ? 400 : double.infinity,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeader(context),
-                    const SizedBox(height: 48),
-                    _buildLoginForm(context),
-                    const SizedBox(height: 24),
-                    _buildDivider(context),
-                    const SizedBox(height: 24),
-                    _buildGoogleSignIn(context),
-                    const SizedBox(height: 32),
-                    _buildSignUpPrompt(context),
-                  ],
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isDesktop ? 400 : double.infinity,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildHeader(context),
+                        const SizedBox(height: 48),
+                        _buildLoginForm(context),
+                        const SizedBox(height: 24),
+                        _buildDivider(context),
+                        const SizedBox(height: 24),
+                        _buildGoogleSignIn(context),
+                        const SizedBox(height: 32),
+                        _buildSignUpPrompt(context),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -189,99 +214,105 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLoginForm(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        return Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Error message
-              if (authProvider.errorMessage != null)
-                AuthErrorMessage(
-                  message: authProvider.errorMessage!,
-                  onDismiss: authProvider.clearError,
+        return AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Error message
+                if (authProvider.errorMessage != null)
+                  AuthErrorMessage(
+                    message: authProvider.errorMessage!,
+                    onDismiss: authProvider.clearError,
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Email field
+                EmailFormField(
+                  controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  nextFocusNode: _passwordFocusNode,
+                  enabled: !authProvider.isLoading,
                 ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Email field
-              EmailFormField(
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                nextFocusNode: _passwordFocusNode,
-                enabled: !authProvider.isLoading,
-              ),
+                // Password field
+                PasswordFormField(
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.password],
+                  onToggleObscure: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                  onSubmitted: (_) => _handleEmailSignIn(),
+                  enabled: !authProvider.isLoading,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 8),
 
-              // Password field
-              PasswordFormField(
-                controller: _passwordController,
-                focusNode: _passwordFocusNode,
-                obscureText: _obscurePassword,
-                onToggleObscure: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-                onSubmitted: (_) => _handleEmailSignIn(),
-                enabled: !authProvider.isLoading,
-              ),
-
-              const SizedBox(height: 8),
-
-              // Forgot password link
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed:
-                      authProvider.isLoading ? null : _navigateToForgotPassword,
-                  child: Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
+                // Forgot password link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed:
+                        authProvider.isLoading
+                            ? null
+                            : _navigateToForgotPassword,
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Sign in button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: authProvider.isLoading ? null : _handleEmailSignIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Sign in button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed:
+                        authProvider.isLoading ? null : _handleEmailSignIn,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                  ),
-                  child:
-                      authProvider.isLoading
-                          ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                    child:
+                        authProvider.isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              'Sign In',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
-                          )
-                          : Text(
-                            'Sign In',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

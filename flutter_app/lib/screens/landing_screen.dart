@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 import '../services/logger_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/theme_logo.dart';
 import '../widgets/theme_toggle.dart';
+import '../routing/route_constants.dart';
 import 'dart:math' as math;
 
 class LandingScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLogin;
-
-  const LandingScreen({super.key, required this.onNavigateToLogin});
+  const LandingScreen({super.key});
 
   @override
   State<LandingScreen> createState() => _LandingScreenState();
@@ -178,6 +178,26 @@ class _LandingScreenState extends State<LandingScreen>
     _logoSpinController.forward();
   }
 
+  /// Handle header button press based on authentication state
+  void _handleHeaderButtonPress(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final logger = getLogger('LandingScreen');
+
+    logger.info(
+      '🔥 Header button pressed, isSignedIn: ${authProvider.isSignedIn}',
+    );
+
+    if (authProvider.isSignedIn) {
+      // User is authenticated - go to app
+      logger.info('🔥 User is signed in, navigating to app home');
+      context.go(Routes.appHome);
+    } else {
+      // User is not authenticated - go to login
+      logger.info('🔥 User not signed in, navigating to login');
+      context.go(Routes.login);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width > 800;
@@ -186,14 +206,20 @@ class _LandingScreenState extends State<LandingScreen>
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).scaffoldBackgroundColor,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            ],
-          ),
+          gradient:
+              isMobile
+                  ? null // Remove gradient on mobile for better performance
+                  : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).scaffoldBackgroundColor,
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.1),
+                    ],
+                  ),
+          color: isMobile ? Theme.of(context).scaffoldBackgroundColor : null,
         ),
         child: SafeArea(
           child: SingleChildScrollView(
@@ -226,6 +252,8 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   Widget _buildHeader(BuildContext context, bool isDesktop) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         return Container(
@@ -233,45 +261,93 @@ class _LandingScreenState extends State<LandingScreen>
             horizontal: isDesktop ? 80 : 20,
             vertical: 20,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Logo/Brand
-              Row(
-                children: [
-                  ThemeLogo(size: 32),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Spaced',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+          child:
+              isMobile
+                  ? Column(
+                    children: [
+                      // First row: Logo and Login button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Logo/Brand
+                          Row(
+                            children: [
+                              ThemeLogo(size: 32),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Spaced',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Login button only
+                          OutlinedButton(
+                            onPressed: () => _handleHeaderButtonPress(context),
+                            child: Text(
+                              authProvider.isSignedIn
+                                  ? 'Back to App'
+                                  : 'Login / Sign Up',
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Second row: Theme toggle right-aligned
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [ThemeToggle()],
+                      ),
+                    ],
+                  )
+                  : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Logo/Brand
+                      Row(
+                        children: [
+                          ThemeLogo(size: 32),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Spaced',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Header buttons
+                      Row(
+                        children: [
+                          // Theme Toggle (replace the dropdown)
+                          ThemeToggle(),
+
+                          const SizedBox(width: 16),
+
+                          // Dynamic button based on auth status
+                          OutlinedButton(
+                            onPressed: () => _handleHeaderButtonPress(context),
+                            child: Text(
+                              authProvider.isSignedIn
+                                  ? 'Back to App'
+                                  : 'Login / Sign Up',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-
-              // Header buttons
-              Row(
-                children: [
-                  // Theme Toggle (replace the dropdown)
-                  ThemeToggle(),
-
-                  const SizedBox(width: 16),
-
-                  // Dynamic button based on auth status
-                  OutlinedButton(
-                    onPressed: widget.onNavigateToLogin,
-                    child: Text(
-                      authProvider.isSignedIn
-                          ? 'Back to App'
-                          : 'Login / Sign Up',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         );
       },
     );
@@ -380,8 +456,11 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   Widget _buildHeroVisual(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final containerHeight = isMobile ? 350.0 : 500.0; // Smaller on mobile
+
     return Container(
-      height: 500,
+      height: containerHeight,
       child: Center(child: _buildAnimatedLogo(context)),
     );
   }
@@ -391,6 +470,8 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   Widget _buildRotatingLogoAnimation(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return TweenAnimationBuilder<double>(
       duration: const Duration(
         milliseconds: 3000,
@@ -437,6 +518,12 @@ class _LandingScreenState extends State<LandingScreen>
                 _baseRotation +
                 (_additionalRotation * curvedValue);
 
+            // Smaller logo size on mobile to prevent clipping
+            final logoSize = isMobile ? 300.0 : 500.0;
+            final glowSize = isMobile ? 320.0 : 500.0;
+            final glowBlur = isMobile ? 15.0 : 30.0;
+            final glowSpread = isMobile ? 5.0 : 10.0;
+
             return GestureDetector(
               onTap: _onLogoTap,
               child: MouseRegion(
@@ -446,26 +533,27 @@ class _LandingScreenState extends State<LandingScreen>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Stationary glow effect
-                      Opacity(
-                        opacity: opacity,
-                        child: Container(
-                          width: 500,
-                          height: 500,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 30 * opacity,
-                                spreadRadius: 10 * opacity,
-                              ),
-                            ],
+                      // Reduced glow effect on mobile for better performance
+                      if (!isMobile) // Only show glow on desktop
+                        Opacity(
+                          opacity: opacity,
+                          child: Container(
+                            width: glowSize,
+                            height: glowSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.3),
+                                  blurRadius: glowBlur * opacity,
+                                  spreadRadius: glowSpread * opacity,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                       // Rotating logo
                       Transform.rotate(
                         angle: totalRotation * 2 * math.pi,
@@ -475,7 +563,7 @@ class _LandingScreenState extends State<LandingScreen>
                         ), // Use final coordinates (-5, 10)
                         child: Opacity(
                           opacity: opacity,
-                          child: ThemeLogo(size: 500),
+                          child: ThemeLogo(size: logoSize),
                         ),
                       ),
                     ],
@@ -511,7 +599,7 @@ class _LandingScreenState extends State<LandingScreen>
             ],
           ),
           child: ElevatedButton(
-            onPressed: widget.onNavigateToLogin,
+            onPressed: () => _handleHeaderButtonPress(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
@@ -580,66 +668,90 @@ class _LandingScreenState extends State<LandingScreen>
       child: Column(
         children: [
           // Animated section header
-          AnimatedBuilder(
-            animation: _featuresHeaderAnimation,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, 30 * (1 - _featuresHeaderAnimation.value)),
-                child: Opacity(
-                  opacity: _featuresHeaderAnimation.value,
-                  child: Column(
-                    children: [
-                      Text(
-                        'Why Choose Spaced?',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Text(
-                        'Built on decades of cognitive science research',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Theme.of(
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _featuresHeaderAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, 30 * (1 - _featuresHeaderAnimation.value)),
+                  child: Opacity(
+                    opacity: _featuresHeaderAnimation.value,
+                    child: Column(
+                      children: [
+                        Text(
+                          'Why Choose Spaced?',
+                          style: Theme.of(
                             context,
-                          ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+                          ).textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Built on decades of cognitive science research',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            color: Theme.of(context).textTheme.bodyLarge?.color
+                                ?.withValues(alpha: 0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
 
           const SizedBox(height: 60),
 
           // Animated features grid
-          AnimatedBuilder(
-            animation: _featuresCardsAnimation,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, 40 * (1 - _featuresCardsAnimation.value)),
-                child: Opacity(
-                  opacity: _featuresCardsAnimation.value,
-                  child:
-                      isDesktop
-                          ? Row(
-                            children:
-                                features
-                                    .asMap()
-                                    .entries
-                                    .map(
-                                      (entry) => Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _featuresCardsAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, 40 * (1 - _featuresCardsAnimation.value)),
+                  child: Opacity(
+                    opacity: _featuresCardsAnimation.value,
+                    child:
+                        isDesktop
+                            ? Row(
+                              children:
+                                  features
+                                      .asMap()
+                                      .entries
+                                      .map(
+                                        (entry) => Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                            ),
+                                            child: _buildFeatureCard(
+                                              context,
+                                              entry.value,
+                                              entry.key,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                            )
+                            : Column(
+                              children:
+                                  features
+                                      .asMap()
+                                      .entries
+                                      .map(
+                                        (entry) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 30,
                                           ),
                                           child: _buildFeatureCard(
                                             context,
@@ -647,32 +759,13 @@ class _LandingScreenState extends State<LandingScreen>
                                             entry.key,
                                           ),
                                         ),
-                                      ),
-                                    )
-                                    .toList(),
-                          )
-                          : Column(
-                            children:
-                                features
-                                    .asMap()
-                                    .entries
-                                    .map(
-                                      (entry) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 30,
-                                        ),
-                                        child: _buildFeatureCard(
-                                          context,
-                                          entry.value,
-                                          entry.key,
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                          ),
-                ),
-              );
-            },
+                                      )
+                                      .toList(),
+                            ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -694,59 +787,68 @@ class _LandingScreenState extends State<LandingScreen>
           offset: Offset(0, 20 * (1 - value)),
           child: Opacity(
             opacity: value,
-            child: Card(
-              elevation: 0,
-              color: Theme.of(context).cardColor.withValues(alpha: 0.7),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
+            child: SizedBox(
+              height: 280, // Fixed height for consistent card sizing
+              child: Card(
+                elevation: 0,
+                color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(30),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(30),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          feature['icon'],
+                          size: 40,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
-                      child: Icon(
-                        feature['icon'],
-                        size: 40,
-                        color: Theme.of(context).colorScheme.primary,
+
+                      const SizedBox(height: 20),
+
+                      Text(
+                        feature['title'],
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
 
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 12),
 
-                    Text(
-                      feature['title'],
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          feature['description'],
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyLarge?.copyWith(
+                            color: Theme.of(context).textTheme.bodyLarge?.color
+                                ?.withValues(alpha: 0.8),
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Text(
-                      feature['description'],
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
-                        height: 1.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -766,56 +868,59 @@ class _LandingScreenState extends State<LandingScreen>
       child: Column(
         children: [
           // Animated section header
-          AnimatedBuilder(
-            animation: _aboutHeaderAnimation,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, 30 * (1 - _aboutHeaderAnimation.value)),
-                child: Opacity(
-                  opacity: _aboutHeaderAnimation.value,
-                  child: Column(
-                    children: [
-                      Text(
-                        'Powered by Science',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Text(
-                        'Built on the Free Spaced Repetition Scheduler (FSRS)',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-
-                      const SizedBox(height: 32),
-
-                      Text(
-                        'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _aboutHeaderAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, 30 * (1 - _aboutHeaderAnimation.value)),
+                  child: Opacity(
+                    opacity: _aboutHeaderAnimation.value,
+                    child: Column(
+                      children: [
+                        Text(
+                          'Powered by Science',
+                          style: Theme.of(
                             context,
-                          ).textTheme.bodyLarge?.color?.withValues(alpha: 0.8),
-                          height: 1.6,
+                          ).textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Built on the Free Spaced Repetition Scheduler (FSRS)',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            color: Theme.of(context).textTheme.bodyLarge?.color
+                                ?.withValues(alpha: 0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        Text(
+                          'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context).textTheme.bodyLarge?.color
+                                ?.withValues(alpha: 0.8),
+                            height: 1.6,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
 
           const SizedBox(height: 40),
@@ -927,39 +1032,47 @@ class _LandingScreenState extends State<LandingScreen>
     String title,
     String description,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+    return SizedBox(
+      height: 200, // Fixed height for consistent benefit card sizing
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
-              height: 1.4,
+            const SizedBox(height: 8),
+            Expanded(
+              child: Text(
+                description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1031,7 +1144,7 @@ class _LandingScreenState extends State<LandingScreen>
             const SizedBox(height: 40),
 
             ElevatedButton(
-              onPressed: widget.onNavigateToLogin,
+              onPressed: () => _handleHeaderButtonPress(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).colorScheme.primary,
