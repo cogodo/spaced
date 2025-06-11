@@ -7,6 +7,7 @@ import '../screens/landing_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
+import '../screens/privacy_policy_screen.dart';
 import '../screens/tab_navigation_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/add_screen.dart';
@@ -97,6 +98,12 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         path: Routes.forgotPassword,
         name: 'forgot-password',
         builder: (context, state) => ForgotPasswordScreen(),
+      ),
+
+      GoRoute(
+        path: Routes.privacyPolicy,
+        name: 'privacy-policy',
+        builder: (context, state) => const PrivacyPolicyScreen(),
       ),
 
       // ===== APP ROUTES (Protected by redirect above) =====
