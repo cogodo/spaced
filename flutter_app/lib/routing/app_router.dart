@@ -173,6 +173,23 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         },
       ),
 
+      // Chat with specific session token
+      GoRoute(
+        path: '/app/chat/:sessionToken',
+        name: 'app-chat-session',
+        builder: (context, state) {
+          final sessionToken = state.pathParameters['sessionToken']!;
+          _logger.info(
+            '💬 Building app chat route with session token: $sessionToken',
+          );
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(
+              child: ChatScreen(sessionToken: sessionToken),
+            ),
+          );
+        },
+      ),
+
       GoRoute(
         path: Routes.appProfile,
         name: 'app-profile',
@@ -208,4 +225,3 @@ GoRouter createAppRouter(AuthProvider authProvider) {
     },
   );
 }
-
