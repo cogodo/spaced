@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// Privacy Policy screen for the Spaced app
 class PrivacyPolicyScreen extends StatelessWidget {

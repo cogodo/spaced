@@ -1,7 +1,8 @@
+// ignore_for_file: no_leading_underscores_for_local_identifiers
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'dart:html' as html;
 
 import '../screens/landing_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -208,20 +209,3 @@ GoRouter createAppRouter(AuthProvider authProvider) {
   );
 }
 
-/// Helper widget for domain errors
-Widget _buildDomainError(BuildContext context, String expectedDomain) {
-  return Scaffold(
-    body: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.warning, size: 64, color: Colors.orange),
-          SizedBox(height: 16),
-          Text('Wrong Domain'),
-          SizedBox(height: 8),
-          Text('This content should be accessed from $expectedDomain'),
-        ],
-      ),
-    ),
-  );
-}

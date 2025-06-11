@@ -10,7 +10,6 @@ import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
 import '../../widgets/theme_logo.dart';
 import '../../routing/route_constants.dart';
-import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
 /// Login screen with email/password and Google OAuth options

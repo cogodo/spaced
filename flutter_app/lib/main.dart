@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:spaced/models/schedule_manager.dart';
-import 'package:spaced/screens/tab_navigation_screen.dart';
-import 'package:spaced/screens/auth/login_screen.dart';
-import 'package:spaced/screens/landing_screen.dart';
-import 'package:spaced/screens/auth/signup_screen.dart';
 import 'package:spaced/providers/auth_provider.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
-import 'services/local_storage_service.dart';
 import 'services/firestore_service.dart';
 import 'services/logger_service.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
