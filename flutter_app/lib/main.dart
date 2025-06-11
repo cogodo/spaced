@@ -15,6 +15,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'dart:async';
 import 'routing/app_router.dart';
+import 'package:flutter/foundation.dart';
+import 'package:go_router/go_router.dart';
+
+// Import URL strategy for web
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 // Define a global key for the root ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
@@ -31,6 +36,11 @@ const bool kIsProduction = bool.fromEnvironment('dart.vm.product');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure URL strategy for web (path-based routing, no hash)
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -58,6 +68,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   static final _logger = getLogger('MyApp');
+  static GoRouter? _router; // Store router as static
 
   const MyApp({super.key});
 
@@ -68,13 +79,70 @@ class MyApp extends StatelessWidget {
 
     _logger.info('Building app with theme: ${themeNotifier.currentThemeKey}');
 
+    // Create router only once
+    if (_router == null) {
+      _logger.info('🚀 Creating new router instance');
+      _router = createAppRouter(authProvider);
+    } else {
+      _logger.info('♻️ Reusing existing router instance');
+    }
+
     return MaterialApp.router(
       title: 'Spaced',
       theme: themeNotifier.currentTheme,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      routerConfig: createAppRouter(
-        authProvider,
-      ), // Pass auth provider to router
+      routerConfig: _router!,
+    );
+  }
+}
+
+/// Wrapper that provides ScheduleManager for authenticated users
+class ScheduleManagerProvider extends StatelessWidget {
+  final Widget child;
+
+  const ScheduleManagerProvider({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    if (!authProvider.isSignedIn || authProvider.user == null) {
+      // Show loading screen during sign-out transition instead of returning child
+      // This prevents ProviderNotFoundException while router redirect is processing
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Signing out...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return FutureBuilder<ScheduleManager>(
+      future: _createScheduleManager(context, authProvider.user!.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text('Error loading user data: ${snapshot.error}'),
+            ),
+          );
+        }
+
+        return ChangeNotifierProvider<ScheduleManager>.value(
+          value: snapshot.data!,
+          child: child,
+        );
+      },
     );
   }
 }

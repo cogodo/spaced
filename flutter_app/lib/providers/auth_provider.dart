@@ -53,17 +53,24 @@ class AuthProvider with ChangeNotifier {
 
   /// Initialize authentication state listener
   void _initializeAuthState() {
-    _logger.info('Initializing auth state listener');
+    _logger.info('🔥 Initializing auth state listener');
 
     // Get the current user immediately
     _user = _authService.currentUser;
-    _logger.info('Initial user state: ${_user?.uid ?? 'null'}');
+    _logger.info('🔥 Initial user state: ${_user?.uid ?? 'null'}');
+
+    // Mark as initialized immediately if we have a definitive state
+    if (_user == null) {
+      _isInitialized = true;
+      _logger.info('🔥 Auth initialized immediately (no user)');
+      notifyListeners();
+    }
 
     // Set up the stream listener
     _authStateSubscription = _authService.authStateChanges.listen(
       (User? user) {
         _logger.info(
-          'Auth state changed: ${user?.uid ?? 'null'} (email: ${user?.email ?? 'null'})',
+          '🔥 Auth state changed: ${user?.uid ?? 'null'} (email: ${user?.email ?? 'null'})',
         );
 
         final bool wasSignedIn = _user != null;
@@ -76,23 +83,28 @@ class AuthProvider with ChangeNotifier {
 
         if (!_isInitialized) {
           _isInitialized = true;
-          _logger.info('Auth provider initialized');
+          _logger.info('🔥 Auth provider initialized via stream');
         }
 
         // Log state transition for debugging
         if (wasSignedIn != isNowSignedIn) {
           _logger.info(
-            'Auth state transition: wasSignedIn=$wasSignedIn -> isNowSignedIn=$isNowSignedIn',
+            '🔥 Auth state transition: wasSignedIn=$wasSignedIn -> isNowSignedIn=$isNowSignedIn',
           );
         }
 
+        _logger.info(
+          '🔥 About to call notifyListeners(), isSignedIn will be: $isNowSignedIn',
+        );
         notifyListeners();
+        _logger.info('🔥 notifyListeners() completed');
       },
       onError: (error) {
-        _logger.severe('Auth state stream error: $error');
+        _logger.severe('🔥 Auth state stream error: $error');
         _setError('Authentication state error');
         if (!_isInitialized) {
           _isInitialized = true;
+          _logger.info('🔥 Auth initialized due to error');
         }
         notifyListeners();
       },
@@ -101,6 +113,7 @@ class AuthProvider with ChangeNotifier {
     // If we already have a user, mark as initialized
     if (_user != null) {
       _isInitialized = true;
+      _logger.info('🔥 Auth initialized immediately (user exists)');
       notifyListeners();
     }
   }
@@ -130,6 +143,7 @@ class AuthProvider with ChangeNotifier {
     required String password,
   }) async {
     await _performAuthOperation(() async {
+      _logger.info('🔐 Starting email sign in process');
       final userCredential = await _authService.signInWithEmail(
         email: email,
         password: password,
@@ -139,6 +153,9 @@ class AuthProvider with ChangeNotifier {
       // Force update the user state immediately after successful sign in
       _user = userCredential.user;
       _logger.info('Updated local user state after sign in');
+      _logger.info(
+        '🚀 Sign in complete, calling notifyListeners() - this should trigger router redirect',
+      );
       notifyListeners(); // Immediately notify listeners for faster UI response
     });
   }

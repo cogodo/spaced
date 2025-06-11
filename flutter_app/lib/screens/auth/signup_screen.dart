@@ -14,14 +14,7 @@ import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
 class SignUpScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLogin;
-  final VoidCallback onBackToLanding;
-
-  const SignUpScreen({
-    super.key,
-    required this.onNavigateToLogin,
-    required this.onBackToLanding,
-  });
+  const SignUpScreen({super.key});
 
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();

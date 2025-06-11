@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 import '../services/logger_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/theme_logo.dart';
 import '../widgets/theme_toggle.dart';
+import '../routing/route_constants.dart';
 import 'dart:math' as math;
 
 class LandingScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLogin;
-
-  const LandingScreen({super.key, required this.onNavigateToLogin});
+  const LandingScreen({super.key});
 
   @override
   State<LandingScreen> createState() => _LandingScreenState();
@@ -178,6 +178,26 @@ class _LandingScreenState extends State<LandingScreen>
     _logoSpinController.forward();
   }
 
+  /// Handle header button press based on authentication state
+  void _handleHeaderButtonPress(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final logger = getLogger('LandingScreen');
+
+    logger.info(
+      '🔥 Header button pressed, isSignedIn: ${authProvider.isSignedIn}',
+    );
+
+    if (authProvider.isSignedIn) {
+      // User is authenticated - go to app
+      logger.info('🔥 User is signed in, navigating to app home');
+      context.go(Routes.appHome);
+    } else {
+      // User is not authenticated - go to login
+      logger.info('🔥 User not signed in, navigating to login');
+      context.go(Routes.login);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width > 800;
@@ -268,7 +288,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                           // Login button only
                           OutlinedButton(
-                            onPressed: widget.onNavigateToLogin,
+                            onPressed: () => _handleHeaderButtonPress(context),
                             child: Text(
                               authProvider.isSignedIn
                                   ? 'Back to App'
@@ -317,7 +337,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                           // Dynamic button based on auth status
                           OutlinedButton(
-                            onPressed: widget.onNavigateToLogin,
+                            onPressed: () => _handleHeaderButtonPress(context),
                             child: Text(
                               authProvider.isSignedIn
                                   ? 'Back to App'
@@ -579,7 +599,7 @@ class _LandingScreenState extends State<LandingScreen>
             ],
           ),
           child: ElevatedButton(
-            onPressed: widget.onNavigateToLogin,
+            onPressed: () => _handleHeaderButtonPress(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
@@ -1124,7 +1144,7 @@ class _LandingScreenState extends State<LandingScreen>
             const SizedBox(height: 40),
 
             ElevatedButton(
-              onPressed: widget.onNavigateToLogin,
+              onPressed: () => _handleHeaderButtonPress(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).colorScheme.primary,
