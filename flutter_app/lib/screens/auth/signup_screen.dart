@@ -10,7 +10,6 @@ import '../../widgets/auth/google_sign_in_button.dart';
 import '../../widgets/auth/auth_error_message.dart';
 import '../../widgets/theme_logo.dart';
 import '../../routing/route_constants.dart';
-import 'login_screen.dart';
 
 /// Sign up screen with email/password and Google OAuth options
 class SignUpScreen extends StatefulWidget {
