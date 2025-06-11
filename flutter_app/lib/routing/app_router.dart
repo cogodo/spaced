@@ -15,47 +15,82 @@ import '../screens/chat_screen.dart';
 import '../screens/user_profile_screen.dart';
 import '../models/schedule_manager.dart';
 import '../providers/auth_provider.dart';
+import '../services/logger_service.dart';
+import '../main.dart';
 import 'route_constants.dart';
-import 'domain_guard.dart';
 
 /// Create router with auth provider context
 GoRouter createAppRouter(AuthProvider authProvider) {
+  final _logger = getLogger('AppRouter');
+
+  _logger.info('🏗️ Creating new GoRouter instance');
+
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: true,
-    refreshListenable: authProvider, // Listen to auth state changes
-    redirect:
-        (context, state) => DomainGuard.handleDomainRouting(context, state),
+    refreshListenable: authProvider,
+    redirect: (context, state) {
+      // Access current auth provider from context instead of using closure-captured parameter
+      final currentAuthProvider = Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      );
+      final currentPath = state.matchedLocation;
+      final isSignedIn = currentAuthProvider.isSignedIn;
+      final isInitialized = currentAuthProvider.isInitialized;
+
+      _logger.info(
+        '🧭 Router redirect: path=$currentPath, signed_in=$isSignedIn, initialized=$isInitialized',
+      );
+
+      // Wait for auth initialization
+      if (!isInitialized) {
+        _logger.info('⏳ Auth not initialized yet, waiting...');
+        return null;
+      }
+
+      // Redirect signed-in users away from auth pages
+      if (isSignedIn &&
+          [
+            Routes.login,
+            Routes.signup,
+            Routes.forgotPassword,
+          ].contains(currentPath)) {
+        _logger.info(
+          '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appHome}',
+        );
+        return Routes.appHome;
+      }
+
+      // PROTECT /app routes - redirect unsigned users to landing
+      if (currentPath.startsWith('/app') && !isSignedIn) {
+        _logger.info(
+          '🔒 REDIRECTING unsigned user from $currentPath to landing page',
+        );
+        return Routes.landing;
+      }
+
+      _logger.info('✅ No redirect needed');
+      return null;
+    },
     routes: [
-      // ===== LANDING DOMAIN ROUTES (getspaced.app) =====
+      // ===== LANDING & AUTH ROUTES (No protection) =====
       GoRoute(
         path: Routes.landing,
         name: 'landing',
-        builder: (context, state) {
-          return LandingScreen(
-            onNavigateToLogin: () => context.go(Routes.login),
-          );
-        },
+        builder: (context, state) => LandingScreen(),
       ),
 
       GoRoute(
         path: Routes.login,
         name: 'login',
-        builder:
-            (context, state) => LoginScreen(
-              onNavigateToSignUp: () => context.go(Routes.signup),
-              onBackToLanding: () => context.go(Routes.landing),
-            ),
+        builder: (context, state) => LoginScreen(),
       ),
 
       GoRoute(
         path: Routes.signup,
         name: 'signup',
-        builder:
-            (context, state) => SignUpScreen(
-              onNavigateToLogin: () => context.go(Routes.login),
-              onBackToLanding: () => context.go(Routes.landing),
-            ),
+        builder: (context, state) => SignUpScreen(),
       ),
 
       GoRoute(
@@ -64,116 +99,99 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         builder: (context, state) => ForgotPasswordScreen(),
       ),
 
-      // ===== APP ROUTES (getspaced.app/app/*) =====
-      ShellRoute(
-        builder: (context, state, child) {
-          return Consumer<ScheduleManager>(
-            builder: (context, scheduleManager, _) {
-              return TabNavigationScreen(
-                child: child,
-                onNavigateToLanding: () => context.go(Routes.landing),
-              );
-            },
+      // ===== APP ROUTES (Protected by redirect above) =====
+      GoRoute(
+        path: Routes.appHome,
+        name: 'app-home',
+        builder: (context, state) {
+          _logger.info('🏠 Building app home route');
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(child: HomeScreen()),
           );
         },
-        routes: [
-          // App home (Today's reviews)
-          GoRoute(
-            path: Routes.appHome,
-            name: 'app-home',
-            builder: (context, state) => HomeScreen(),
-          ),
+      ),
 
-          // Add new items
-          GoRoute(
-            path: Routes.appAdd,
-            name: 'app-add',
-            builder:
-                (context, state) => Consumer<ScheduleManager>(
-                  builder:
-                      (context, scheduleManager, _) =>
-                          AdderScreen(onAddTask: scheduleManager.addTask),
-                ),
-          ),
+      GoRoute(
+        path: Routes.appAdd,
+        name: 'app-add',
+        builder: (context, state) {
+          _logger.info('➕ Building app add route');
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(
+              child: Consumer<ScheduleManager>(
+                builder: (context, scheduleManager, child) {
+                  return AdderScreen(
+                    onAddTask: (task) async {
+                      return await scheduleManager.addTask(task);
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
 
-          // All items
-          GoRoute(
-            path: Routes.appAll,
-            name: 'app-all',
-            builder:
-                (context, state) => Consumer<ScheduleManager>(
-                  builder:
-                      (context, scheduleManager, _) => AllReviewItemsScreen(
-                        allTasks: scheduleManager.allTasks,
-                        onDeleteTask: scheduleManager.removeTask,
-                      ),
-                ),
-          ),
+      GoRoute(
+        path: Routes.appAll,
+        name: 'app-all',
+        builder: (context, state) {
+          _logger.info('📋 Building app all items route');
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(
+              child: Consumer<ScheduleManager>(
+                builder: (context, scheduleManager, child) {
+                  return AllReviewItemsScreen(
+                    allTasks: scheduleManager.allTasks,
+                    onDeleteTask: (task) async {
+                      await scheduleManager.removeTask(task);
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
 
-          // Chat interface
-          GoRoute(
-            path: Routes.appChat,
-            name: 'app-chat',
-            builder: (context, state) => ChatScreen(),
-          ),
+      GoRoute(
+        path: Routes.appChat,
+        name: 'app-chat',
+        builder: (context, state) {
+          _logger.info('💬 Building app chat route');
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(child: ChatScreen()),
+          );
+        },
+      ),
 
-          // User profile
-          GoRoute(
-            path: Routes.appProfile,
-            name: 'app-profile',
-            builder:
-                (context, state) => UserProfileScreen(
-                  onNavigateToLanding: () => context.go(Routes.landing),
-                ),
-          ),
-        ],
+      GoRoute(
+        path: Routes.appProfile,
+        name: 'app-profile',
+        builder: (context, state) {
+          _logger.info('👤 Building app profile route');
+          return ScheduleManagerProvider(
+            child: TabNavigationScreen(child: UserProfileScreen()),
+          );
+        },
       ),
     ],
 
     // ===== ERROR HANDLING =====
     errorBuilder: (context, state) {
-      final currentPath = state.matchedLocation;
-      final isAppRoute = currentPath.startsWith('/app');
-
       return Scaffold(
-        appBar: AppBar(
-          title: Text('Page Not Found'),
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        ),
+        appBar: AppBar(title: Text('Page Not Found')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
+              Icon(Icons.error_outline, size: 64),
               SizedBox(height: 16),
-              Text(
-                '404 - Page Not Found',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              SizedBox(height: 8),
-              Text(
-                'The page you\'re looking for doesn\'t exist.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
-              ),
+              Text('404 - Page Not Found'),
               SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () {
-                  if (isAppRoute) {
-                    context.go(Routes.appHome);
-                  } else {
-                    context.go(Routes.landing);
-                  }
-                },
-                icon: Icon(Icons.home),
-                label: Text(isAppRoute ? 'Go to App Home' : 'Go to Landing'),
+              ElevatedButton(
+                onPressed: () => context.go('/'),
+                child: Text('Go Home'),
               ),
             ],
           ),

@@ -14,13 +14,8 @@ import 'dart:html' as html;
 
 class TabNavigationScreen extends StatefulWidget {
   final Widget child; // Child widget from router
-  final VoidCallback onNavigateToLanding;
 
-  const TabNavigationScreen({
-    super.key,
-    required this.child,
-    required this.onNavigateToLanding,
-  });
+  const TabNavigationScreen({super.key, required this.child});
 
   @override
   State<TabNavigationScreen> createState() => _TabNavigationScreenState();

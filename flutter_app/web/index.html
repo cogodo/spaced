@@ -106,12 +106,14 @@
   </div>
 
   <script>
-    // Configure Flutter for path-based routing (no hash)
-    window.flutterConfiguration = {
-      canvasKitBaseUrl: "https://www.gstatic.com/flutterjs/canvaskit/",
-      // Use path-based routing instead of hash routing
-      useColorEmoji: true,
-    };
+    // Force path-based URL strategy
+    window.addEventListener('load', function () {
+      if (window.location.hash && window.location.hash.length > 1) {
+        // Remove hash from URL and replace with path
+        const hashPath = window.location.hash.substring(1);
+        window.history.replaceState(null, null, hashPath);
+      }
+    });
   </script>
 
   <script src="flutter_bootstrap.js" async></script>

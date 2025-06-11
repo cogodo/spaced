@@ -15,14 +15,7 @@ import 'forgot_password_screen.dart';
 
 /// Login screen with email/password and Google OAuth options
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onNavigateToSignUp;
-  final VoidCallback onBackToLanding;
-
-  const LoginScreen({
-    super.key,
-    required this.onNavigateToSignUp,
-    required this.onBackToLanding,
-  });
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
