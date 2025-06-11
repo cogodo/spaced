@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:spaced/models/schedule_manager.dart';
 import 'package:spaced/providers/auth_provider.dart';
+import 'package:spaced/providers/chat_provider.dart';
 import 'themes/theme_data.dart';
 import 'package:provider/provider.dart';
 import 'services/firestore_service.dart';
@@ -69,8 +70,19 @@ void main() async {
 
         // Theme provider
         ChangeNotifierProvider(create: (_) => ThemeNotifier(prefs)),
+
         // Authentication provider
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+
+        // Chat provider for persistent chat state - depends on auth
+        ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
+          create: (_) => ChatProvider(),
+          update: (_, authProvider, chatProvider) {
+            // Update chat provider when auth state changes
+            chatProvider?.setUserId(authProvider.user?.uid);
+            return chatProvider!;
+          },
+        ),
       ],
       child: const MyApp(),
     ),
@@ -87,6 +99,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
     final authProvider = Provider.of<AuthProvider>(context);
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
     _logger.info('Building app with theme: ${themeNotifier.currentThemeKey}');
 
@@ -97,6 +110,9 @@ class MyApp extends StatelessWidget {
     } else {
       _logger.info('♻️ Reusing existing router instance');
     }
+
+    // Provide router to chat provider for navigation
+    chatProvider.setRouter(_router!);
 
     return MaterialApp.router(
       title: 'Spaced',
