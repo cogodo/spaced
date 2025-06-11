@@ -1,5 +1,5 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# Deploy Flutter app to GitHub Pages with custom domain
+name: Deploy to GitHub Pages
 
 on:
   # Runs on pushes targeting the default branch
@@ -66,20 +66,8 @@ jobs:
         
       - name: Prepare web files
         run: |
-          # Copy CNAME file for custom domain (if it exists in flutter_app/web)
-          if [ -f "flutter_app/web/CNAME" ]; then
-            echo "Copying CNAME file from flutter_app/web for custom domain"
-            cp flutter_app/web/CNAME flutter_app/build/web/CNAME
-          elif [ -f "CNAME" ]; then
-            echo "Copying CNAME file from root for custom domain"
-            cp CNAME flutter_app/build/web/CNAME
-          fi
-          
-          # Always use the optimized alt-index.html as the main index
-          if [ -f "alt-index.html" ]; then
-            echo "Using optimized alt-index.html as main index"
-            cp alt-index.html flutter_app/build/web/index.html
-          fi
+          # Create CNAME for main domain (getspaced.app)
+          echo "getspaced.app" > flutter_app/build/web/CNAME
           
           # Create .nojekyll file to bypass Jekyll processing
           touch flutter_app/build/web/.nojekyll

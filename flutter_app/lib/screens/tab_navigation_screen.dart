@@ -8,11 +8,14 @@ import 'package:spaced/models/schedule_manager.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import '../widgets/theme_logo.dart';
+import 'package:go_router/go_router.dart';
+import '../routing/route_constants.dart';
+import 'dart:html' as html;
 
 class TabNavigationScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLanding;
+  final Widget child; // Child widget from router
 
-  const TabNavigationScreen({super.key, required this.onNavigateToLanding});
+  const TabNavigationScreen({super.key, required this.child});
 
   @override
   State<TabNavigationScreen> createState() => _TabNavigationScreenState();
@@ -75,119 +78,59 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
     return success;
   }
 
+  // Helper method to get selected navigation index from current route
+  int _getSelectedIndex(String currentPath) {
+    switch (currentPath) {
+      case Routes.appHome:
+        return 0; // app.getspaced.app/
+      case Routes.appAdd:
+        return 1; // app.getspaced.app/add
+      case Routes.appAll:
+        return 2; // app.getspaced.app/all
+      case Routes.appChat:
+        return 3; // app.getspaced.app/chat
+      default:
+        return 0;
+    }
+  }
+
+  // Helper method to navigate to route by index
+  void _navigateToIndex(BuildContext context, int index) {
+    final routes = [
+      Routes.appHome, // /
+      Routes.appAdd, // /add
+      Routes.appAll, // /all
+      Routes.appChat, // /chat
+    ];
+    context.go(routes[index]);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Get ScheduleManager instance
-    final scheduleManager = Provider.of<ScheduleManager>(context);
     final isDesktop = MediaQuery.of(context).size.width > 600;
-
-    // Create a list of screens that we'll display
-    final screens = [
-      HomeScreen(),
-      AdderScreen(onAddTask: _handleAddTask),
-      AllReviewItemsScreen(
-        allTasks: scheduleManager.allTasks,
-        onDeleteTask: scheduleManager.removeTask,
-      ),
-      ChatScreen(),
-      // Removed profile screen from main navigation
-    ];
+    final currentPath = GoRouterState.of(context).matchedLocation;
+    final selectedIndex = _getSelectedIndex(currentPath);
 
     return Scaffold(
       body: Column(
         children: [
-          // New vertical bar with logo left, profile right
-          Container(
-            height: 100,
-            color: Theme.of(context).scaffoldBackgroundColor,
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-            child: Row(
-              children: [
-                // Logo on the left
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    child: Tooltip(
-                      message: 'Return to landing page',
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: widget.onNavigateToLanding,
-                          child: Center(child: ThemeLogo(size: 60)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Spacer to push profile icon to the right
-                const Spacer(),
-
-                // Profile icon on the right
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    child: Tooltip(
-                      message: 'Profile',
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: () {
-                            // Navigate to profile screen with ScheduleManager provider
-                            final scheduleManager =
-                                Provider.of<ScheduleManager>(
-                                  context,
-                                  listen: false,
-                                );
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => ChangeNotifierProvider<
-                                      ScheduleManager
-                                    >.value(
-                                      value: scheduleManager,
-                                      child: const UserProfileScreen(),
-                                    ),
-                              ),
-                            );
-                          },
-                          child: Center(
-                            child: Icon(
-                              Icons.account_circle,
-                              size: 60,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Header with logo and profile
+          _buildHeader(context),
 
           // Main content area
           Expanded(
             child: Row(
               children: [
-                // For desktop layouts, show the navigation rail
+                // Desktop navigation rail
                 if (isDesktop)
                   Container(
-                    width: 120, // Fixed width
+                    width: 120,
                     height: double.infinity,
                     child: Center(
                       child: NavigationRail(
-                        selectedIndex: _currentIndex,
-                        onDestinationSelected: (index) {
-                          setState(() {
-                            _currentIndex = index;
-                          });
-                        },
+                        selectedIndex: selectedIndex,
+                        onDestinationSelected:
+                            (index) => _navigateToIndex(context, index),
                         labelType: NavigationRailLabelType.all,
                         backgroundColor:
                             Theme.of(context).scaffoldBackgroundColor,
@@ -208,59 +151,21 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                             icon: Icon(Icons.chat),
                             label: Text('Chat'),
                           ),
-                          // Removed profile from navigation rail
                         ],
-                        // Make the rail same width as before
                         minWidth: 120,
                         useIndicator: true,
                       ),
                     ),
                   ),
 
-                // Main content area
+                // Main content from router
                 Expanded(
-                  child: Stack(
-                    children: [
-                      // Main content
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isDesktop ? 80 : 20,
-                          vertical: 20,
-                        ),
-                        child: screens[_currentIndex],
-                      ),
-
-                      // Confirmation message
-                      Positioned(
-                        bottom: 20,
-                        left: 20,
-                        right: 20,
-                        child: AnimatedOpacity(
-                          duration: Duration(milliseconds: 300),
-                          opacity: _showConfirmation ? 1.0 : 0.0,
-                          child: Material(
-                            borderRadius: BorderRadius.circular(12),
-                            elevation: 6,
-                            color: Theme.of(context).colorScheme.primary,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 16.0,
-                                horizontal: 24.0,
-                              ),
-                              child: Text(
-                                _confirmationText,
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(context).colorScheme.onPrimary,
-                                  fontSize: 16,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isDesktop ? 80 : 20,
+                      vertical: 20,
+                    ),
+                    child: widget.child, // Router provides the child
                   ),
                 ),
               ],
@@ -269,18 +174,13 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         ],
       ),
 
-      // Use a bottom navigation bar for mobile only
+      // Mobile bottom navigation
       bottomNavigationBar:
           !isDesktop
               ? BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                },
+                currentIndex: selectedIndex,
+                onTap: (index) => _navigateToIndex(context, index),
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                // Use the text color for items to match theme
                 selectedItemColor: Theme.of(context).colorScheme.primary,
                 unselectedItemColor: Theme.of(
                   context,
@@ -302,14 +202,78 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
                     icon: Icon(Icons.chat),
                     label: 'Chat',
                   ),
-                  // Removed profile from bottom navigation
                 ],
-                // Ensure it's large enough for easy touch
                 selectedFontSize: 14,
                 iconSize: 28,
-                type: BottomNavigationBarType.fixed, // Ensure all items fit
+                type: BottomNavigationBarType.fixed,
               )
               : null,
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 100,
+      color: Theme.of(context).scaffoldBackgroundColor,
+      padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+      child: Row(
+        children: [
+          // Logo - now redirects to landing domain!
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Container(
+              width: 100,
+              height: 100,
+              child: Tooltip(
+                message: 'Return to landing page',
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      final currentHost = html.window.location.host;
+                      if (currentHost.contains('localhost') ||
+                          currentHost.contains('127.0.0.1')) {
+                        context.go(Routes.landing);
+                      } else {
+                        html.window.location.href =
+                            'https://${Domains.landing}/';
+                      }
+                    },
+                    child: Center(child: ThemeLogo(size: 60)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Profile icon - simple app-domain routing!
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Container(
+              width: 100,
+              height: 100,
+              child: Tooltip(
+                message: 'Profile',
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => context.go(Routes.appProfile), // /profile
+                    child: Center(
+                      child: Icon(
+                        Icons.account_circle,
+                        size: 60,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

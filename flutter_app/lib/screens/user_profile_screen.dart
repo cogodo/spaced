@@ -6,6 +6,7 @@ import '../services/logger_service.dart';
 import '../models/schedule_manager.dart';
 import '../widgets/theme_toggle.dart';
 
+/// User profile screen showing account information and settings
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
 
