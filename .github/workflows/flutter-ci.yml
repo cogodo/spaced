@@ -1,0 +1,25 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # or macos-latest for iOS builds
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Install Flutter & enable caching
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'latest'   # or pin to e.g. '3.10.5'
+          cache: true                  # <-- turns on pub & pods caching
+
+      # 2. Get packages (will be super-fast when cache hits)
+      - run: flutter pub get
+
+      # 3. Run your build/tests
+      - run: flutter test
+      - run: flutter build apk --release
