@@ -21,6 +21,22 @@ import 'package:go_router/go_router.dart';
 // Import URL strategy for web
 import 'package:flutter_web_plugins/url_strategy.dart';
 
+// Custom page transition builder with no animations
+class NoTransitionPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NoTransitionPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T extends Object?>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child; // No transition, just return the child directly
+  }
+}
+
 // Define a global key for the root ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -89,7 +105,19 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp.router(
       title: 'Spaced',
-      theme: themeNotifier.currentTheme,
+      theme: themeNotifier.currentTheme.copyWith(
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            // Remove transitions for all platforms
+            TargetPlatform.android: NoTransitionPageTransitionsBuilder(),
+            TargetPlatform.iOS: NoTransitionPageTransitionsBuilder(),
+            TargetPlatform.macOS: NoTransitionPageTransitionsBuilder(),
+            TargetPlatform.windows: NoTransitionPageTransitionsBuilder(),
+            TargetPlatform.linux: NoTransitionPageTransitionsBuilder(),
+            TargetPlatform.fuchsia: NoTransitionPageTransitionsBuilder(),
+          },
+        ),
+      ),
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: _router!,
     );
