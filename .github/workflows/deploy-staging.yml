@@ -28,10 +28,10 @@ jobs:
         working-directory: ./flutter_app
         run: flutter pub get
 
-      # 4) Build the web app
+      # 4) Build the web app with staging backend URL
       - name: Build Flutter Web
         working-directory: ./flutter_app
-        run: flutter build web --release
+        run: flutter build web --release --dart-define=BACKEND_URL=https://spaced-backend-staging.onrender.com
 
       # 5) Deploy the contents of build/web to spaced-staging gh-pages
       - name: Deploy to spaced-staging
