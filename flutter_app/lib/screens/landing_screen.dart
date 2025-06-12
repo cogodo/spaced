@@ -204,46 +204,50 @@ class _LandingScreenState extends State<LandingScreen>
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient:
-              isMobile
-                  ? null // Remove gradient on mobile for better performance
-                  : LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).scaffoldBackgroundColor,
-                      Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1),
-                    ],
-                  ),
-          color: isMobile ? Theme.of(context).scaffoldBackgroundColor : null,
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            child: Column(
-              children: [
-                // Header
-                _buildHeader(context, isDesktop),
+      body: SelectableRegion(
+        focusNode: FocusNode(),
+        selectionControls: materialTextSelectionControls,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient:
+                isMobile
+                    ? null // Remove gradient on mobile for better performance
+                    : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Theme.of(context).scaffoldBackgroundColor,
+                        Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
+                      ],
+                    ),
+            color: isMobile ? Theme.of(context).scaffoldBackgroundColor : null,
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: Column(
+                children: [
+                  // Header
+                  _buildHeader(context, isDesktop),
 
-                // Hero Section
-                _buildHeroSection(context, isDesktop, isMobile),
+                  // Hero Section
+                  _buildHeroSection(context, isDesktop, isMobile),
 
-                // Features Section
-                _buildFeaturesSection(context, isDesktop, isMobile),
+                  // Features Section
+                  _buildFeaturesSection(context, isDesktop, isMobile),
 
-                // About Section
-                _buildAboutSection(context, isDesktop),
+                  // About Section
+                  _buildAboutSection(context, isDesktop),
 
-                // Call to Action Section
-                _buildCallToActionSection(context, isDesktop),
+                  // Call to Action Section
+                  _buildCallToActionSection(context, isDesktop),
 
-                // Footer
-                _buildFooter(context),
-              ],
+                  // Footer
+                  _buildFooter(context),
+                ],
+              ),
             ),
           ),
         ),

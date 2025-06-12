@@ -72,142 +72,146 @@ class _AdderScreenState extends State<AdderScreen>
     final isDesktop = screenWidth > 600;
     final maxWidth = isDesktop ? 600.0 : screenWidth * 0.9;
 
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
-      child: Center(
-        child: Container(
-          width: maxWidth,
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Text field with shake animation
-              SlideTransition(
-                position: _shakeAnimation,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withAlpha(128),
-                      width: 2,
+    return SelectableRegion(
+      focusNode: FocusNode(),
+      selectionControls: materialTextSelectionControls,
+      child: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: Center(
+          child: Container(
+            width: maxWidth,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Text field with shake animation
+                SlideTransition(
+                  position: _shakeAnimation,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withAlpha(128),
+                        width: 2,
+                      ),
                     ),
-                  ),
-                  child: TextField(
-                    controller: _taskController,
-                    focusNode: _focusNode,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.done,
-                    maxLength: 400,
-                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          maxLength,
-                        }) => Padding(
-                          padding: const EdgeInsets.only(right: 16.0),
-                          child: Text(
-                            '$currentLength / 400',
-                            style: TextStyle(
-                              color:
-                                  currentLength >= 400
-                                      ? Colors.red
-                                      : Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.color,
+                    child: TextField(
+                      controller: _taskController,
+                      focusNode: _focusNode,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.done,
+                      maxLength: 400,
+                      maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                      buildCounter:
+                          (
+                            context, {
+                            required currentLength,
+                            required isFocused,
+                            maxLength,
+                          }) => Padding(
+                            padding: const EdgeInsets.only(right: 16.0),
+                            child: Text(
+                              '$currentLength / 400',
+                              style: TextStyle(
+                                color:
+                                    currentLength >= 400
+                                        ? Colors.red
+                                        : Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color,
+                              ),
                             ),
                           ),
+                      // Larger font size for better readability
+                      style: TextStyle(fontSize: isDesktop ? 24.0 : 20.0),
+                      decoration: InputDecoration(
+                        hintText: 'Enter item to remember...',
+                        hintStyle: TextStyle(
+                          fontSize: isDesktop ? 24.0 : 20.0,
+                          color: Theme.of(context).hintColor,
                         ),
-                    // Larger font size for better readability
-                    style: TextStyle(fontSize: isDesktop ? 24.0 : 20.0),
-                    decoration: InputDecoration(
-                      hintText: 'Enter item to remember...',
-                      hintStyle: TextStyle(
-                        fontSize: isDesktop ? 24.0 : 20.0,
-                        color: Theme.of(context).hintColor,
+                        contentPadding: EdgeInsets.all(20),
+                        border: InputBorder.none,
+                        // Add rounded border that matches container
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
-                      contentPadding: EdgeInsets.all(20),
-                      border: InputBorder.none,
-                      // Add rounded border that matches container
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                      onSubmitted: (value) {
+                        // Handle keyboard submission
+                        if (!_isAdding) {
+                          _submitTask();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                SizedBox(height: 32),
+
+                // Submit button
+                SizedBox(
+                  width: isDesktop ? 300 : double.infinity,
+                  height: 60, // Taller button for easier clicking
+                  child: ElevatedButton(
+                    onPressed: _isAdding ? null : _submitTask,
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onSubmitted: (value) {
-                      // Handle keyboard submission
-                      if (!_isAdding) {
-                        _submitTask();
-                      }
+                    child:
+                        _isAdding
+                            ? SizedBox(
+                              height: 24.0,
+                              width: 24.0,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            )
+                            : Text(
+                              'Add Item',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                  ),
+                ),
+
+                SizedBox(height: 16),
+
+                // Clear button
+                SizedBox(
+                  width: isDesktop ? 300 : double.infinity,
+                  height: 60,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      _taskController.clear();
+                      _focusNode.requestFocus();
                     },
-                  ),
-                ),
-              ),
-              SizedBox(height: 32),
-
-              // Submit button
-              SizedBox(
-                width: isDesktop ? 300 : double.infinity,
-                height: 60, // Taller button for easier clicking
-                child: ElevatedButton(
-                  onPressed: _isAdding ? null : _submitTask,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
+                    child: Text('Clear', style: TextStyle(fontSize: 18)),
                   ),
-                  child:
-                      _isAdding
-                          ? SizedBox(
-                            height: 24.0,
-                            width: 24.0,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
-                          : Text(
-                            'Add Item',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                 ),
-              ),
-
-              SizedBox(height: 16),
-
-              // Clear button
-              SizedBox(
-                width: isDesktop ? 300 : double.infinity,
-                height: 60,
-                child: OutlinedButton(
-                  onPressed: () {
-                    _taskController.clear();
-                    _focusNode.requestFocus();
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text('Clear', style: TextStyle(fontSize: 18)),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

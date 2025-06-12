@@ -57,29 +57,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
             elevation: 0,
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User Info Section
-                _buildUserInfoSection(context, user, authProvider),
+          body: SelectableRegion(
+            focusNode: FocusNode(),
+            selectionControls: materialTextSelectionControls,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Info Section
+                  _buildUserInfoSection(context, user, authProvider),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Sync Status Section
-                _buildSyncStatusSection(context),
+                  // Sync Status Section
+                  _buildSyncStatusSection(context),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // App Settings Section (inline)
-                _buildAppSettingsSection(context),
+                  // App Settings Section (inline)
+                  _buildAppSettingsSection(context),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Account Actions Section
-                _buildAccountActionsSection(context, authProvider),
-              ],
+                  // Account Actions Section
+                  _buildAccountActionsSection(context, authProvider),
+                ],
+              ),
             ),
           ),
         );
