@@ -3,26 +3,132 @@ name: Flutter CI
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  FLUTTER_VERSION: '3.32.0'  # Match project Flutter version
 
 jobs:
-  build:
-    runs-on: ubuntu-latest   # or macos-latest for iOS builds
-
+  test:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # 1. Install Flutter & enable caching
-      - uses: subosito/flutter-action@v2
+      # Cache Flutter SDK
+      - name: Cache Flutter SDK
+        uses: actions/cache@v4
         with:
-          channel: '3.32.0'            # Use stable channel
-          cache: true                  # <-- turns on pub & pods caching
+          path: /opt/hostedtoolcache/flutter
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+            flutter-
 
-      # 2. Get packages (will be super-fast when cache hits)
-      - run: flutter pub get
+      # Install Flutter with caching
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # Cache pub dependencies
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            flutter_app/.dart_tool
+            flutter_app/pubspec.lock
+          key: pub-cache-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.yaml') }}
+          restore-keys: |
+            pub-cache-${{ runner.os }}-
+
+      # Get dependencies
+      - name: Install dependencies
+        run: flutter pub get
         working-directory: flutter_app
 
-      # 3. Run your build/tests
-      - run: flutter test
+      # Run tests
+      - name: Run tests
+        run: flutter test
         working-directory: flutter_app
-      - run: flutter build apk --release
+
+      # Run analyzer
+      - name: Analyze code
+        run: flutter analyze
         working-directory: flutter_app
+
+  build-web:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Cache Flutter SDK (reuse cache key from test job)
+      - name: Cache Flutter SDK
+        uses: actions/cache@v4
+        with:
+          path: /opt/hostedtoolcache/flutter
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+            flutter-
+
+      # Install Flutter with caching
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # Cache pub dependencies (reuse cache key from test job)
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            flutter_app/.dart_tool
+            flutter_app/pubspec.lock
+          key: pub-cache-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.yaml') }}
+          restore-keys: |
+            pub-cache-${{ runner.os }}-
+
+      # Cache web build artifacts
+      - name: Cache web build
+        uses: actions/cache@v4
+        with:
+          path: |
+            flutter_app/build/web
+            flutter_app/.dart_tool/build
+          key: web-build-${{ runner.os }}-${{ hashFiles('flutter_app/lib/**/*.dart', 'flutter_app/web/**/*') }}
+          restore-keys: |
+            web-build-${{ runner.os }}-
+
+      # Get dependencies
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: flutter_app
+
+      # Enable web
+      - name: Enable web
+        run: flutter config --enable-web
+
+      # Build web app for testing (no deployment)
+      - name: Build web app
+        run: flutter build web --release --tree-shake-icons
+        working-directory: flutter_app
+
+      # Upload web build artifact for testing
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: flutter_app/build/web
+          retention-days: 7
