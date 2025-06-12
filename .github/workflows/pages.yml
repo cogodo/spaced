@@ -54,8 +54,8 @@ jobs:
       - name: Build web with optimizations
         run: |
           cd flutter_app
-          # Build with basic performance optimizations
-          flutter build web --release --tree-shake-icons
+          # Build with basic performance optimizations and production backend
+          flutter build web --release --tree-shake-icons --dart-define=BACKEND_URL=https://spaced-x2o1.onrender.com
           
       - name: Verify build output
         run: |
