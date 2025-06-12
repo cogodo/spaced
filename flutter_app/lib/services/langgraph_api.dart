@@ -110,6 +110,7 @@ class LangGraphApi {
     final url = Uri.parse('$baseUrl/start_session');
 
     final payload = {
+      'session_type': 'custom_topics',
       'topics': topics,
       'max_topics': maxTopics,
       'max_questions': maxQuestions,

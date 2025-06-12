@@ -14,12 +14,15 @@ jobs:
       # 1. Install Flutter & enable caching
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'latest'   # or pin to e.g. '3.10.5'
+          channel: '3.32.0'            # Use stable channel
           cache: true                  # <-- turns on pub & pods caching
 
       # 2. Get packages (will be super-fast when cache hits)
       - run: flutter pub get
+        working-directory: flutter_app
 
       # 3. Run your build/tests
       - run: flutter test
+        working-directory: flutter_app
       - run: flutter build apk --release
+        working-directory: flutter_app

@@ -46,13 +46,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _refreshTasks();
     }
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {
-          _isRefreshing = true;
-        });
-      },
-      child: _buildContent(context),
+    return SelectableRegion(
+      focusNode: FocusNode(),
+      selectionControls: materialTextSelectionControls,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          setState(() {
+            _isRefreshing = true;
+          });
+        },
+        child: _buildContent(context),
+      ),
     );
   }
 

@@ -130,18 +130,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: double.infinity, // Ensure full height
-      child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch, // Make sidebar full height
-        children: [
-          // Left sidebar for session history
-          ChatHistorySidebar(selectedSessionToken: widget.sessionToken),
+    return SelectableRegion(
+      focusNode: FocusNode(),
+      selectionControls: materialTextSelectionControls,
+      child: SizedBox(
+        height: double.infinity, // Ensure full height
+        child: Row(
+          crossAxisAlignment:
+              CrossAxisAlignment.stretch, // Make sidebar full height
+          children: [
+            // Left sidebar for session history
+            ChatHistorySidebar(selectedSessionToken: widget.sessionToken),
 
-          // Main chat area (no divider)
-          Expanded(child: _buildChatMainArea()),
-        ],
+            // Main chat area (no divider)
+            Expanded(child: _buildChatMainArea()),
+          ],
+        ),
       ),
     );
   }
