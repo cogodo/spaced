@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/chat_history_sidebar.dart';
+import 'package:go_router/go_router.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -29,17 +30,22 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
 
-    // Load session based on token or start new session
+    // Load session based on token, but don't auto-start new sessions
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
       if (widget.sessionToken != null) {
         // Load specific session by token
         _loadSessionByToken(widget.sessionToken!);
-      } else if (!chatProvider.hasActiveSession) {
-        // Start a new session if there's no active session
-        chatProvider.startNewSession();
+      } else {
+        // Check if there's an active session and redirect to its token URL
+        final currentToken = chatProvider.currentSessionToken;
+        if (currentToken != null) {
+          // Redirect to the active session's token URL
+          context.go('/app/chat/$currentToken');
+        }
       }
+      // Don't auto-start new sessions - wait for user input
     });
   }
 
@@ -51,13 +57,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.sessionToken != oldWidget.sessionToken) {
       if (widget.sessionToken != null) {
         _loadSessionByToken(widget.sessionToken!);
-      } else {
-        // Navigate to default chat - start new session if needed
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        if (!chatProvider.hasActiveSession) {
-          chatProvider.startNewSession();
-        }
       }
+      // Don't auto-start new sessions when navigating to default chat
     }
   }
 
@@ -97,7 +98,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     if (chatProvider.isLoading) return;
 
-    chatProvider.sendMessage(text);
+    // If no active session exists, start a new one first
+    if (!chatProvider.hasActiveSession) {
+      chatProvider.startNewSession().then((_) {
+        // Send the message after the session is started
+        chatProvider.sendMessage(text);
+      });
+    } else {
+      chatProvider.sendMessage(text);
+    }
+
     _messageController.clear();
 
     // Keep focus on text field for better UX
@@ -120,140 +130,48 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Left sidebar for session history
-        ChatHistorySidebar(selectedSessionToken: widget.sessionToken),
-
-        // Vertical divider
-        const VerticalDivider(width: 1),
-
-        // Main chat area
-        Expanded(child: _buildChatMainArea()),
-      ],
-    );
-  }
-
-  Widget _buildChatMainArea() {
-    return GestureDetector(
-      // Dismiss keyboard when tapping outside interactive elements
-      onTap: () {
-        final FocusScopeNode currentScope = FocusScope.of(context);
-        if (!currentScope.hasPrimaryFocus && currentScope.hasFocus) {
-          FocusManager.instance.primaryFocus?.unfocus();
-        }
-      },
-      behavior: HitTestBehavior.translucent,
-      child: Column(
+    return SizedBox(
+      height: double.infinity, // Ensure full height
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.stretch, // Make sidebar full height
         children: [
-          // Session status bar
-          _buildSessionStatusBar(),
-          // Chat messages area
-          Expanded(child: _buildMessagesArea()),
-          // Input area - with bottom margin to move it up a bit
-          Container(
-            margin: const EdgeInsets.only(bottom: 24),
-            child: _buildInputArea(),
-          ),
+          // Left sidebar for session history
+          ChatHistorySidebar(selectedSessionToken: widget.sessionToken),
+
+          // Main chat area (no divider)
+          Expanded(child: _buildChatMainArea()),
         ],
       ),
     );
   }
 
-  Widget _buildSessionStatusBar() {
-    return Consumer<ChatProvider>(
-      builder: (context, chatProvider, child) {
-        if (chatProvider.sessionState == SessionState.initial ||
-            chatProvider.sessionState == SessionState.collectingTopics) {
-          return const SizedBox.shrink();
-        }
-
-        String statusText;
-        Color statusColor;
-
-        switch (chatProvider.sessionState) {
-          case SessionState.active:
-            statusText = "Learning Session Active";
-            statusColor = Colors.green;
-            break;
-          case SessionState.completed:
-            statusText = "Session Completed";
-            statusColor = Colors.blue;
-            break;
-          case SessionState.error:
-            statusText = "Session Error";
-            statusColor = Colors.red;
-            break;
-          default:
-            return const SizedBox.shrink();
-        }
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.1),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 1,
-              ),
+  Widget _buildChatMainArea() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+      ),
+      child: GestureDetector(
+        // Dismiss keyboard when tapping outside interactive elements
+        onTap: () {
+          final FocusScopeNode currentScope = FocusScope.of(context);
+          if (!currentScope.hasPrimaryFocus && currentScope.hasFocus) {
+            FocusManager.instance.primaryFocus?.unfocus();
+          }
+        },
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            // Chat messages area - removed session status bar
+            Expanded(child: _buildMessagesArea()),
+            // Input area - with bottom margin to move it up a bit
+            Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              child: _buildInputArea(),
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                chatProvider.sessionState == SessionState.active
-                    ? Icons.psychology
-                    : chatProvider.sessionState == SessionState.completed
-                    ? Icons.check_circle
-                    : Icons.error,
-                color: statusColor,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                statusText,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-              const Spacer(),
-              if (chatProvider.sessionState == SessionState.active)
-                TextButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder:
-                          (context) => AlertDialog(
-                            title: const Text('Start New Session'),
-                            content: const Text(
-                              'Are you sure you want to start a new learning session? This will end the current session.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  chatProvider.startNewSession();
-                                },
-                                child: const Text('Start New'),
-                              ),
-                            ],
-                          ),
-                    );
-                  },
-                  child: const Text('Start New'),
-                ),
-            ],
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 

@@ -119,39 +119,52 @@ class _SessionItemState extends State<SessionItem> {
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
+        position.dx - 120, // Move closer to the left
+        position.dy - 10, // Move slightly up
+        position.dx - 50, // Smaller width
+        position.dy + 10, // Smaller height
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8), // Rounded edges
+      ),
+      constraints: const BoxConstraints(
+        minWidth: 120, // Smaller minimum width
+        maxWidth: 150, // Smaller maximum width
       ),
       items: [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'rename',
+          height: 36, // Smaller height
           child: Row(
             children: [
-              Icon(Icons.edit, size: 16),
-              SizedBox(width: 8),
-              Text('Rename'),
+              Icon(Icons.edit, size: 14), // Smaller icon
+              const SizedBox(width: 8),
+              Text('Rename', style: TextStyle(fontSize: 13)), // Smaller text
             ],
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'copy_url',
+          height: 36, // Smaller height
           child: Row(
             children: [
-              Icon(Icons.link, size: 16),
-              SizedBox(width: 8),
-              Text('Copy URL'),
+              Icon(Icons.link, size: 14), // Smaller icon
+              const SizedBox(width: 8),
+              Text('Copy URL', style: TextStyle(fontSize: 13)), // Smaller text
             ],
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'delete',
+          height: 36, // Smaller height
           child: Row(
             children: [
-              Icon(Icons.delete, size: 16, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Delete', style: TextStyle(color: Colors.red)),
+              Icon(Icons.delete, size: 14, color: Colors.red), // Smaller icon
+              const SizedBox(width: 8),
+              Text(
+                'Delete',
+                style: TextStyle(fontSize: 13, color: Colors.red),
+              ), // Smaller text
             ],
           ),
         ),
@@ -269,11 +282,21 @@ class _SessionItemState extends State<SessionItem> {
                       ),
                       if (_isHovered)
                         GestureDetector(
-                          onTap:
-                              () => _showContextMenu(
-                                context,
-                                const Offset(200, 0),
+                          onTap: () {
+                            // Get the position of the three dots relative to the widget
+                            final RenderBox renderBox =
+                                context.findRenderObject() as RenderBox;
+                            final position = renderBox.localToGlobal(
+                              Offset.zero,
+                            );
+                            _showContextMenu(
+                              context,
+                              Offset(
+                                position.dx + renderBox.size.width,
+                                position.dy,
                               ),
+                            );
+                          },
                           child: Icon(
                             Icons.more_horiz,
                             size: 16,

@@ -338,6 +338,13 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
+    // Handle "continue" command for expired sessions
+    final lowerAnswer = answer.toLowerCase().trim();
+    if (lowerAnswer == 'continue' || lowerAnswer == 'new question') {
+      await _handleExpiredSession(answer);
+      return;
+    }
+
     try {
       final response = await _api.answer(
         sessionId: _currentSessionId!,
@@ -363,11 +370,8 @@ class ChatProvider extends ChangeNotifier {
       }
     } on LangGraphApiException catch (e) {
       if (e.statusCode == 404) {
-        _addAIMessage(
-          "Your session has expired or is no longer valid. Let's start a new one!\n\n"
-          "Please tell me what topics you'd like to study.",
-        );
-        _resetSession();
+        // Backend session expired - handle gracefully
+        await _handleExpiredSession(answer);
       } else {
         _sessionState = SessionState.error;
         _addAIMessage(
@@ -379,6 +383,70 @@ class ChatProvider extends ChangeNotifier {
 
     _updateCurrentSession();
     await _autoSaveSession();
+  }
+
+  /// Handle expired backend sessions gracefully
+  Future<void> _handleExpiredSession(String answer) async {
+    _logger.info('Backend session expired, attempting to continue gracefully');
+
+    try {
+      // If we have topics from the current session, restart the backend session
+      if (_currentSession != null && _currentSession!.topics.isNotEmpty) {
+        // Restart the backend session with existing topics
+        final response = await _api.startSession(
+          topics: _currentSession!.topics,
+          maxTopics: _maxTopics,
+          maxQuestions: _maxQuestions,
+        );
+
+        _currentSessionId = response.sessionId;
+
+        // Try to process the user's answer directly instead of starting from the beginning
+        try {
+          final continueResponse = await _api.answer(
+            sessionId: _currentSessionId!,
+            userInput: answer,
+          );
+
+          if (continueResponse.isDone) {
+            // Session completed
+            _sessionState = SessionState.completed;
+            _finalScores = continueResponse.scores;
+
+            _currentSession = _currentSession!.copyWith(
+              state: SessionState.completed,
+              isCompleted: true,
+              finalScores: continueResponse.scores,
+              updatedAt: DateTime.now(),
+            );
+
+            _addAIMessage(_buildCompletionMessage(continueResponse.scores!));
+          } else {
+            // Continue with next question
+            _addAIMessage(
+              "**Next Question:**\n${continueResponse.nextQuestion!}",
+            );
+          }
+        } catch (e) {
+          // If answer processing fails, show the first question from the restarted session
+          _logger.warning(
+            'Failed to process answer after restart, showing first question: $e',
+          );
+          _addAIMessage("**Question:**\n${response.nextQuestion}");
+        }
+      } else {
+        // No topics available, ask user to restart
+        _addAIMessage("Please tell me what topics you'd like to study.");
+        _sessionState = SessionState.collectingTopics;
+        _currentSessionId = null;
+      }
+    } catch (e) {
+      // If restart fails, gracefully degrade
+      _logger.warning('Failed to restart expired session: $e');
+      _addAIMessage("Please tell me what topics you'd like to study today.");
+      _sessionState = SessionState.collectingTopics;
+      _currentSessionId = null;
+    }
   }
 
   /// Handle input when session is completed
@@ -726,4 +794,7 @@ class ChatProvider extends ChangeNotifier {
     // TODO: Implement in Phase 5 with AI naming
     _logger.info('Auto-naming will be implemented in Phase 5');
   }
+
+  /// Get the current session token for routing
+  String? get currentSessionToken => _currentSession?.token;
 }
