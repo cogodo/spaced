@@ -222,6 +222,11 @@ def evaluate_node(state: GraphState) -> Dict[str, Any]:
     """
     if state["done"]:
         scores = call_evaluator_llm(state)
+        
+        # Ensure scores is valid - throw error if not
+        if not scores or not isinstance(scores, dict):
+            raise ValueError("Evaluation failed: call_evaluator_llm returned invalid scores")
+        
         state["scores"] = scores
         
         # Add evaluation metadata for debugging and analytics
