@@ -41,7 +41,7 @@ class ChatProvider extends ChangeNotifier {
     // Use environment-based backend URL
     const String? backendUrl = String.fromEnvironment(
       'BACKEND_URL',
-      defaultValue: 'https://spaced-x2o1.onrender.com',
+      defaultValue: 'https://spaced-staging.onrender.com',
     );
 
     _api = LangGraphApi(baseUrl: backendUrl);
