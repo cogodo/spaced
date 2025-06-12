@@ -12,6 +12,11 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
 
   // Helper method to get selected navigation index from current route
   int _getSelectedIndex(String currentPath) {
+    // Handle chat routes with tokens (e.g., /app/chat/abc123)
+    if (currentPath.startsWith('/app/chat')) {
+      return 3;
+    }
+
     switch (currentPath) {
       case Routes.appHome:
         return 0;

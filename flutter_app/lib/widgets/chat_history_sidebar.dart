@@ -55,14 +55,16 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
         color: colorScheme.surface,
         border: Border(
           right: BorderSide(
-            color: colorScheme.outline.withOpacity(0.2),
+            color: colorScheme.outline.withOpacity(
+              0.15,
+            ), // Slightly lighter border
             width: 1,
           ),
         ),
       ),
       child: Column(
         children: [
-          // Header with new chat button
+          // Header with new chat button - flush to top
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
