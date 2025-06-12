@@ -38,7 +38,13 @@ class ChatProvider extends ChangeNotifier {
   GoRouter? _router;
 
   ChatProvider() {
-    _api = LangGraphApi(baseUrl: 'https://spaced-x2o1.onrender.com');
+    // Use environment-based backend URL
+    const String? backendUrl = String.fromEnvironment(
+      'BACKEND_URL',
+      defaultValue: 'https://spaced-x2o1.onrender.com',
+    );
+
+    _api = LangGraphApi(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
   }
 
