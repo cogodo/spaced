@@ -2,6 +2,23 @@ import random
 from typing import Dict, List, Tuple
 import re
 from datetime import datetime, timezone
+import os
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+# Initialize OpenAI LLM lazily to avoid import errors when API key is not set
+_llm = None
+
+def get_llm():
+    """Get or create the OpenAI LLM instance"""
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            model="gpt-4.1-nano",
+            temperature=0.7,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+    return _llm
 
 # Question type definitions with learning science rationale
 QUESTION_TYPES = {
@@ -696,7 +713,7 @@ def calculate_adaptive_score(topic: str, topic_qa: List[Dict], task_context: Dic
 
 def call_main_llm(state: Dict) -> str:
     """
-    Enhanced question generator with Phase 5 adaptive features.
+    Enhanced question generator with Phase 5 adaptive features using OpenAI.
     
     Features:
     - FSRS difficulty-based question type selection
@@ -725,34 +742,76 @@ def call_main_llm(state: Dict) -> str:
     # Select adaptive question type
     question_type = select_question_type(difficulty, question_count, topic_history)
     
-    # Generate context-aware question
-    question = generate_question_by_type(topic, question_type, question_count, topic_history, task_context)
-    
-    # Phase 5: Track difficulty progression
-    if 'question_difficulty_progression' not in state:
-        state['question_difficulty_progression'] = []
-    state['question_difficulty_progression'].append(difficulty)
-    
-    # Log difficulty adaptation for monitoring
-    if session_type == "due_items":
-        overdue_info = f", {task_context['days_overdue']} days overdue" if task_context['days_overdue'] > 0 else ""
-        print(f"Generated {question_type} question for '{topic}' (difficulty: {difficulty:.2f}{overdue_info})")
-    
-    # Store question type in state for evaluation
-    if 'question_types' not in state:
-        state['question_types'] = []
-    state['question_types'].append({
-        'topic': topic,
-        'type': question_type,
-        'question': question,
-        'difficulty_context': task_context
-    })
-    
-    return question
+    # Build context for OpenAI
+    system_prompt = f"""You are an expert learning coach specializing in spaced repetition and adaptive questioning.
+
+Your task: Generate a {question_type} question about "{topic}" for a learner.
+
+Question Type Guidelines:
+- free_recall: Open-ended questions requiring complete recall from memory
+- cued_recall: Questions with context clues to guide memory retrieval  
+- recognition: Multiple choice or yes/no questions for identification
+- application: Questions requiring practical use of knowledge
+- connection: Questions about relationships between concepts
+- elaboration: Questions that build on previous responses
+- analysis: Questions requiring breaking down concepts into components
+- comparison: Questions comparing concepts or approaches
+
+Context:
+- This is question #{question_count} about {topic}
+- Session type: {session_type}
+- Difficulty level: {difficulty:.2f} (0=easy, 1=hard)
+- Previous questions asked: {len(topic_history)}
+
+Session History:
+{chr(10).join([f"Q: {qa.get('question', 'N/A')[:100]}..." for qa in topic_history[-3:]])}
+
+Generate ONE focused question that:
+1. Matches the {question_type} question type exactly
+2. Is appropriate for difficulty level {difficulty:.2f}
+3. Avoids repeating previous questions
+4. Helps assess the learner's understanding of {topic}
+
+Return ONLY the question text, nothing else."""
+
+    if task_context.get("days_overdue", 0) > 7:
+        system_prompt += f"\n\nNote: This topic is {task_context['days_overdue']} days overdue - consider gentler questioning."
+
+    try:
+        messages = [SystemMessage(content=system_prompt)]
+        response = get_llm().invoke(messages)
+        question = response.content.strip()
+        
+        # Phase 5: Track difficulty progression
+        if 'question_difficulty_progression' not in state:
+            state['question_difficulty_progression'] = []
+        state['question_difficulty_progression'].append(difficulty)
+        
+        # Log difficulty adaptation for monitoring
+        if session_type == "due_items":
+            overdue_info = f", {task_context['days_overdue']} days overdue" if task_context['days_overdue'] > 0 else ""
+            print(f"Generated {question_type} question for '{topic}' (difficulty: {difficulty:.2f}{overdue_info})")
+        
+        # Store question type in state for evaluation
+        if 'question_types' not in state:
+            state['question_types'] = []
+        state['question_types'].append({
+            'topic': topic,
+            'type': question_type,
+            'question': question,
+            'difficulty_context': task_context
+        })
+        
+        return question
+        
+    except Exception as e:
+        print(f"Error calling OpenAI for question generation: {e}")
+        # Fallback to deterministic question generation
+        return generate_question_by_type(topic, question_type, question_count, topic_history, task_context)
 
 def call_evaluator_llm(state: Dict) -> Dict[str, int]:
     """
-    Enhanced evaluator with sophisticated FSRS-aware scoring and Phase 5 analytics.
+    Enhanced evaluator with sophisticated FSRS-aware scoring and Phase 5 analytics using OpenAI.
     
     Features:
     - Question type difficulty weighting
@@ -762,10 +821,14 @@ def call_evaluator_llm(state: Dict) -> Dict[str, int]:
     - Consistency across question types
     - Phase 5: Advanced analytics and insights
     """
-    topics = state["topics"]
-    history = state["history"]
+    topics = state.get("topics", [])
+    history = state.get("history", [])
     session_type = state.get("session_type", "custom_topics")
     question_types = state.get("question_types", [])
+
+    # Ensure we have topics to evaluate
+    if not topics:
+        raise ValueError("No topics found for evaluation")
 
     scores = {}
     
@@ -788,42 +851,104 @@ def call_evaluator_llm(state: Dict) -> Dict[str, int]:
         
         # Get task context for adaptive scoring
         task_context = get_task_context(state, topic)
+        difficulty = task_context.get("difficulty", 0.5)
+        days_overdue = task_context.get("days_overdue", 0)
         
-        # Calculate adaptive score
-        if session_type == "due_items":
-            # Use sophisticated adaptive scoring for due items
+        # Build evaluation prompt for OpenAI
+        qa_text = ""
+        for i, qa in enumerate(topic_qa, 1):
+            question_type = "unknown"
+            for qt in question_types:
+                if qt.get('topic') == topic and qt.get('question') == qa.get('question'):
+                    question_type = qt.get('type', 'unknown')
+                    break
+            
+            qa_text += f"\nQ{i} ({question_type}): {qa.get('question', 'N/A')}\n"
+            qa_text += f"A{i}: {qa.get('answer', 'N/A')}\n"
+        
+        system_prompt = f"""You are an expert learning assessment specialist. Evaluate a learner's understanding of "{topic}" based on their Q&A session.
+
+Context:
+- Topic: {topic}
+- Session type: {session_type}
+- Topic difficulty: {difficulty:.2f} (0=easy, 1=hard)
+- Days overdue: {days_overdue}
+- Total questions: {len(topic_qa)}
+
+Question-Answer Session:
+{qa_text}
+
+Evaluation Criteria:
+1. Accuracy of responses
+2. Depth of understanding shown
+3. Use of correct terminology
+4. Ability to explain concepts
+5. Recognition of key principles
+
+Scoring Guidelines:
+- 5: Excellent understanding, comprehensive and accurate responses
+- 4: Good understanding, mostly accurate with minor gaps
+- 3: Adequate understanding, some inaccuracies or incomplete responses  
+- 2: Limited understanding, significant gaps or errors
+- 1: Poor understanding, mostly incorrect or vague responses
+- 0: No understanding demonstrated
+
+Special Considerations:
+- For high difficulty topics ({difficulty:.2f}), be more generous with scoring
+- For overdue topics ({days_overdue} days), focus on retention rather than perfection
+- Weight harder question types (analysis, application) more heavily than easier ones (recognition)
+
+Return ONLY a single integer score from 0-5 for this topic. No explanation needed."""
+
+        try:
+            messages = [SystemMessage(content=system_prompt)]
+            response = get_llm().invoke(messages)
+            score_text = response.content.strip()
+            
+            # Extract score from response
+            try:
+                score = int(score_text)
+                score = max(0, min(5, score))  # Ensure score is in valid range
+            except ValueError:
+                # Fallback if OpenAI doesn't return a clean integer
+                print(f"Warning: OpenAI returned non-integer score for {topic}: {score_text}")
+                score = calculate_adaptive_score(topic, topic_qa, task_context, question_types)
+            
+            scores[topic] = score
+            
+            # Log scoring details for debugging
+            if session_type == "due_items":
+                print(f"Scored '{topic}': {score}/5 (difficulty: {difficulty:.2f}, overdue: {days_overdue} days)")
+                
+        except Exception as e:
+            print(f"Error calling OpenAI for evaluation of {topic}: {e}")
+            # Fallback to algorithmic scoring
             score = calculate_adaptive_score(topic, topic_qa, task_context, question_types)
+            scores[topic] = score
+    
+    # Phase 5: Generate advanced analytics (with error handling)
+    try:
+        state["topic_connections"] = detect_topic_connections(topics, history)
+        state["cross_topic_insights"] = generate_cross_topic_insights(state)
+        state["learning_momentum"] = calculate_learning_momentum(scores, question_types)
+        state["retention_prediction"] = predict_retention(state)
+        state["recommended_next_session"] = generate_next_session_recommendations(state)
+        state["session_completion_reason"] = determine_completion_reason(state)
+        
+        # Calculate learning velocity (improvement rate during session)
+        if len(scores) > 1:
+            score_values = list(scores.values())
+            state["learning_velocity"] = (score_values[-1] - score_values[0]) / len(score_values)
         else:
-            # Use simplified scoring for custom topics
-            quality_scores = [analyze_answer_quality(qa.get('answer', '')) for qa in topic_qa]
-            if quality_scores:
-                avg_quality = sum(sum(qs.values()) for qs in quality_scores) / (len(quality_scores) * 5)
-                score = round(avg_quality * 5)
-            else:
-                score = 0
-        
-        scores[topic] = score
-        
-        # Log scoring details for debugging
-        if session_type == "due_items":
-            difficulty = task_context["difficulty"]
-            overdue = task_context["days_overdue"]
-            print(f"Scored '{topic}': {score}/5 (difficulty: {difficulty:.2f}, overdue: {overdue} days)")
-    
-    # Phase 5: Generate advanced analytics
-    state["topic_connections"] = detect_topic_connections(topics, history)
-    state["cross_topic_insights"] = generate_cross_topic_insights(state)
-    state["learning_momentum"] = calculate_learning_momentum(scores, question_types)
-    state["retention_prediction"] = predict_retention(state)
-    state["recommended_next_session"] = generate_next_session_recommendations(state)
-    state["session_completion_reason"] = determine_completion_reason(state)
-    
-    # Calculate learning velocity (improvement rate during session)
-    if len(scores) > 1:
-        score_values = list(scores.values())
-        state["learning_velocity"] = (score_values[-1] - score_values[0]) / len(score_values)
-    else:
+            state["learning_velocity"] = 0.0
+    except Exception as e:
+        print(f"Warning: Error generating analytics: {e}")
+        # Set default values for analytics only - scores are still valid
+        state["learning_momentum"] = 0.0
         state["learning_velocity"] = 0.0
+    
+    if not scores:
+        raise ValueError("Evaluation failed: No valid scores generated")
     
     return scores
 
