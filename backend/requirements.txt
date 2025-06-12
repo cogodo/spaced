@@ -4,3 +4,4 @@ fastapi>=0.95.0
 uvicorn[standard]>=0.23.0
 python-dotenv>=1.0.0
 ruff
+firebase-admin>=6.0.0
