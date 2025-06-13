@@ -6,12 +6,17 @@ from pydantic import BaseModel
 from typing import Dict, Optional
 import logging
 from datetime import datetime, timezone
+import asyncio
 
 from langgraph.graph import StateGraph
 
 from my_agent.utils.state import GraphState
-from my_agent.utils.nodes import respond_node, evaluate_node
+from my_agent.utils.nodes import (
+    respond_node, evaluate_node, conversation_node, evaluate_topic_node, complete_session_with_topic_scores,
+    question_maker_node, enhanced_conversation_node, question_summary_node, enhanced_scoring_node
+)
 from my_agent.utils.firebase_service import firebase_service, SessionMetrics
+from my_agent.utils.tools import decide_topic_action, decide_after_evaluation
 
 # Load environment variables from .env
 from dotenv import load_dotenv
@@ -24,28 +29,210 @@ logger = logging.getLogger(__name__)
 
 def build_graph():
     """
-    Build a LangGraph with two nodes:
-      1. respond_node: asks/records Q&A
-      2. evaluate_node: computes FSRS scores once done=True
+    Build Phase 2: Question → Conversation → Scoring Architecture
     """
     # NOTE: We must pass state_schema=GraphState here to avoid a ValueError
     graph = StateGraph(state_schema=GraphState)
 
-    # Add nodes directly without ToolNode wrapper
-    graph.add_node("respond_node", respond_node)
-    graph.add_node("evaluate_node", evaluate_node)
+    # Add Phase 2 nodes
+    graph.add_node("question_maker", question_maker_node)
+    graph.add_node("enhanced_conversation", enhanced_conversation_node) 
+    graph.add_node("question_summary", question_summary_node)
+    graph.add_node("enhanced_scoring", enhanced_scoring_node)
+    graph.add_node("complete_session", complete_session_with_topic_scores)
 
-    # Add edges to connect the nodes
-    graph.add_edge("respond_node", "evaluate_node")
-    
-    # Set the entry point
-    graph.set_entry_point("respond_node")
-    
-    # Compile the graph to make it executable
+    # Set entry point to question maker
+    graph.set_entry_point("question_maker")
+
+    # Define conditional edges for Phase 2 architecture
+    graph.add_conditional_edges(
+        "question_maker",
+        route_from_question_maker,
+        {
+            "present_question": "enhanced_conversation",
+            "topic_complete": "enhanced_scoring",
+            "session_complete": "complete_session",
+            "error": "complete_session"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "enhanced_conversation", 
+        route_from_conversation,
+        {
+            "continue_conversation": "enhanced_conversation",
+            "question_complete": "question_summary",
+            "next_topic": "enhanced_scoring",
+            "end_session": "complete_session",
+            "error": "complete_session"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "question_summary",
+        route_from_question_summary,
+        {
+            "next_question": "question_maker",
+            "topic_complete": "enhanced_scoring",
+            "error": "complete_session"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "enhanced_scoring",
+        route_from_scoring,
+        {
+            "next_topic": "question_maker", 
+            "session_complete": "complete_session",
+            "error": "complete_session"
+        }
+    )
+
+    # complete_session is terminal - no outgoing edges
+
     return graph.compile()
 
 
+def route_from_question_maker(state: GraphState) -> str:
+    """Route from question_maker_node based on its output"""
+    # The node result is stored directly in state by LangGraph
+    # Look for the action field that should be set by the node
+    action = "error"  # Default fallback
+    
+    # Check if there's a current question (indicates successful question presentation)
+    if state.get("current_question"):
+        action = "present_question"
+    # Check if session should be complete
+    elif state.get("session_complete"):
+        action = "session_complete"
+    # Check topic completion signals
+    elif not state.get("topics") or len(state.get("completed_topics", [])) >= len(state.get("topics", [])):
+        action = "session_complete"
+    else:
+        # This might be topic_complete or error - check remaining topics
+        remaining = get_remaining_topics(state)
+        if not remaining:
+            action = "session_complete"
+        else:
+            action = "topic_complete"  # No questions available for current topic
+    
+    logger.info(f"Routing from question_maker: action={action}")
+    return action
+
+
+def route_from_conversation(state: GraphState) -> str:
+    """Route from enhanced_conversation_node based on its output"""
+    user_input = state.get("user_input", "").lower()
+    
+    # Check for explicit user signals first
+    if "end session" in user_input or "quit" in user_input or "stop" in user_input:
+        logger.info("User requested to end session")
+        return "end_session"
+    
+    if "next topic" in user_input or "move to next topic" in user_input:
+        logger.info("User requested to move to next topic")
+        return "next_topic"
+    
+    # Check if current question conversation is marked complete
+    current_question = state.get("current_question")
+    if not current_question:
+        # No active question suggests completion
+        logger.info("No current question - routing to question_complete")
+        return "question_complete"
+    
+    # Check conversation history length to determine if we should continue
+    conversation_history = current_question.get("conversation_history", [])
+    if len(conversation_history) > 10:  # Prevent overly long conversations
+        logger.info("Conversation getting long - routing to question_complete")
+        return "question_complete"
+    
+    # Default to continue conversation
+    logger.info("Continuing conversation")
+    return "continue_conversation"
+
+
+def route_from_question_summary(state: GraphState) -> str:
+    """Route from question_summary_node based on its output"""
+    # Check how many questions have been completed for current topic
+    topic_summaries = state.get("topic_question_summaries", [])
+    session_settings = state.get("session_settings", {})
+    max_questions = session_settings.get("max_questions_per_topic", 7)
+    
+    # Check if user wants to move to next topic
+    user_input = state.get("user_input", "").lower()
+    if any(signal in user_input for signal in ["next topic", "move to next", "done with this topic"]):
+        logger.info("User requested next topic")
+        return "topic_complete"
+    
+    # Check if we've reached max questions for this topic
+    if len(topic_summaries) >= max_questions:
+        logger.info(f"Reached max questions ({max_questions}) for topic")
+        return "topic_complete"
+    
+    # Default to next question
+    logger.info("Continuing with next question")
+    return "next_question"
+
+
+def route_from_scoring(state: GraphState) -> str:
+    """Route from enhanced_scoring_node based on its output"""
+    # Check if there are remaining topics
+    remaining_topics = get_remaining_topics(state)
+    
+    if remaining_topics:
+        logger.info(f"Moving to next topic: {remaining_topics[0] if remaining_topics else 'None'}")
+        return "next_topic"
+    else:
+        logger.info("All topics completed - ending session")
+        return "session_complete"
+
+
+# Legacy graph builder for backward compatibility
+def build_legacy_graph():
+    """
+    Build legacy Topic-Aware Agentic LangGraph with conditional edges and AI decision making
+    """
+    # NOTE: We must pass state_schema=GraphState here to avoid a ValueError
+    graph = StateGraph(state_schema=GraphState)
+
+    # Add the legacy nodes
+    graph.add_node("conversation", conversation_node)
+    graph.add_node("evaluate_topic", evaluate_topic_node) 
+    graph.add_node("complete_session", complete_session_with_topic_scores)
+
+    # Set entry point
+    graph.set_entry_point("conversation")
+
+    # Add conditional edges with AI decision making
+    graph.add_conditional_edges(
+        "conversation",
+        decide_topic_action,  # AI decides: continue_topic, evaluate_topic, or end_session
+        {
+            "continue_topic": "conversation",
+            "evaluate_topic": "evaluate_topic",
+            "end_session": "complete_session"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "evaluate_topic",
+        decide_after_evaluation,  # AI decides: next_topic or end_session
+        {
+            "next_topic": "conversation",
+            "end_session": "complete_session"
+        }
+    )
+
+    # complete_session is terminal - no outgoing edges
+
+    return graph.compile()
+
+
+# Use Phase 2 architecture by default
 compiled_graph = build_graph()
+
+# For debugging/testing, also compile legacy graph
+legacy_compiled_graph = build_legacy_graph()
 
 # In‐memory store of session_id -> GraphState
 SESSIONS: Dict[str, GraphState] = {}
@@ -403,22 +590,50 @@ async def get_session_analytics(session_id: str):
 
 @app.post("/start_session")
 async def start_session(payload: StartPayload, user_id: Optional[str] = Depends(get_user_id)):
-    """Start a new learning session - either due items or custom topics"""
+    """
+    Start a new learning session with topic-aware initialization
+    """
     try:
-        logger.info(f"Starting {payload.session_type} session for user: {user_id}")
+        session_id = str(uuid.uuid4())
+        logger.info(f"Starting new session {session_id}")
         
-        # Initialize base state
-        state: GraphState = {
+        # Initialize new state structure
+        state = {
             "session_type": payload.session_type,
             "user_id": user_id,
-            "topics": [],
-            "tasks": None,
+            "session_id": session_id,
+            "message_count": 0,
+            "max_messages": 40,  # Hard limit
             "current_topic_index": 0,
-            "question_count": 0,
-            "history": [],
-            "question_types": [],
+            "completed_topics": [],
+            "topic_scores": {},
+            "topic_evaluations": {},
+            "conversation_history": [],
+            "session_complete": False,
+            "session_summary": None,
+            "topic_sources": {},
+            
+            # Initialize user_input as None for first call
             "user_input": None,
             "next_question": None,
+            
+            # PHASE 2: Question-Based Conversation Fields
+            "current_question": None,
+            "current_topic_id": None,
+            "topic_question_summaries": [],
+            "session_settings": {
+                "max_questions_per_topic": payload.max_questions,
+                "adaptive_session_length": payload.adaptive_session_length,
+                "performance_threshold": payload.performance_threshold,
+                "struggle_threshold": payload.struggle_threshold,
+                "personalized_difficulty": payload.personalized_difficulty
+            },
+            
+            # Legacy fields for backward compatibility (TODO: remove after full migration)
+            "topics": [],
+            "tasks": None,
+            "question_count": 0,
+            "history": [],
             "done": False,
             "scores": None,
             "max_topics": payload.max_topics,
@@ -426,174 +641,189 @@ async def start_session(payload: StartPayload, user_id: Optional[str] = Depends(
             "due_tasks_count": None,
             "current_task": None,
             "progress": None,
-            
-            # Phase 5: Adaptive session features
-            "adaptive_session_length": payload.adaptive_session_length,
-            "performance_threshold": payload.performance_threshold,
-            "struggle_threshold": payload.struggle_threshold,
-            "personalized_difficulty": payload.personalized_difficulty,
-            "session_start_time": None,  # Will be set in respond_node
-            "performance_trends": {},
-            "topic_connections": {},
-            "cross_topic_insights": [],
-            "learning_momentum": 0.0,
-            "retention_prediction": {},
-            "recommended_next_session": {},
-            "answer_confidence_scores": [],
-            "question_difficulty_progression": [],
-            "session_completion_reason": None,
-            "learning_velocity": 0.0,
-            "detailed_performance_analysis": {}
+            "question_types": []
         }
-
+        
+        # Session type specific initialization
         if payload.session_type == "due_items":
             if not user_id:
-                raise HTTPException(status_code=400, detail="User ID required for due_items sessions")
+                raise HTTPException(status_code=401, detail="User ID required for due_items sessions")
             
             # Fetch due tasks from Firebase
             due_tasks = await firebase_service.get_due_tasks(user_id)
             
             if not due_tasks:
-                # No due tasks - return enhanced info for frontend
                 return {
-                    "session_id": None,
-                    "session_type": "due_items",
+                    "message": "No tasks due for review! You're all caught up.",
                     "due_tasks_count": 0,
-                    "message": "🎉 All caught up! No tasks due for review.",
-                    "suggestion": "Try custom topics to practice or learn something new!",
-                    "suggest_custom": True,
-                    "next_review_info": "Check back later for more review tasks."
+                    "session_id": None
                 }
             
-            # Prioritize tasks and limit to max_topics
-            prioritized_tasks = firebase_service.prioritize_tasks(due_tasks)
-            selected_tasks = prioritized_tasks[:payload.max_topics]
+            # Limit topics to max_topics
+            limited_tasks = due_tasks[:payload.max_topics]
             
-            # Update state with task data
-            state["tasks"] = selected_tasks
-            state["topics"] = [task.task_name for task in selected_tasks]
+            # Store in new format
+            state["due_tasks"] = limited_tasks
+            state["topics"] = [task.task_name for task in limited_tasks]
+            
+            # Also store in legacy format for backward compatibility
+            state["tasks"] = limited_tasks
             state["due_tasks_count"] = len(due_tasks)
-            state["current_task"] = selected_tasks[0].task_name if selected_tasks else None
-            state["progress"] = f"1/{len(selected_tasks)} tasks"
             
-            logger.info(f"Set up due_items session with {len(selected_tasks)} tasks (total due: {len(due_tasks)})")
+            logger.info(f"Session {session_id}: {len(limited_tasks)} due tasks loaded for user {user_id}")
             
         elif payload.session_type == "custom_topics":
             if not payload.topics:
                 raise HTTPException(status_code=400, detail="Topics required for custom_topics sessions")
             
-            # Validate and clean topics
-            valid_topics = [topic.strip() for topic in payload.topics if topic.strip()]
-            if not valid_topics:
-                raise HTTPException(status_code=400, detail="At least one valid topic required")
+            # Limit topics to max_topics  
+            limited_topics = payload.topics[:payload.max_topics]
             
-            state["topics"] = valid_topics[:payload.max_topics]  # Limit topics
-            logger.info(f"Set up custom_topics session with topics: {state['topics']}")
+            # Store in new format
+            state["custom_topics"] = limited_topics
+            state["topics"] = limited_topics
+            
+            logger.info(f"Session {session_id}: {len(limited_topics)} custom topics loaded")
             
         else:
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid session_type. Use 'due_items' or 'custom_topics'"
-            )
-
-        # Create and store session
-        session_id = str(uuid.uuid4())
-        SESSIONS[session_id] = state
-        SESSION_START_TIMES[session_id] = datetime.now(timezone.utc)
-
-        # Run the graph one step to get the first question
-        updated = compiled_graph.invoke(state)
-        SESSIONS[session_id] = updated
-
-        response = {
-            "session_id": session_id,
-            "session_type": payload.session_type,
-            "next_question": updated["next_question"],
-            "topics_count": len(updated.get("topics", [])),
-            "max_questions_per_topic": payload.max_questions
-        }
+            raise HTTPException(status_code=400, detail="Invalid session_type")
         
-        # Add session-specific data
-        if payload.session_type == "due_items":
-            response.update({
-                "due_tasks_count": updated.get("due_tasks_count"),
-                "current_task": updated.get("current_task"),
-                "progress": updated.get("progress"),
-                "message": f"Starting review session with {len(updated.get('topics', []))} tasks"
-            })
-        else:
-            response.update({
-                "message": f"Starting custom session with {len(updated.get('topics', []))} topics"
-            })
-
-        logger.info(f"Session {session_id} started successfully")
-        return response
-    
+        # Store session
+        SESSIONS[session_id] = state
+        SESSION_START_TIMES[session_id] = datetime.now()
+        
+        # Get initial response from conversation node
+        try:
+            result = await asyncio.to_thread(compiled_graph.invoke, state)
+            
+            # Update stored state with result
+            SESSIONS[session_id].update(result)
+            
+            return {
+                "session_id": session_id,
+                "message": result.get("next_question", "Session started"),
+                "current_topic": result.get("current_topic"),
+                "remaining_topics": result.get("remaining_topics", []),
+                "message_count": result.get("message_count", 0),
+                "total_topics": len(state["topics"]),
+                "session_type": payload.session_type,
+                "success": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error invoking graph for session {session_id}: {e}")
+            # Clean up failed session
+            SESSIONS.pop(session_id, None)
+            SESSION_START_TIMES.pop(session_id, None)
+            raise HTTPException(status_code=500, detail=f"Error starting session: {str(e)}")
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting session: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error starting session: {str(e)}")
+        logger.error(f"Unexpected error starting session: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @app.post("/answer")
 async def answer_question(payload: AnswerPayload):
-    """Submit an answer to continue the learning session"""
+    """
+    Process user answer in the agentic conversation system
+    """
     try:
         session_id = payload.session_id
+        user_input = payload.user_input.strip()
+        
+        if not user_input:
+            raise HTTPException(status_code=400, detail="User input cannot be empty")
+        
+        # Retrieve the session
         if session_id not in SESSIONS:
-            logger.warning(f"Session not found: {session_id}")
             raise HTTPException(status_code=404, detail="Session not found")
-
+        
         state = SESSIONS[session_id]
-        state["user_input"] = payload.user_input
-
-        logger.info(f"Processing answer for session {session_id}")
-        updated = compiled_graph.invoke(state)
-        SESSIONS[session_id] = updated
-
-        if updated["done"]:
-            logger.info(f"Session {session_id} completed")
+        
+        # Check if session is complete
+        if state.get("session_complete", False):
+            return {
+                "session_complete": True,
+                "message": "This session has already been completed.",
+                "session_summary": state.get("session_summary")
+            }
+        
+        # Check message limit
+        if state.get("message_count", 0) >= state.get("max_messages", 40):
+            # Force session completion
+            from my_agent.utils.nodes import complete_session_with_topic_scores
+            final_result = complete_session_with_topic_scores(state)
+            SESSIONS[session_id].update(final_result)
             
-            # Generate comprehensive session metrics
-            await generate_and_save_session_metrics(session_id, updated)
+            return {
+                "session_complete": True,
+                "message": "Session completed - message limit reached.",
+                "session_summary": final_result.get("session_summary"),
+                "topic_scores": final_result.get("topic_scores")
+            }
+        
+        # Set user input for next graph invocation
+        state["user_input"] = user_input
+        
+        # Invoke the graph to get AI response
+        try:
+            result = await asyncio.to_thread(compiled_graph.invoke, state)
             
-            response = {"scores": updated.get("scores", {})}
+            # Update stored state
+            SESSIONS[session_id].update(result)
             
-            # For due_items sessions, provide data for FSRS updates
-            if updated.get("session_type") == "due_items":
-                response["session_summary"] = f"Completed {len(updated.get('topics', []))} tasks"
-                response["tasks_for_fsrs_update"] = updated.get("scores", {})
-            
-            # Phase 5: Include adaptive completion information
-            response.update({
-                "completion_reason": updated.get("session_completion_reason", "standard"),
-                "adaptive_completion": updated.get("session_completion_reason") == "performance_achieved",
-                "session_summary": updated.get("session_summary", {}),
-                "performance_analysis": {
-                    "learning_momentum": updated.get("learning_momentum", 0.0),
-                    "learning_velocity": updated.get("learning_velocity", 0.0)
+            # Check if session is complete after this turn
+            if result.get("session_complete", False):
+                return {
+                    "session_complete": True,
+                    "message": "Session completed successfully!",
+                    "session_summary": result.get("session_summary"),
+                    "topic_scores": result.get("topic_scores"),
+                    "topics_completed": result.get("topics_completed"),
+                    "total_topics": result.get("total_topics")
                 }
-            })
             
-            return response
-        else:
-            response = {"next_question": updated.get("next_question", "")}
+            # Check if we just completed a topic evaluation
+            if result.get("topic_evaluated"):
+                evaluated_topic = result.get("topic_evaluated")
+                topic_score = result.get("topic_score")
+                remaining_topics = result.get("remaining_topics", [])
+                
+                return {
+                    "topic_completed": True,
+                    "topic_evaluated": evaluated_topic,
+                    "topic_score": topic_score,
+                    "message": f"Great work on {evaluated_topic}! " + (
+                        f"Next, let's discuss {remaining_topics[0]}." if remaining_topics 
+                        else "Let's wrap up the session."
+                    ),
+                    "remaining_topics": remaining_topics,
+                    "topics_completed": result.get("topics_completed", 0),
+                    "session_complete": False
+                }
             
-            # Add progress info for due_items sessions
-            if updated.get("session_type") == "due_items":
-                response.update({
-                    "current_task": updated.get("current_task"),
-                    "progress": updated.get("progress")
-                })
+            # Regular conversation response
+            return {
+                "message": result.get("next_question", "Let's continue our conversation."),
+                "current_topic": result.get("current_topic"),
+                "remaining_topics": result.get("remaining_topics", []),
+                "message_count": result.get("message_count", 0),
+                "max_messages": state.get("max_messages", 40),
+                "session_complete": False,
+                "conversation_action": result.get("conversation_action", "continue")
+            }
             
-            return response
-    
+        except Exception as e:
+            logger.error(f"Error invoking graph for session {session_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Error processing answer: {str(e)}")
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing answer: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing answer: {str(e)}")
+        logger.error(f"Unexpected error in answer endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @app.post("/complete_session")

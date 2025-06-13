@@ -2,85 +2,94 @@ from typing import TypedDict, List, Dict, Optional, Any
 from my_agent.utils.firebase_service import Task
 
 class GraphState(TypedDict):
-    # Session type: "due_items" or "custom_topics"
-    session_type: str
-    
-    # User authentication
+    # Core session data
+    session_type: str  # "due_items" or "custom_topics"
     user_id: Optional[str]
     
-    # For custom_topics: user-provided topics
-    # For due_items: task names from Firebase
-    topics: List[str]
-    
-    # For due_items sessions: full task objects with FSRS data
-    tasks: Optional[List[Any]]
-
-    # Index of the current topic/task (0-based)
+    # Topic management - NEW: Explicit topic source tracking
+    topics: List[str]  # All topics for this session
+    topic_sources: Dict[str, Dict]  # Source metadata for each topic
     current_topic_index: int
-
-    # How many questions have been asked so far for the current topic
-    question_count: int
-
-    # A running list of {"question": str, "answer": str, "topic": str} pairs
-    history: List[Dict[str, Any]]
-
-    # The most recent user input (or None when it's time to ask the first question)
+    completed_topics: List[str]
+    
+    # Topic-by-topic scoring - NEW: Individual topic evaluation
+    topic_scores: Dict[str, int]  # topic -> score (0-5)
+    topic_evaluations: Dict[str, Dict]  # topic -> full evaluation details
+    
+    # Conversation management - SIMPLIFIED: Remove legacy fields
     user_input: Optional[str]
-
-    # The next question to send back to the user (filled by the respond node)
     next_question: Optional[str]
-
-    # Whether we've exhausted all topics/questions and should evaluate
-    done: bool
-
-    # Once done=True, the evaluator will fill this mapping: topic -> FSRS score (0–5)
+    conversation_history: List[Dict[str, Any]]  # NEW: Cleaner conversation tracking
+    message_count: int
+    
+    # Session completion - SIMPLIFIED: Remove complex analytics
+    session_complete: bool
+    session_summary: Optional[Dict[str, Any]]
+    
+    # PHASE 2: Question-Based Conversation Fields
+    current_question: Optional[Dict[str, Any]]  # Current active question with conversation history
+    current_topic_id: Optional[str]  # Firebase-safe topic ID
+    topic_question_summaries: List[Dict[str, Any]]  # Question summaries for current topic
+    session_settings: Optional[Dict[str, Any]]  # User preferences (max_questions_per_topic, etc.)
+    
+    # Firebase integration (for due_items sessions)
+    due_tasks: Optional[List[Any]]  # Original task objects from Firebase
+    custom_topics: Optional[List[str]]  # For custom_topics sessions
+    
+    # Configuration
+    max_messages: int  # Hard limit (40)
+    
+    # Legacy fields - DEPRECATED: Keep for backward compatibility during transition
+    # TODO: Remove these after full migration
+    tasks: Optional[List[Any]]
+    question_count: Optional[int]
+    history: Optional[List[Dict[str, Any]]]
+    done: Optional[bool]
     scores: Optional[Dict[str, int]]
-
-    # Configuration: maximum number of topics to cover (e.g. 3)
-    max_topics: int
-
-    # Configuration: maximum questions per topic (e.g. 7)
-    max_questions: int
-
-    # For due_items: count of total due tasks available
+    max_topics: Optional[int]
+    max_questions: Optional[int]
     due_tasks_count: Optional[int]
-
-    # Current task being reviewed (for due_items sessions)
     current_task: Optional[str]
-
-    # Progress tracking for UI
     progress: Optional[str]
-
-    # Track question types and contexts
-    question_types: List[Dict[str, Any]]
-
-    # Phase 5: Advanced Features
+    question_types: Optional[List[Dict[str, Any]]]
     
-    # Adaptive session management
+    # Legacy Phase 5 fields - DEPRECATED
     adaptive_session_length: Optional[bool]
-    performance_threshold: Optional[float]  # For early completion if performing well
-    struggle_threshold: Optional[float]     # For extended session if struggling
-    
-    # Multi-task connections and analytics
-    topic_connections: Optional[Dict[str, List[str]]]  # topic -> related topics
-    cross_topic_insights: Optional[List[Dict[str, Any]]]  # Connections found during session
-    
-    # Session analytics and summaries
+    performance_threshold: Optional[float]
+    struggle_threshold: Optional[float]
+    topic_connections: Optional[Dict[str, List[str]]]
+    cross_topic_insights: Optional[List[Dict[str, Any]]]
     session_start_time: Optional[str]
     session_end_time: Optional[str]
-    performance_trends: Optional[Dict[str, List[float]]]  # topic -> score progression
-    learning_momentum: Optional[float]  # Overall session momentum score
+    performance_trends: Optional[Dict[str, List[float]]]
+    learning_momentum: Optional[float]
+    question_difficulty_progression: Optional[List[float]]
+    answer_confidence_scores: Optional[List[float]]
+    personalized_question_bank: Optional[Dict[str, List[str]]]
+    session_completion_reason: Optional[str]
+    recommended_next_session: Optional[Dict[str, Any]]
+    detailed_performance_analysis: Optional[Dict[str, Any]]
+    learning_velocity: Optional[float]
+    retention_prediction: Optional[Dict[str, float]]
     
-    # Advanced question generation
-    question_difficulty_progression: Optional[List[float]]  # Track difficulty changes
-    answer_confidence_scores: Optional[List[float]]  # Confidence in each answer
-    personalized_question_bank: Optional[Dict[str, List[str]]]  # User-specific questions
+    # PHASE 4: Real-Time Adaptive Intelligence Fields  
+    live_performance_metrics: Optional[Dict[str, float]]  # understanding, confidence, engagement
+    adaptive_difficulty_level: Optional[float]  # 0.0-1.0, adjusts in real-time
+    learned_user_preferences: Optional[Dict[str, Any]]  # discovered during conversation
+    question_adaptation_history: Optional[List[Dict]]  # track how questions were adapted
     
-    # Intelligent session adaptation
-    session_completion_reason: Optional[str]  # "max_questions", "performance_achieved", "time_limit", etc.
-    recommended_next_session: Optional[Dict[str, Any]]  # Smart recommendations for next study session
+    # Real-time personalization
+    detected_learning_style: Optional[str]  # visual, verbal, experiential, kinesthetic
+    cognitive_load_level: Optional[str]  # low, medium, high, overloaded
+    engagement_trend: Optional[str]  # increasing, stable, declining
+    understanding_velocity: Optional[float]  # how quickly they're grasping concepts
     
-    # Enhanced evaluation metrics
-    detailed_performance_analysis: Optional[Dict[str, Any]]  # Deep performance insights
-    learning_velocity: Optional[float]  # Rate of improvement during session
-    retention_prediction: Optional[Dict[str, float]]  # Predicted retention for each topic
+    # Intelligent conversation management
+    conversation_intelligence: Optional[Dict[str, Any]]  # teaching strategy, depth level, etc.
+    adaptive_conversation_history: Optional[List[Dict]]  # enhanced conversation tracking
+    personalization_insights: Optional[Dict[str, Any]]  # discovered preferences and patterns
+    
+    # Advanced session optimization
+    optimal_question_sequence: Optional[List[str]]  # dynamically reordered questions
+    learning_momentum_score: Optional[float]  # 0.0-1.0 momentum tracking
+    session_optimization_log: Optional[List[Dict]]  # track all adaptations made
