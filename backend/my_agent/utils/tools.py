@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import os
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+import json
 
 # Initialize OpenAI LLM lazily to avoid import errors when API key is not set
 _llm = None
@@ -965,3 +966,402 @@ For production, these mock functions should be replaced with:
 1. call_main_llm_openai(state) - with FSRS-aware prompts and Phase 5 features
 2. call_evaluator_llm_openai(state) - with task difficulty context and advanced analytics
 """
+
+# ===== NEW: AI Decision Functions for Agentic Graph =====
+
+def call_ai_for_decision(prompt: str) -> str:
+    """Get AI decision for graph conditional logic"""
+    try:
+        llm = get_llm()
+        messages = [SystemMessage(content=prompt)]
+        response = llm.invoke(messages)
+        return response.content.strip()
+    except Exception as e:
+        print(f"Error in AI decision: {e}")
+        # Fallback to safe default
+        return "continue_topic"
+
+def call_ai_with_json_output(prompt: str) -> Dict:
+    """Get structured JSON response from AI"""
+    try:
+        llm = get_llm()
+        messages = [SystemMessage(content=prompt)]
+        response = llm.invoke(messages)
+        
+        try:
+            return json.loads(response.content)
+        except json.JSONDecodeError:
+            # Fallback if AI doesn't return valid JSON
+            return {
+                "action": "continue",
+                "content": response.content,
+                "reasoning": "Fallback response - JSON parse failed"
+            }
+    except Exception as e:
+        print(f"Error in AI JSON response: {e}")
+        return {
+            "action": "continue",
+            "content": "I'd like to continue our discussion about this topic.",
+            "reasoning": "Fallback due to AI error"
+        }
+
+def call_ai_for_simple_response(prompt: str) -> str:
+    """Get simple text response from AI"""
+    try:
+        llm = get_llm()
+        messages = [SystemMessage(content=prompt)]
+        response = llm.invoke(messages)
+        return response.content.strip()
+    except Exception as e:
+        print(f"Error in AI simple response: {e}")
+        return "Let's continue our conversation about this topic."
+
+# ===== Topic Management Functions =====
+
+def initialize_session_topics(state: Dict) -> None:
+    """
+    Initialize topics from explicit sources: Firebase tasks or custom selection
+    """
+    session_type = state.get("session_type")
+    
+    if session_type == "due_items":
+        # Topics come from Firebase due tasks
+        due_tasks = state.get("due_tasks", [])
+        state["topics"] = [task.task_name for task in due_tasks]
+        state["topic_sources"] = {task.task_name: {
+            "source": "firebase",
+            "task_id": getattr(task, 'id', None),
+            "difficulty": getattr(task, 'difficulty', 0.5),
+            "days_overdue": getattr(task, 'days_overdue', 0),
+            "last_reviewed": getattr(task, 'last_reviewed', None)
+        } for task in due_tasks}
+        
+    elif session_type == "custom_topics":
+        # Topics come from user selection
+        custom_topics = state.get("custom_topics", [])
+        state["topics"] = custom_topics
+        state["topic_sources"] = {topic: {
+            "source": "custom",
+            "user_selected": True
+        } for topic in custom_topics}
+    
+    # Initialize topic tracking
+    state["current_topic_index"] = 0
+    state["completed_topics"] = []
+    state["topic_scores"] = {}
+    state["topic_evaluations"] = {}
+    state["conversation_history"] = []
+
+def get_current_topic(state: Dict) -> str:
+    """Get the currently active topic"""
+    topics = state.get("topics", [])
+    current_index = state.get("current_topic_index", 0)
+    
+    if current_index < len(topics):
+        return topics[current_index]
+    return None
+
+def get_remaining_topics(state: Dict) -> List[str]:
+    """Get list of remaining topics to cover"""
+    topics = state.get("topics", [])
+    current_index = state.get("current_topic_index", 0)
+    
+    return topics[current_index + 1:] if current_index < len(topics) else []
+
+def advance_to_next_topic(state: Dict) -> None:
+    """Move to the next topic in the list"""
+    current_topic = get_current_topic(state)
+    if current_topic:
+        completed_topics = state.get("completed_topics", [])
+        completed_topics.append(current_topic)
+        state["completed_topics"] = completed_topics
+    
+    state["current_topic_index"] = state.get("current_topic_index", 0) + 1
+
+def build_topic_context(topic: str, topic_source: Dict) -> str:
+    """Build context string about topic source and metadata"""
+    if topic_source.get("source") == "firebase":
+        difficulty = topic_source.get('difficulty', 'unknown')
+        days_overdue = topic_source.get('days_overdue', 0)
+        return f"Due for review (difficulty: {difficulty}, {days_overdue} days overdue)"
+    elif topic_source.get("source") == "custom":
+        return "User-selected topic for review"
+    else:
+        return "Topic for review"
+
+def format_recent_conversation(state: Dict) -> str:
+    """Format recent conversation for AI context"""
+    history = state.get("conversation_history", [])
+    if not history:
+        return "No conversation yet - this is the beginning."
+    
+    # Get last 4 messages (2 exchanges)
+    recent = history[-4:]
+    formatted = []
+    for msg in recent:
+        role = "You" if msg["role"] == "assistant" else "Student"
+        content = msg["content"][:150] + "..." if len(msg["content"]) > 150 else msg["content"]
+        formatted.append(f"{role}: {content}")
+    
+    return "\n".join(formatted)
+
+def format_topic_conversation_history(state: Dict, topic: str) -> str:
+    """Format conversation history for a specific topic"""
+    history = state.get("conversation_history", [])
+    topic_messages = [msg for msg in history if msg.get("topic") == topic]
+    
+    if not topic_messages:
+        return "No conversation about this topic yet."
+    
+    formatted = []
+    for msg in topic_messages:
+        role = "You" if msg["role"] == "assistant" else "Student"
+        formatted.append(f"{role}: {msg['content']}")
+    
+    return "\n".join(formatted)
+
+def get_topic_conversation(state: Dict, topic: str) -> List[Dict]:
+    """Extract conversation history for a specific topic"""
+    conversation_history = state.get("conversation_history", [])
+    return [msg for msg in conversation_history if msg.get("topic") == topic]
+
+def format_topic_conversation_for_evaluation(topic_conversation: List[Dict]) -> str:
+    """Format topic-specific conversation for evaluation"""
+    formatted = []
+    for msg in topic_conversation:
+        role = "TUTOR" if msg["role"] == "assistant" else "STUDENT"
+        formatted.append(f"{role}: {msg['content']}")
+    
+    return "\n\n".join(formatted)
+
+# ===== AI Decision Functions for Graph Edges =====
+
+def decide_topic_action(state: Dict) -> str:
+    """
+    Phase 2: Enhanced AI-driven decision with sophisticated conversation analysis
+    """
+    current_topic = get_current_topic(state)
+    remaining_topics = get_remaining_topics(state)
+    
+    if not current_topic:
+        return "end_session"
+    
+    # Get conversation context for better decision making
+    conversation_history = state.get("conversation_history", [])
+    topic_messages = [msg for msg in conversation_history if msg.get("topic") == current_topic]
+    conversation_quality = analyze_conversation_quality(topic_messages) if topic_messages else {}
+    
+    decision_prompt = f"""
+You are the conversation flow manager for a natural learning dialogue. Your job is to decide whether the current topic has been sufficiently explored through conversation or if more discussion would be beneficial.
+
+CONVERSATION CONTEXT:
+Current Topic: {current_topic}
+Remaining Topics: {remaining_topics}
+Message Count: {state.get('message_count', 0)}/40
+
+TOPIC CONVERSATION ANALYSIS:
+- Total exchanges about this topic: {len(topic_messages)}
+- Conversation quality: {conversation_quality.get('quality_level', 'unknown')}
+- Student engagement: {conversation_quality.get('engagement_level', 'unknown')}
+- Response depth: {conversation_quality.get('depth_level', 'unknown')}
+
+RECENT CONVERSATION:
+{format_recent_conversation(state)}
+
+DECISION CRITERIA FOR NATURAL CONVERSATION FLOW:
+
+🔄 CONTINUE TOPIC if:
+- Student is actively engaged and asking questions
+- There are natural opportunities for deeper exploration
+- Recent responses show gaps that warrant follow-up
+- The conversation is building momentum on this topic
+- Student seems curious or wants to explore further
+- Natural teaching moments are emerging
+
+✅ EVALUATE TOPIC if:
+- Student has demonstrated solid understanding through dialogue
+- Conversation has reached a natural conclusion
+- Multiple aspects of the topic have been explored
+- Student shows confidence and can explain concepts clearly
+- Discussion feels complete and ready for closure
+- Natural transition point has been reached
+
+🏁 END SESSION if:
+- All topics have been thoroughly discussed
+- Approaching message limit (35+ messages)
+- Natural conversation endpoint has been reached
+- Student seems fatigued or disengaged
+- Quality of responses is declining
+
+CONVERSATIONAL DECISION MAKING:
+Think like you're observing a natural tutoring conversation. Would a good tutor:
+- Continue exploring this topic because there's more to uncover?
+- Wrap up this topic because it's been well-covered?
+- End the session because it's reached a natural conclusion?
+
+Consider the rhythm and flow of the conversation, not just information coverage.
+
+Return ONLY: "continue_topic", "evaluate_topic", or "end_session"
+"""
+    
+    response = call_ai_for_decision(decision_prompt)
+    
+    # Validate response with enhanced error handling
+    valid_responses = ["continue_topic", "evaluate_topic", "end_session"]
+    if response not in valid_responses:
+        print(f"Invalid AI decision: {response}, analyzing conversation context for fallback")
+        
+        # Intelligent fallback based on conversation analysis
+        if len(topic_messages) < 2:
+            return "continue_topic"  # Need more conversation
+        elif len(topic_messages) >= 4 and conversation_quality.get('quality_level') in ['high', 'good']:
+            return "evaluate_topic"  # Good conversation, ready to evaluate
+        elif state.get('message_count', 0) >= 35:
+            return "end_session"  # Approaching limit
+        else:
+            return "continue_topic"  # Default to continue
+    
+    return response
+
+def decide_after_evaluation(state: Dict) -> str:
+    """
+    Phase 2: Enhanced post-evaluation decision with conversation flow awareness
+    """
+    remaining_topics = get_remaining_topics(state)
+    
+    if not remaining_topics:
+        return "end_session"
+    
+    # Analyze session momentum and conversation quality
+    conversation_history = state.get("conversation_history", [])
+    message_count = state.get("message_count", 0)
+    completed_topics = state.get("completed_topics", [])
+    
+    # Get insights from completed evaluations
+    topic_evaluations = state.get("topic_evaluations", {})
+    recent_evaluation = None
+    if completed_topics:
+        last_topic = completed_topics[-1]
+        recent_evaluation = topic_evaluations.get(last_topic, {})
+    
+    decision_prompt = f"""
+You are managing the flow of a natural learning conversation. A topic has just been evaluated and you need to decide whether to continue with the next topic or conclude the session.
+
+SESSION CONTEXT:
+- Remaining topics: {remaining_topics}
+- Topics completed: {len(completed_topics)}
+- Total message count: {message_count}/40
+- Recent evaluation score: {recent_evaluation.get('score', 'N/A') if recent_evaluation else 'N/A'}/5
+
+CONVERSATION MOMENTUM ANALYSIS:
+- Total conversation turns: {len(conversation_history)}
+- Session engagement level: {"high" if len(conversation_history) > 10 else "moderate" if len(conversation_history) > 6 else "low"}
+- Recent topic performance: {recent_evaluation.get('confidence_level', 'unknown') if recent_evaluation else 'unknown'}
+
+DECISION FACTORS FOR NATURAL SESSION FLOW:
+
+🚀 CONTINUE TO NEXT TOPIC if:
+- Good conversation momentum and engagement
+- Student seems energized and ready for more
+- Plenty of message capacity remaining (< 30 messages)
+- Recent topic went well, building confidence
+- Natural flow suggests continuing
+- Student is in a good learning rhythm
+
+🏁 END SESSION if:
+- Approaching message limit (35+ messages)
+- Student seems tired or responses are getting shorter
+- Good natural stopping point has been reached
+- Session has achieved its learning goals
+- Conversation quality is declining
+- Better to end on a high note
+
+CONVERSATION FLOW PRINCIPLES:
+- Respect natural rhythm of learning conversations
+- Don't force continuation if momentum is lost
+- Don't end abruptly if student is engaged
+- Consider the holistic learning experience
+- Think about what would feel natural in a real tutoring session
+
+Based on the conversation flow and student engagement, what feels like the right next step?
+
+Return ONLY: "next_topic" or "end_session"
+"""
+    
+    response = call_ai_for_decision(decision_prompt)
+    
+    # Validate with intelligent fallback
+    valid_responses = ["next_topic", "end_session"]
+    if response not in valid_responses:
+        print(f"Invalid AI decision: {response}, using context-based fallback")
+        
+        # Intelligent fallback logic
+        if message_count >= 35:
+            return "end_session"  # Near limit
+        elif len(remaining_topics) == 0:
+            return "end_session"  # No more topics
+        elif len(conversation_history) < 6:
+            return "next_topic"  # Session still building
+        else:
+            return "next_topic"  # Default to continue
+    
+    return response
+
+def analyze_conversation_quality(topic_messages: List[Dict]) -> Dict[str, str]:
+    """
+    Phase 2: Enhanced conversation quality analysis for decision making
+    """
+    if not topic_messages:
+        return {
+            "quality_level": "insufficient",
+            "engagement_level": "none",
+            "depth_level": "none"
+        }
+    
+    # Count student vs tutor messages
+    student_messages = [msg for msg in topic_messages if msg["role"] == "user"]
+    tutor_messages = [msg for msg in topic_messages if msg["role"] == "assistant"]
+    
+    # Analyze message characteristics
+    avg_student_length = sum(len(msg["content"]) for msg in student_messages) / len(student_messages) if student_messages else 0
+    total_exchanges = len(student_messages)
+    
+    # Look for engagement indicators in student messages
+    engagement_keywords = ["because", "but", "however", "actually", "i think", "maybe", "what if", "how about"]
+    curiosity_keywords = ["why", "how", "what", "where", "when", "can you", "could you", "tell me more"]
+    
+    engagement_score = 0
+    curiosity_score = 0
+    
+    for msg in student_messages:
+        content_lower = msg["content"].lower()
+        engagement_score += sum(1 for keyword in engagement_keywords if keyword in content_lower)
+        curiosity_score += sum(1 for keyword in curiosity_keywords if keyword in content_lower)
+    
+    # Enhanced quality assessment
+    if total_exchanges >= 4 and avg_student_length > 100 and (engagement_score > 2 or curiosity_score > 1):
+        quality_level = "high"
+        engagement_level = "highly_engaged"
+        depth_level = "deep"
+    elif total_exchanges >= 3 and avg_student_length > 50 and (engagement_score > 1 or curiosity_score > 0):
+        quality_level = "good"
+        engagement_level = "well_engaged"
+        depth_level = "moderate"
+    elif total_exchanges >= 2 and avg_student_length > 20:
+        quality_level = "basic"
+        engagement_level = "moderately_engaged"
+        depth_level = "shallow"
+    else:
+        quality_level = "minimal"
+        engagement_level = "low_engagement"
+        depth_level = "surface"
+    
+    return {
+        "quality_level": quality_level,
+        "engagement_level": engagement_level,
+        "depth_level": depth_level,
+        "total_exchanges": total_exchanges,
+        "avg_response_length": round(avg_student_length),
+        "engagement_indicators": engagement_score,
+        "curiosity_indicators": curiosity_score
+    }

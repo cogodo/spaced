@@ -297,31 +297,26 @@ class FirebaseService:
     async def get_learning_insights(self, user_id: str, days: int = 30) -> Optional[LearningInsights]:
         """Generate comprehensive learning insights for a user"""
         try:
-            # Calculate date range
-            end_date = datetime.now(timezone.utc)
-            start_date = end_date - timedelta(days=days)
-            
-            # Fetch session data from the period
+            # Get recent session data
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
             sessions_ref = self._db.collection('users').document(user_id).collection('session_analytics')
-            sessions_query = sessions_ref.where('start_time', '>=', start_date).stream()
             
-            sessions_data = []
-            for doc in sessions_query:
-                data = doc.to_dict()
-                sessions_data.append(data)
+            query = sessions_ref.where('start_time', '>=', cutoff_date).order_by('start_time')
+            sessions_docs = query.stream()
+            
+            sessions_data = [doc.to_dict() for doc in sessions_docs]
             
             if not sessions_data:
-                logger.info(f"No session data found for user {user_id} in last {days} days")
+                logger.info(f"No sessions found for user {user_id} in the last {days} days")
                 return None
             
-            # Analyze session data
+            # Analyze sessions and generate insights
             insights = self._analyze_sessions(user_id, sessions_data, days)
-            logger.info(f"Generated learning insights for {user_id}: {len(sessions_data)} sessions analyzed")
-            
+            logger.info(f"Generated learning insights for user {user_id}")
             return insights
             
         except Exception as e:
-            logger.error(f"Error generating learning insights for {user_id}: {e}")
+            logger.error(f"Error generating learning insights for user {user_id}: {e}")
             return None
     
     def _analyze_sessions(self, user_id: str, sessions_data: List[Dict], days: int) -> LearningInsights:
@@ -439,6 +434,209 @@ class FirebaseService:
         except Exception as e:
             logger.error(f"Error generating dashboard data for {user_id}: {e}")
             return {}
+
+
+class QuestionBankService:
+    """Service for managing topic question banks in Firebase"""
+    
+    def __init__(self, firebase_service: FirebaseService = None):
+        self.firebase_service = firebase_service or FirebaseService()
+        self._db = self.firebase_service._db
+    
+    async def ensure_topic_has_questions(self, user_id: str, topic_id: str, topic_name: str, topic_context: str = "") -> bool:
+        """Ensure topic has question bank, generate if needed"""
+        try:
+            # Check if topic already has unused questions
+            existing_questions = await self.get_unused_questions(user_id, topic_id, limit=1)
+            
+            if existing_questions:
+                logger.info(f"Topic {topic_id} already has questions")
+                return True
+            
+            # Check if topic exists but all questions are used
+            topic_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+            )
+            
+            topic_doc = topic_ref.get()
+            if topic_doc.exists:
+                topic_data = topic_doc.to_dict()
+                if topic_data.get('questions_remaining', 0) == 0:
+                    logger.info(f"All questions used for topic {topic_id}, generating new ones")
+                    # Generate new questions
+                    from .question_generator import QuestionGenerationService
+                    question_service = QuestionGenerationService()
+                    questions = await question_service.generate_topic_questions(topic_name, topic_context)
+                    
+                    if questions:
+                        success = await question_service.store_questions_in_firebase(user_id, topic_id, questions)
+                        return success
+                    return False
+                else:
+                    logger.info(f"Topic {topic_id} has questions available")
+                    return True
+            
+            # Generate questions for new topic
+            logger.info(f"Generating questions for new topic: {topic_name}")
+            from .question_generator import QuestionGenerationService
+            question_service = QuestionGenerationService()
+            questions = await question_service.generate_topic_questions(topic_name, topic_context)
+            
+            if not questions:
+                logger.error(f"Failed to generate questions for topic {topic_name}")
+                return False
+            
+            # Store questions in Firebase
+            success = await question_service.store_questions_in_firebase(user_id, topic_id, questions)
+            
+            if success:
+                logger.info(f"Successfully initialized question bank for topic {topic_name} ({len(questions)} questions)")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error ensuring topic {topic_id} has questions: {e}")
+            return False
+    
+    async def get_next_question(self, user_id: str, topic_id: str) -> Optional[Dict]:
+        """Get next unused question for topic"""
+        try:
+            unused_questions = await self.get_unused_questions(user_id, topic_id, limit=1)
+            return unused_questions[0] if unused_questions else None
+        except Exception as e:
+            logger.error(f"Error getting next question for topic {topic_id}: {e}")
+            return None
+    
+    async def get_unused_questions(self, user_id: str, topic_id: str, limit: int = 7) -> List[Dict]:
+        """Retrieve unused questions for a topic"""
+        try:
+            questions_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+                .collection('questions')
+            )
+            
+            # Query for unused questions
+            query = questions_ref.where('used', '==', False).limit(limit)
+            docs = query.stream()
+            
+            questions = []
+            for doc in docs:
+                question_data = doc.to_dict()
+                question_data['id'] = doc.id  # Ensure ID is present
+                questions.append(question_data)
+            
+            logger.info(f"Retrieved {len(questions)} unused questions for topic {topic_id}")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"Error retrieving unused questions for topic {topic_id}: {e}")
+            return []
+    
+    async def store_question_summary(self, user_id: str, topic_id: str, question_id: str, summary: Dict) -> bool:
+        """Store conversation summary for a question"""
+        try:
+            summary_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+                .collection('question_summaries')
+                .document(question_id)
+            )
+            
+            summary_data = {
+                **summary,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'question_id': question_id,
+                'topic_id': topic_id
+            }
+            
+            summary_ref.set(summary_data)
+            logger.info(f"Stored question summary for {question_id} in topic {topic_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing question summary for {question_id}: {e}")
+            return False
+    
+    async def get_topic_question_summaries(self, user_id: str, topic_id: str) -> List[Dict]:
+        """Get all question summaries for topic evaluation"""
+        try:
+            summaries_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+                .collection('question_summaries')
+            )
+            
+            docs = summaries_ref.stream()
+            summaries = []
+            
+            for doc in docs:
+                summary_data = doc.to_dict()
+                summary_data['id'] = doc.id
+                summaries.append(summary_data)
+            
+            logger.info(f"Retrieved {len(summaries)} question summaries for topic {topic_id}")
+            return summaries
+            
+        except Exception as e:
+            logger.error(f"Error retrieving question summaries for topic {topic_id}: {e}")
+            return []
+    
+    async def mark_question_used(self, user_id: str, topic_id: str, question_id: str) -> bool:
+        """Mark a question as used"""
+        try:
+            question_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+                .collection('questions')
+                .document(question_id)
+            )
+            
+            # Update question as used
+            question_ref.update({
+                'used': True,
+                'last_used': datetime.now(timezone.utc).isoformat(),
+                'usage_count': 1
+            })
+            
+            # Update topic metadata with proper imports
+            topic_ref = (
+                self._db
+                .collection('users')
+                .document(user_id)
+                .collection('question_banks')
+                .document(topic_id)
+            )
+            
+            # Use Firestore increments for atomic updates
+            topic_ref.update({
+                'questions_used': firestore.Increment(1),
+                'questions_remaining': firestore.Increment(-1),
+                'last_accessed': datetime.now(timezone.utc).isoformat()
+            })
+            
+            logger.info(f"Marked question {question_id} as used for topic {topic_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error marking question {question_id} as used: {e}")
+            return False
 
 
 # Global Firebase service instance
