@@ -115,8 +115,8 @@ def build_graph():
 def route_from_conversation(state: GraphState) -> str:
     """Route from conversation_node - Phase 4 with legacy rejection"""
     # REJECT LEGACY PATTERNS
-    user_input = state.get("user_input", "").lower()
-    if any(legacy_term in user_input for legacy_term in ['use_legacy', 'old_system', 'legacy_mode']):
+    user_input = state.get("user_input", "")
+    if user_input and any(legacy_term in user_input.lower() for legacy_term in ['use_legacy', 'old_system', 'legacy_mode']):
         logger.error("Legacy system usage attempted - rejecting")
         return "error"
     
