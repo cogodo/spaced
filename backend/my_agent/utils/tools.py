@@ -1,25 +1,21 @@
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import re
 from datetime import datetime, timezone
 import os
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+import openai
 import json
+from my_agent.utils.state import GraphState
+from my_agent.utils.firebase_service import firebase_service
 
-# Initialize OpenAI LLM lazily to avoid import errors when API key is not set
-_llm = None
-
-def get_llm():
-    """Get or create the OpenAI LLM instance"""
-    global _llm
-    if _llm is None:
-        _llm = ChatOpenAI(
-            model="gpt-4.1-nano",
-            temperature=0.7,
-            openai_api_key=os.getenv("OPENAI_API_KEY")
-        )
-    return _llm
+# Initialize OpenAI client (optional for testing)
+openai_client = None
+try:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        openai_client = openai.OpenAI(api_key=api_key)
+except Exception as e:
+    print(f"Warning: OpenAI client not initialized: {e}")
 
 # Question type definitions with learning science rationale
 QUESTION_TYPES = {
@@ -971,50 +967,65 @@ For production, these mock functions should be replaced with:
 
 def call_ai_for_decision(prompt: str) -> str:
     """Get AI decision for graph conditional logic"""
+    if not openai_client:
+        print("Warning: OpenAI client not available, using fallback decision")
+        return "continue_topic"
+    
     try:
-        llm = get_llm()
-        messages = [SystemMessage(content=prompt)]
-        response = llm.invoke(messages)
-        return response.content.strip()
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"Error in AI decision: {e}")
         # Fallback to safe default
         return "continue_topic"
 
-def call_ai_with_json_output(prompt: str) -> Dict:
-    """Get structured JSON response from AI"""
+def call_ai_with_json_output(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> Dict[str, Any]:
+    """Call OpenAI API and return JSON response"""
+    if not openai_client:
+        return {"error": "OpenAI client not initialized"}
+    
     try:
-        llm = get_llm()
-        messages = [SystemMessage(content=prompt)]
-        response = llm.invoke(messages)
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
         
-        try:
-            return json.loads(response.content)
-        except json.JSONDecodeError:
-            # Fallback if AI doesn't return valid JSON
-            return {
-                "action": "continue",
-                "content": response.content,
-                "reasoning": "Fallback response - JSON parse failed"
-            }
+        content = response.choices[0].message.content
+        return json.loads(content)
     except Exception as e:
-        print(f"Error in AI JSON response: {e}")
-        return {
-            "action": "continue",
-            "content": "I'd like to continue our discussion about this topic.",
-            "reasoning": "Fallback due to AI error"
-        }
+        print(f"Error calling OpenAI API: {e}")
+        return {"error": str(e)}
 
-def call_ai_for_simple_response(prompt: str) -> str:
-    """Get simple text response from AI"""
+def call_ai_for_simple_response(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
+    """Call OpenAI API and return simple text response"""
+    if not openai_client:
+        return "Error: OpenAI client not initialized"
+    
     try:
-        llm = get_llm()
-        messages = [SystemMessage(content=prompt)]
-        response = llm.invoke(messages)
-        return response.content.strip()
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
     except Exception as e:
-        print(f"Error in AI simple response: {e}")
-        return "Let's continue our conversation about this topic."
+        print(f"Error calling OpenAI API: {e}")
+        return f"Error: {str(e)}"
 
 # ===== Topic Management Functions =====
 

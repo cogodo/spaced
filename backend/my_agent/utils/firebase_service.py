@@ -390,50 +390,70 @@ class FirebaseService:
     async def get_user_dashboard_data(self, user_id: str) -> Dict[str, Any]:
         """Get comprehensive dashboard data for user"""
         try:
-            # Get current due tasks
+            # Get basic task stats
+            all_tasks = await self.get_all_tasks(user_id)
             due_tasks = await self.get_due_tasks(user_id)
             
             # Get recent learning insights
             insights = await self.get_learning_insights(user_id, days=7)  # Last week
-            monthly_insights = await self.get_learning_insights(user_id, days=30)  # Last month
             
-            # Get user statistics
-            stats_ref = self._db.collection('users').document(user_id).collection('statistics').document('learning_analytics')
-            stats_doc = stats_ref.get()
-            user_stats = stats_doc.to_dict() if stats_doc.exists else {}
-            
-            dashboard_data = {
-                'current_status': {
-                    'due_tasks_count': len(due_tasks),
-                    'overdue_tasks': [t.task_name for t in due_tasks if t.days_overdue > 0],
-                    'priority_tasks': [t.task_name for t in due_tasks[:5]],  # Top 5 priority
-                },
-                'weekly_progress': {
-                    'sessions_completed': insights.total_sessions if insights else 0,
-                    'total_study_minutes': insights.total_study_time_minutes if insights else 0,
-                    'average_score': sum(insights.average_scores.values()) / len(insights.average_scores) if insights and insights.average_scores else 0,
-                    'topics_studied': list(insights.average_scores.keys()) if insights else []
-                },
-                'monthly_trends': {
-                    'total_sessions': monthly_insights.total_sessions if monthly_insights else 0,
-                    'improvement_rate': monthly_insights.improvement_rate if monthly_insights else {},
-                    'struggling_topics': monthly_insights.struggling_topics if monthly_insights else [],
-                    'mastered_topics': monthly_insights.mastered_topics if monthly_insights else []
-                },
-                'recommendations': {
-                    'review_frequency': monthly_insights.recommended_review_frequency if monthly_insights else {},
-                    'suggested_session_type': 'due_items' if len(due_tasks) > 0 else 'custom_topics',
-                    'focus_areas': insights.struggling_topics[:3] if insights else []  # Top 3 struggling topics
-                },
-                'lifetime_stats': user_stats
+            current_status = {
+                "total_tasks": len(all_tasks),
+                "due_tasks_count": len(due_tasks),
+                "most_overdue_days": max([task.days_overdue for task in due_tasks], default=0)
             }
             
-            logger.info(f"Generated dashboard data for user {user_id}")
-            return dashboard_data
+            # Weekly progress from insights
+            weekly_progress = {
+                "sessions_completed": insights.total_sessions if insights else 0,
+                "study_time_minutes": insights.total_study_time_minutes if insights else 0,
+                "topics_studied": len(insights.average_scores) if insights else 0,
+                "avg_score": sum(insights.average_scores.values()) / len(insights.average_scores) if insights and insights.average_scores else 0
+            }
+            
+            # Learning recommendations
+            recommendations = {
+                "suggested_session_type": "due_items" if due_tasks else "custom_topics",
+                "focus_topics": insights.struggling_topics[:3] if insights else [],
+                "estimated_review_time": len(due_tasks) * 2  # 2 min per task estimate
+            }
+            
+            return {
+                "user_id": user_id,
+                "current_status": current_status,
+                "weekly_progress": weekly_progress,
+                "recommendations": recommendations,
+                "insights_available": insights is not None
+            }
             
         except Exception as e:
-            logger.error(f"Error generating dashboard data for {user_id}: {e}")
-            return {}
+            logger.error(f"Error generating dashboard for user {user_id}: {e}")
+            return None
+
+    async def get_topic_questions(self, user_id: str, topic_id: str) -> Dict[str, Any]:
+        """
+        Get all questions for a topic (wrapper for QuestionBankService)
+        
+        Returns:
+            Dict with success status and questions list
+        """
+        try:
+            question_service = QuestionBankService()
+            questions = await question_service.get_unused_questions(user_id, topic_id, limit=50)  # Get more questions
+            
+            return {
+                "success": True,
+                "questions": questions,
+                "count": len(questions)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting questions for topic {topic_id}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "questions": []
+            }
 
 
 class QuestionBankService:

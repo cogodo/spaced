@@ -10,6 +10,7 @@ import uuid
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
+import re
 
 from .firebase_service import FirebaseService
 from .tools import get_llm
@@ -422,4 +423,11 @@ Generate exactly 25-30 questions covering the full spectrum of understanding for
 
     def create_topic_id(self, topic_name: str) -> str:
         """Create a URL-safe topic ID from topic name"""
-        return topic_name.lower().replace(' ', '_').replace('-', '_') 
+        # Replace spaces and special characters with underscores
+        # Handle ampersands, parentheses, and other special characters
+        topic_id = topic_name.lower()
+        topic_id = re.sub(r'[&\(\)\[\]\{\}\/\\]', '', topic_id)  # Remove special chars
+        topic_id = re.sub(r'[^a-z0-9_]', '_', topic_id)  # Replace non-alphanumeric with underscore
+        topic_id = re.sub(r'_+', '_', topic_id)  # Collapse multiple underscores
+        topic_id = topic_id.strip('_')  # Remove leading/trailing underscores
+        return topic_id 
