@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/chat_history_sidebar.dart';
+import '../models/schedule_manager.dart';
+import '../models/task_holder.dart';
 import 'package:go_router/go_router.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -15,6 +17,8 @@ class ChatScreen extends StatefulWidget {
 
 enum SessionState {
   initial, // No session started yet
+  selectingSessionType, // Choosing between new items or past reviews
+  selectingDueTopics, // Selecting which due topics to review
   collectingTopics, // Waiting for user to provide topics
   active, // Session running, asking questions
   completed, // Session finished, showing scores
@@ -25,6 +29,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
+
+  // For due topics selection
+  List<Task> _dueTasks = [];
+  Set<String> _selectedTopics = {};
+  bool _isLoadingDueTasks = false;
 
   @override
   void initState() {
@@ -81,6 +90,62 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     }
+  }
+
+  Future<void> _loadDueTasks() async {
+    setState(() {
+      _isLoadingDueTasks = true;
+    });
+
+    try {
+      final scheduleManager = Provider.of<ScheduleManager>(
+        context,
+        listen: false,
+      );
+      final dueTasks = scheduleManager.getTodaysTasks();
+      setState(() {
+        _dueTasks = dueTasks;
+        _selectedTopics.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading due tasks: $e')));
+      }
+    } finally {
+      setState(() {
+        _isLoadingDueTasks = false;
+      });
+    }
+  }
+
+  void _startNewItemsSession() {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    chatProvider.startNewSession(sessionType: 'custom_topics');
+  }
+
+  void _startPastReviewsSession() {
+    _loadDueTasks();
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    chatProvider.setSessionState(SessionState.selectingDueTopics);
+  }
+
+  void _startDueTopicsSession() {
+    if (_selectedTopics.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one topic to review'),
+        ),
+      );
+      return;
+    }
+
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    chatProvider.startNewSession(
+      sessionType: 'due_items',
+      selectedTopics: _selectedTopics.toList(),
+    );
   }
 
   @override
@@ -164,19 +229,404 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         },
         behavior: HitTestBehavior.translucent,
+        child: Consumer<ChatProvider>(
+          builder: (context, chatProvider, child) {
+            // Show session type selection if no active session
+            if (!chatProvider.hasActiveSession &&
+                chatProvider.sessionState == SessionState.initial) {
+              return _buildSessionTypeSelection();
+            }
+
+            // Show due topics selection
+            if (chatProvider.sessionState == SessionState.selectingDueTopics) {
+              return _buildDueTopicsSelection();
+            }
+
+            // Show normal chat interface
+            return Column(
+              children: [
+                // Chat messages area - removed session status bar
+                Expanded(child: _buildMessagesArea()),
+                // Input area - with bottom margin to move it up a bit
+                Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: _buildInputArea(),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSessionTypeSelection() {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 600),
+        padding: const EdgeInsets.all(32),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Chat messages area - removed session status bar
-            Expanded(child: _buildMessagesArea()),
-            // Input area - with bottom margin to move it up a bit
-            Container(
-              margin: const EdgeInsets.only(bottom: 24),
-              child: _buildInputArea(),
+            Icon(Icons.psychology, size: 80, color: theme.colorScheme.primary),
+            const SizedBox(height: 24),
+            Text(
+              'Start Your Learning Session',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Choose how you\'d like to learn today',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 48),
+
+            // New Items Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _startNewItemsSession,
+                icon: const Icon(Icons.add_circle_outline, size: 24),
+                label: const Text('New Items'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 20,
+                    horizontal: 24,
+                  ),
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Past Reviews Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _startPastReviewsSession,
+                icon: const Icon(Icons.history, size: 24),
+                label: const Text('Past Reviews'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 20,
+                    horizontal: 24,
+                  ),
+                  foregroundColor: theme.colorScheme.primary,
+                  side: BorderSide(color: theme.colorScheme.primary, width: 2),
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            Text(
+              'New Items: Learn completely new topics\nPast Reviews: Review topics you\'ve studied before',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildDueTopicsSelection() {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      final chatProvider = Provider.of<ChatProvider>(
+                        context,
+                        listen: false,
+                      );
+                      chatProvider.setSessionState(SessionState.initial);
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Topics to Review',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Choose which topics you\'d like to review today',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Content
+        Expanded(
+          child:
+              _isLoadingDueTasks
+                  ? const Center(child: CircularProgressIndicator())
+                  : _dueTasks.isEmpty
+                  ? _buildNoDueTasksMessage()
+                  : _buildDueTasksList(),
+        ),
+
+        // Bottom action bar
+        if (_dueTasks.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  '${_selectedTopics.length} topic${_selectedTopics.length == 1 ? '' : 's'} selected',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed:
+                      _selectedTopics.isEmpty ? null : _startDueTopicsSession,
+                  child: const Text('Start Review Session'),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildNoDueTasksMessage() {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              size: 80,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'All Caught Up!',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You don\'t have any topics due for review right now. Great job staying on top of your learning!',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _startNewItemsSession,
+              child: const Text('Learn New Topics Instead'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDueTasksList() {
+    final theme = Theme.of(context);
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _dueTasks.length,
+      itemBuilder: (context, index) {
+        final task = _dueTasks[index];
+        final isSelected = _selectedTopics.contains(task.task);
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: CheckboxListTile(
+            value: isSelected,
+            onChanged: (bool? value) {
+              setState(() {
+                if (value == true) {
+                  _selectedTopics.add(task.task);
+                } else {
+                  _selectedTopics.remove(task.task);
+                }
+              });
+            },
+            title: Text(
+              task.task,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _buildTaskChip(
+                      'Difficulty: ${(task.difficulty * 100).round()}%',
+                      theme.colorScheme.secondary,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildTaskChip(
+                      'Repetition: ${task.repetition}',
+                      theme.colorScheme.tertiary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _getTaskDueText(task),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _getTaskDueColor(task, theme),
+                  ),
+                ),
+              ],
+            ),
+            controlAffinity: ListTileControlAffinity.trailing,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTaskChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  String _getTaskDueText(Task task) {
+    if (task.nextReviewDate == null) {
+      return 'Never reviewed';
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final reviewDate = DateTime(
+      task.nextReviewDate!.year,
+      task.nextReviewDate!.month,
+      task.nextReviewDate!.day,
+    );
+
+    final daysDifference = today.difference(reviewDate).inDays;
+
+    if (daysDifference > 0) {
+      return '$daysDifference day${daysDifference == 1 ? '' : 's'} overdue';
+    } else if (daysDifference == 0) {
+      return 'Due today';
+    } else {
+      return 'Due in ${-daysDifference} day${daysDifference == -1 ? '' : 's'}';
+    }
+  }
+
+  Color _getTaskDueColor(Task task, ThemeData theme) {
+    if (task.nextReviewDate == null) {
+      return theme.colorScheme.primary;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final reviewDate = DateTime(
+      task.nextReviewDate!.year,
+      task.nextReviewDate!.month,
+      task.nextReviewDate!.day,
+    );
+
+    final daysDifference = today.difference(reviewDate).inDays;
+
+    if (daysDifference > 0) {
+      return theme.colorScheme.error; // Overdue
+    } else if (daysDifference == 0) {
+      return theme.colorScheme.primary; // Due today
+    } else {
+      return theme.colorScheme.onSurface.withValues(alpha: 0.6); // Future
+    }
   }
 
   Widget _buildMessagesArea() {
@@ -448,6 +898,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String _getInputHint(SessionState sessionState) {
     switch (sessionState) {
       case SessionState.initial:
+      case SessionState.selectingSessionType:
+      case SessionState.selectingDueTopics:
       case SessionState.collectingTopics:
         return 'Enter topics to study (e.g., "Flutter, Dart")...';
       case SessionState.active:

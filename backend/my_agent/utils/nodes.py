@@ -504,13 +504,8 @@ def generate_topic_aware_opening(state: GraphState) -> str:
         else:
             topic_contexts.append(f"{topic} (custom topic)")
     
-    opening_prompt = f"""
+    system_prompt = """
 Generate a warm, natural opening for a learning conversation that feels like chatting with an enthusiastic tutor.
-
-SESSION CONTEXT:
-- Topics we'll explore: {topic_contexts}
-- Session type: {session_type}
-- Total topics: {len(topics)}
 
 TONE & STYLE:
 - Conversational and welcoming (like ChatGPT)
@@ -534,7 +529,16 @@ Generate ONE natural opening message (2-3 sentences max) that launches into the 
 Return just the opening text, no JSON or formatting.
 """
     
-    return call_ai_for_simple_response(opening_prompt)
+    user_prompt = f"""
+SESSION CONTEXT:
+- Topics we'll explore: {topic_contexts}
+- Session type: {session_type}
+- Total topics: {len(topics)}
+
+Generate the opening message now.
+"""
+    
+    return call_ai_for_simple_response(system_prompt, user_prompt)
 
 def record_user_response(state: GraphState):
     """Record user's response in conversation history"""

@@ -28,7 +28,8 @@ class StartSessionResponse {
   factory StartSessionResponse.fromJson(Map<String, dynamic> json) {
     return StartSessionResponse(
       sessionId: json['session_id'] as String,
-      nextQuestion: json['next_question'] as String,
+      nextQuestion:
+          json['message'] as String? ?? json['next_question'] as String? ?? '',
     );
   }
 }
@@ -85,6 +86,7 @@ class LangGraphApi {
   /// - [topics]: List of study topics (must not be empty)
   /// - [maxTopics]: Maximum number of topics to cover (default: 3, min: 1)
   /// - [maxQuestions]: Maximum questions per topic (default: 7, min: 1)
+  /// - [sessionType]: Type of session - 'custom_topics' or 'due_items' (default: 'custom_topics')
   ///
   /// Returns [StartSessionResponse] containing:
   /// - sessionId: Unique identifier for this study session
@@ -95,6 +97,7 @@ class LangGraphApi {
     required List<String> topics,
     int maxTopics = 3,
     int maxQuestions = 7,
+    String sessionType = 'custom_topics',
   }) async {
     // Input validation
     if (topics.isEmpty) {
@@ -106,11 +109,16 @@ class LangGraphApi {
     if (maxQuestions < 1) {
       throw ArgumentError('maxQuestions must be at least 1');
     }
+    if (sessionType != 'custom_topics' && sessionType != 'due_items') {
+      throw ArgumentError(
+        'sessionType must be either "custom_topics" or "due_items"',
+      );
+    }
 
     final url = Uri.parse('$baseUrl/start_session');
 
     final payload = {
-      'session_type': 'custom_topics',
+      'session_type': sessionType,
       'topics': topics,
       'max_topics': maxTopics,
       'max_questions': maxQuestions,
