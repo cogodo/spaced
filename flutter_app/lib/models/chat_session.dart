@@ -145,6 +145,10 @@ class ChatSession {
     switch (stateString) {
       case 'initial':
         return SessionState.initial;
+      case 'selectingSessionType':
+        return SessionState.selectingSessionType;
+      case 'selectingDueTopics':
+        return SessionState.selectingDueTopics;
       case 'collectingTopics':
         return SessionState.collectingTopics;
       case 'active':
@@ -261,6 +265,10 @@ class ChatSessionSummary {
         return 'Error';
       case SessionState.collectingTopics:
         return 'Setting up...';
+      case SessionState.selectingSessionType:
+        return 'Choosing type...';
+      case SessionState.selectingDueTopics:
+        return 'Selecting topics...';
       case SessionState.initial:
         return 'New';
     }
@@ -277,6 +285,10 @@ class ChatSessionSummary {
         return 'error';
       case SessionState.collectingTopics:
         return 'warning';
+      case SessionState.selectingSessionType:
+        return 'neutral';
+      case SessionState.selectingDueTopics:
+        return 'neutral';
       case SessionState.initial:
         return 'neutral';
     }

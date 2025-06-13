@@ -80,9 +80,21 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Set the session state manually (for UI state management)
+  void setSessionState(SessionState newState) {
+    if (_sessionState != newState) {
+      _sessionState = newState;
+      notifyListeners();
+    }
+  }
+
   /// Initialize a new chat session
-  Future<void> startNewSession({List<String>? initialTopics}) async {
-    _logger.info('Starting new chat session');
+  Future<void> startNewSession({
+    List<String>? initialTopics,
+    String? sessionType,
+    List<String>? selectedTopics,
+  }) async {
+    _logger.info('Starting new chat session with type: $sessionType');
 
     final sessionId = _uuid.v4();
     final now = DateTime.now();
@@ -102,10 +114,18 @@ class ChatProvider extends ChangeNotifier {
       token = ChatSession.generateSessionToken();
     }
 
+    // Determine topics based on session type
+    List<String> topics = [];
+    if (sessionType == 'due_items' && selectedTopics != null) {
+      topics = selectedTopics;
+    } else if (initialTopics != null) {
+      topics = initialTopics;
+    }
+
     // Create new session
     _currentSession = ChatSession.create(
       id: sessionId,
-      topics: initialTopics ?? [],
+      topics: topics,
       name: 'New Session - ${_formatTimestamp(now)}',
       token: token,
     );
@@ -116,16 +136,37 @@ class ChatProvider extends ChangeNotifier {
     _isLoading = false;
     _finalScores = null;
 
-    // Add welcome message
-    _addSystemMessage(
-      "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
-      "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
-      "To get started, please tell me what topics you'd like to study today. "
-      "You can list multiple topics separated by commas.\n\n"
-      "For example: 'Flutter widgets, Dart programming, Mobile development'",
-    );
+    // Add appropriate welcome message based on session type
+    if (sessionType == 'due_items') {
+      _addSystemMessage(
+        "Great! Let's review your selected topics using spaced repetition. 🧠✨\n\n"
+        "I'll ask you questions about: ${topics.join(', ')}\n\n"
+        "This will help reinforce your memory and identify areas that need more attention.",
+      );
+      _sessionState = SessionState.active;
 
-    _sessionState = SessionState.collectingTopics;
+      // Start the backend session immediately for due items
+      await _startBackendSession(sessionType, topics);
+    } else if (sessionType == 'custom_topics') {
+      _addSystemMessage(
+        "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
+        "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
+        "To get started, please tell me what topics you'd like to study today. "
+        "You can list multiple topics separated by commas.\n\n"
+        "For example: 'Flutter widgets, Dart programming, Mobile development'",
+      );
+      _sessionState = SessionState.collectingTopics;
+    } else {
+      // Default behavior
+      _addSystemMessage(
+        "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
+        "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
+        "To get started, please tell me what topics you'd like to study today. "
+        "You can list multiple topics separated by commas.\n\n"
+        "For example: 'Flutter widgets, Dart programming, Mobile development'",
+      );
+      _sessionState = SessionState.collectingTopics;
+    }
 
     _updateCurrentSession();
     notifyListeners();
@@ -139,7 +180,10 @@ class ChatProvider extends ChangeNotifier {
         // Refresh session history to show the new session immediately
         await loadSessionHistory();
 
-        // Don't navigate to token URL yet - wait for first message
+        // Navigate to token URL for due items sessions
+        if (sessionType == 'due_items' && _router != null) {
+          _router!.go('/app/chat/${token}');
+        }
       } catch (e) {
         _logger.warning('Failed to save new session to Firebase: $e');
         // Continue without Firebase - session will be saved later
@@ -147,6 +191,36 @@ class ChatProvider extends ChangeNotifier {
     }
 
     _logger.info('New chat session started with ID: $sessionId, token: $token');
+  }
+
+  /// Start the backend session
+  Future<void> _startBackendSession(
+    String? sessionType,
+    List<String> topics,
+  ) async {
+    try {
+      final response = await _api.startSession(
+        topics: topics,
+        maxTopics: _maxTopics,
+        maxQuestions: _maxQuestions,
+        sessionType: sessionType ?? 'custom_topics',
+      );
+
+      _logger.info('Backend session started successfully');
+
+      // Add the initial AI message
+      final initialMessage = response.nextQuestion;
+      if (initialMessage.isNotEmpty) {
+        _addSystemMessage(initialMessage);
+      }
+    } catch (e) {
+      _logger.severe('Error starting backend session: $e');
+      _addSystemMessage(
+        'Sorry, there was an error starting your session. Please try again.',
+      );
+      _sessionState = SessionState.error;
+      notifyListeners();
+    }
   }
 
   /// Load an existing session from Firebase
@@ -237,6 +311,10 @@ class ChatProvider extends ChangeNotifier {
     try {
       switch (_sessionState) {
         case SessionState.initial:
+        case SessionState.selectingSessionType:
+        case SessionState.selectingDueTopics:
+          // These states are handled by UI, not user input
+          break;
         case SessionState.collectingTopics:
           await _handleTopicsInput(userInput);
           break;
