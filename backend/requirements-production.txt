@@ -1,33 +1,32 @@
 # Core framework
-fastapi==0.104.1
-uvicorn[standard]==0.25.0
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
 
 # Google Cloud & Firebase
-firebase-admin==6.2.0
-google-cloud-firestore==2.13.1
+firebase-admin==6.9.0
+google-cloud-firestore==2.21.0
 
-# AI/ML - Using more compatible versions
-openai>=1.3.0,<2.0.0
-anthropic==0.7.2
+# AI/ML
+openai==1.86.0
+anthropic==0.54.0
 
-# LangGraph without complex dependencies - use simpler approach
-# We'll use OpenAI directly instead of langchain-openai for now
-langgraph==0.0.32
-langchain-core==0.1.20
+# LangGraph & LangChain
+langgraph==0.4.8
+langchain-core==0.3.65
 
 # Authentication
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.6
+python-jose[cryptography]==3.5.0
+python-multipart==0.0.20
 passlib[bcrypt]==1.7.4
 
 # Utilities
-python-dotenv==1.0.0
-requests==2.31.0
+python-dotenv==1.1.0
+requests==2.32.4
 
 # Production features
 slowapi==0.1.9
-redis==5.0.1
+redis==6.2.0
 
-# Additional production dependencies
-gunicorn==21.2.0
-psutil==5.9.6 
+# Production deployment
+gunicorn==23.0.0
+psutil==7.0.0
