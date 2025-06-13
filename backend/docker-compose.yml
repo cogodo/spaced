@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  spaced-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FIREBASE_ADMIN_CREDENTIALS=${FIREBASE_ADMIN_CREDENTIALS}
+      - CORS_ORIGINS=https://getspaced.app,https://www.getspaced.app,http://localhost:3000,http://localhost:8080
+    volumes:
+      - .:/app
+      - firebase-cache:/app/.firebase-cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  firebase-cache:
+  redis-data: 
