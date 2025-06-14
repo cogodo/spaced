@@ -37,19 +37,20 @@ def session_initialization_node(state: GraphState) -> Dict[str, Any]:
     This handles the initial session setup that was missing from question_maker_node.
     """
     try:
-        # Import here to avoid circular imports
-        from my_agent.utils.nodes import generate_topic_aware_opening
+        # Simple welcome message without complex generation to avoid recursion
+        topics = state.get("topics", [])
+        session_type = state.get("session_type", "custom_topics")
         
-        # Generate a welcoming opening message for the topics
-        opening_message = generate_topic_aware_opening(state)
+        if session_type == "due_items":
+            opening_message = f"Great! Let's review your selected topics using spaced repetition. 🧠✨\n\nI'll ask you questions about: {', '.join(topics)}\n\nThis will help reinforce your memory and identify areas that need more attention."
+        else:
+            opening_message = f"Welcome to your personalized spaced repetition learning session! 🧠✨\n\nI'll help you learn and retain information about: {', '.join(topics)}\n\nLet's start with some questions to assess your current knowledge."
         
         # Set up initial session state
-        state["message_count"] = 1
-        
         return {
             "next_question": opening_message,
-            "current_topic": state.get("topics", [])[0] if state.get("topics") else None,
-            "remaining_topics": state.get("topics", [])[1:] if len(state.get("topics", [])) > 1 else [],
+            "current_topic": topics[0] if topics else None,
+            "remaining_topics": topics[1:] if len(topics) > 1 else [],
             "message_count": 1,
             "session_initialized": True
         }
