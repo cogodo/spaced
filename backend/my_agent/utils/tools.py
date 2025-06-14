@@ -1345,7 +1345,7 @@ def analyze_conversation_quality(topic_messages: List[Dict]) -> Dict[str, str]:
     curiosity_score = 0
     
     for msg in student_messages:
-        content_lower = msg["content"].lower()
+        content_lower = msg.get("content", "").lower()
         engagement_score += sum(1 for keyword in engagement_keywords if keyword in content_lower)
         curiosity_score += sum(1 for keyword in curiosity_keywords if keyword in content_lower)
     
