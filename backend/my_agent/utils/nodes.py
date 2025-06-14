@@ -127,19 +127,8 @@ def get_topic_aware_response(state: GraphState, current_topic: str, topic_source
     conversation_stage = get_enhanced_conversation_stage(state, current_topic, learning_personalization)
     
     # Phase 3: Sophisticated conversation prompt with deep personalization
-    conversation_prompt = f"""
+    system_prompt = """
 You are an expert AI learning companion with deep expertise in conversational pedagogy, cognitive science, and personalized learning. You're having a natural, adaptive conversation that feels like ChatGPT but is specifically designed to optimize learning through sophisticated active recall and personalized teaching strategies.
-
-ADVANCED LEARNING CONTEXT:
-{conversation_context}
-
-PERSONALIZED LEARNING PROFILE:
-{learning_personalization}
-
-CROSS-TOPIC LEARNING INSIGHTS:
-{cross_topic_insights}
-
-CONVERSATION STAGE: {conversation_stage}
 
 YOUR ADVANCED PEDAGOGICAL APPROACH:
 
@@ -216,7 +205,7 @@ Your response should feel like a natural conversation while being pedagogically 
 RESPONSE FORMAT:
 Return JSON with sophisticated analysis:
 
-{{
+{
     "action": "continue" | "topic_complete",
     "content": "Your natural, personalized, pedagogically sophisticated response",
     "reasoning": "Why you chose this approach based on learning patterns and context",
@@ -226,7 +215,7 @@ Return JSON with sophisticated analysis:
     "pedagogical_strategy": "The underlying teaching strategy being employed",
     "cross_topic_connection": "Any connections made to previous learning (if applicable)",
     "learning_momentum_assessment": "increasing|steady|needs_support"
-}}
+}
 
 CRITICAL SUCCESS FACTORS:
 - This should feel like the most engaging, personalized tutor they've ever had
@@ -238,7 +227,22 @@ CRITICAL SUCCESS FACTORS:
 Remember: You're not just having a conversation - you're orchestrating a sophisticated, personalized learning experience! 🎯
 """
 
-    response = call_ai_with_json_output(conversation_prompt)
+    user_prompt = f"""
+ADVANCED LEARNING CONTEXT:
+{conversation_context}
+
+PERSONALIZED LEARNING PROFILE:
+{learning_personalization}
+
+CROSS-TOPIC LEARNING INSIGHTS:
+{cross_topic_insights}
+
+CONVERSATION STAGE: {conversation_stage}
+
+Generate your response now.
+"""
+
+    response = call_ai_with_json_output(system_prompt, user_prompt)
     
     # Phase 3: Enhanced response validation and enrichment
     if not response.get("content"):
@@ -582,11 +586,8 @@ def evaluate_topic_node(state: GraphState) -> Dict[str, Any]:
     )
     
     # Phase 3: Pure LLM evaluation with advanced context awareness
-    evaluation_prompt = f"""
+    system_prompt = """
 You are an expert learning assessment specialist with deep expertise in conversational learning analysis, cognitive science, and personalized education. You're evaluating a student's understanding of a topic through natural dialogue analysis.
-
-COMPREHENSIVE EVALUATION CONTEXT:
-{evaluation_context}
 
 ADVANCED ASSESSMENT FRAMEWORK:
 
@@ -641,42 +642,42 @@ Instead of traditional testing metrics, assess through conversation quality:
 COMPREHENSIVE EVALUATION OUTPUT:
 Return a detailed JSON assessment that captures the full learning picture:
 
-{{
-    "topic": "{current_topic}",
+{
+    "topic": "TOPIC_NAME",
     "understanding_level": 4,
     "understanding_category": "proficient|developing|emerging|mastery|insufficient",
-    "confidence_assessment": {{
+    "confidence_assessment": {
         "student_confidence": "high|medium|low",
         "actual_understanding": "high|medium|low", 
         "confidence_accuracy": "overconfident|well_calibrated|underconfident"
-    }},
-    "cognitive_dimensions": {{
+    },
+    "cognitive_dimensions": {
         "conceptual_mastery": "strong|adequate|weak",
         "procedural_knowledge": "strong|adequate|weak",
         "conditional_knowledge": "strong|adequate|weak",
         "metacognitive_awareness": "strong|adequate|weak",
         "transfer_ability": "strong|adequate|weak"
-    }},
-    "conversation_analysis": {{
+    },
+    "conversation_analysis": {
         "explanation_quality": "excellent|good|fair|poor",
         "question_handling": "excellent|good|fair|poor",
         "elaboration_depth": "deep|moderate|shallow",
         "connection_making": "extensive|some|minimal",
         "engagement_level": "highly_engaged|engaged|moderately_engaged|disengaged"
-    }},
-    "learning_patterns": {{
+    },
+    "learning_patterns": {
         "preferred_learning_style": "verbal|visual|experiential|mixed",
         "cognitive_load_preference": "high|moderate|low",
         "optimal_questioning_style": "direct|scaffolded|exploratory|socratic",
         "knowledge_construction_pattern": "systematic|intuitive|example_driven|theory_first"
-    }},
-    "retention_prediction": {{
+    },
+    "retention_prediction": {
         "short_term_retention": 0.85,
         "long_term_retention": 0.72,
         "factors_supporting_retention": ["clear_understanding", "personal_examples", "enthusiasm"],
         "factors_hindering_retention": ["complexity", "abstract_concepts"]
-    }},
-    "learning_insights": {{
+    },
+    "learning_insights": {
         "key_strengths": [
             "Specific strengths observed in this conversation",
             "Learning approaches that worked well"
@@ -689,34 +690,43 @@ Return a detailed JSON assessment that captures the full learning picture:
             "How well they understand their own learning",
             "Self-awareness of strengths and gaps"
         ]
-    }},
-    "personalized_recommendations": {{
+    },
+    "personalized_recommendations": {
         "immediate_review_focus": "What to review right after this session",
         "optimal_review_timing": "immediate|1_day|3_days|1_week|2_weeks",
         "recommended_learning_approach": "Specific strategies for future learning",
         "complexity_adjustment": "increase|maintain|decrease",
         "questioning_style_preference": "What works best for this learner"
-    }},
-    "cross_topic_integration": {{
+    },
+    "cross_topic_integration": {
         "connections_to_previous_topics": ["topic1", "topic2"],
         "learning_velocity_trend": "accelerating|steady|slowing",
         "consistency_with_previous_performance": "consistent|improving|declining",
         "emerging_learning_patterns": "Patterns observed across multiple topics"
-    }},
-    "session_contribution": {{
+    },
+    "session_contribution": {
         "conversation_quality_rating": "excellent|good|adequate|poor",
         "learning_momentum_impact": "increased|maintained|decreased",
         "engagement_level_change": "increased|stable|decreased",
         "knowledge_construction_effectiveness": "highly_effective|effective|somewhat_effective|ineffective"
-    }},
+    },
     "summary": "Comprehensive 2-3 sentence summary of understanding and learning patterns",
     "next_session_optimization": "Specific suggestions for optimizing future learning conversations"
-}}
+}
 
 CRITICAL INSTRUCTION: This is pure LLM evaluation. Make sophisticated judgments based on conversation quality, learning patterns, and understanding indicators. Be nuanced in your assessment - look for evidence of genuine understanding vs surface-level responses.
 """
+
+    user_prompt = f"""
+COMPREHENSIVE EVALUATION CONTEXT:
+{evaluation_context}
+
+Topic to evaluate: {current_topic}
+
+Generate your evaluation now.
+"""
     
-    evaluation = call_ai_with_json_output(evaluation_prompt)
+    evaluation = call_ai_with_json_output(system_prompt, user_prompt)
     
     # Ensure backward compatibility while adding Phase 3 enhancements
     score = evaluation.get("understanding_level", 3)
@@ -922,11 +932,8 @@ def complete_session_with_topic_scores(state: GraphState) -> Dict[str, Any]:
     )
     
     # Phase 3: Generate sophisticated session summary with LLM
-    session_summary_prompt = f"""
+    system_prompt = """
 You are an expert learning analytics specialist and educational psychologist. You've just observed a sophisticated AI-driven conversational learning session. Your task is to provide a comprehensive, insightful analysis of the learning experience and outcomes.
-
-COMPREHENSIVE SESSION DATA:
-{format_session_analysis_for_llm(session_analytics, topic_scores, topic_evaluations, conversation_history)}
 
 ADVANCED LEARNING ANALYTICS FRAMEWORK:
 
@@ -965,31 +972,31 @@ Analyze learning evolution across the session:
 COMPREHENSIVE EVALUATION OUTPUT:
 Generate a sophisticated assessment that captures the full learning picture:
 
-{{
+{
     "overall_learning_effectiveness": "exceptional|excellent|good|developing|needs_attention",
-    "learning_experience_quality": {{
+    "learning_experience_quality": {
         "engagement_depth": "profound|high|moderate|surface",
         "intellectual_curiosity": "exceptional|strong|moderate|limited",
         "learning_momentum": "accelerating|steady|variable|declining",
         "challenge_response": "thrives|adapts_well|needs_support|struggles"
-    }},
-    "personalized_learning_profile": {{
+    },
+    "personalized_learning_profile": {
         "dominant_learning_style": "verbal|visual|experiential|kinesthetic|mixed",
         "cognitive_processing_preference": "systematic|intuitive|analytical|holistic",
         "optimal_challenge_level": "high|moderate|gentle|scaffolded",
         "preferred_interaction_style": "socratic|collaborative|direct|exploratory",
         "knowledge_construction_pattern": "building_blocks|web_connections|story_narrative|practical_application"
-    }},
-    "learning_outcomes_analysis": {{
+    },
+    "learning_outcomes_analysis": {
         "knowledge_acquisition_quality": "deep_understanding|solid_grasp|surface_learning|fragmented",
-        "retention_probability": {{
+        "retention_probability": {
             "short_term": 0.95,
             "medium_term": 0.85,
             "long_term": 0.75
-        }},
+        },
         "transfer_readiness": "high|moderate|developing|limited",
         "metacognitive_growth": "significant|moderate|minimal|none"
-    }},
+    },
     "session_highlights": [
         "Most significant learning breakthroughs",
         "Moments of exceptional understanding",
@@ -1005,15 +1012,15 @@ Generate a sophisticated assessment that captures the full learning picture:
         "Learning strategies that could be enhanced",
         "Concepts that warrant additional exploration"
     ],
-    "pedagogical_insights": {{
+    "pedagogical_insights": {
         "most_effective_teaching_approaches": [
             "Specific instructional strategies that worked best",
             "Question types that elicited strong responses"
         ],
         "optimal_learning_conditions": "Environmental and contextual factors that enhanced learning",
         "response_to_different_difficulty_levels": "How they handled varying challenge levels"
-    }},
-    "cross_topic_learning_analysis": {{
+    },
+    "cross_topic_learning_analysis": {
         "learning_velocity_trend": "accelerating|steady_improvement|consistent|variable|declining",
         "concept_integration_ability": "excellent|good|developing|limited",
         "knowledge_transfer_evidence": [
@@ -1021,43 +1028,43 @@ Generate a sophisticated assessment that captures the full learning picture:
             "Signs of applying learning in new contexts"
         ],
         "learning_strategy_evolution": "How their approach changed across topics"
-    }},
-    "personalized_recommendations": {{
+    },
+    "personalized_recommendations": {
         "immediate_follow_up": "Specific actions to reinforce today's learning",
-        "optimal_review_schedule": {{
+        "optimal_review_schedule": {
             "next_review": "1_day|3_days|1_week|2_weeks",
             "review_focus": "What to emphasize in next session",
             "review_format": "conversation|practice|application|reflection"
-        }},
+        },
         "learning_optimization_strategies": [
             "Specific approaches to enhance future learning",
             "Environmental or methodological adjustments"
         ],
         "challenge_level_recommendations": "How to optimize difficulty for continued growth"
-    }},
-    "future_learning_pathway": {{
+    },
+    "future_learning_pathway": {
         "suggested_next_topics": [
             "Natural progressions from current understanding",
             "Areas that would build on established strengths"
         ],
         "learning_goal_suggestions": "Appropriate learning objectives for continued development",
         "session_format_optimization": "How to structure future learning conversations"
-    }},
-    "session_quality_metrics": {{
+    },
+    "session_quality_metrics": {
         "conversation_naturalness": "exceptionally_natural|very_natural|natural|somewhat_artificial",
         "ai_tutor_effectiveness": "outstanding|excellent|good|adequate",
         "learning_efficiency": "highly_efficient|efficient|adequate|inefficient",
         "overall_session_satisfaction": "exceptional|high|good|moderate"
-    }},
-    "learning_analytics_summary": {{
-        "total_learning_interactions": {len(conversation_history)},
+    },
+    "learning_analytics_summary": {
+        "total_learning_interactions": 0,
         "average_topic_performance": 4.2,
         "learning_consistency": "highly_consistent|consistent|variable|inconsistent",
         "engagement_sustainability": "maintained_throughout|mostly_sustained|variable|declined"
-    }},
+    },
     "comprehensive_summary": "A detailed 3-4 sentence summary that captures the essence of this learner's experience, strengths, learning patterns, and potential",
     "next_session_optimization": "Specific, actionable recommendations for maximizing the effectiveness of future learning conversations based on observed patterns and preferences"
-}}
+}
 
 EVALUATION PRINCIPLES:
 - Focus on learning quality over simple metrics
@@ -1068,8 +1075,15 @@ EVALUATION PRINCIPLES:
 
 Your analysis should feel like it comes from an expert educational psychologist who has deeply understood this learner through careful observation of their conversational learning patterns.
 """
+
+    user_prompt = f"""
+COMPREHENSIVE SESSION DATA:
+{format_session_analysis_for_llm(session_analytics, topic_scores, topic_evaluations, conversation_history)}
+
+Generate your comprehensive session analysis now.
+"""
     
-    session_summary = call_ai_with_json_output(session_summary_prompt)
+    session_summary = call_ai_with_json_output(system_prompt, user_prompt)
     
     # Phase 3: Enhance summary with calculated metrics
     if topic_scores:

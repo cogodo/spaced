@@ -30,63 +30,94 @@ async def analyze_user_response_live(user_input: str, state: GraphState) -> Dict
     question_context = current_question.get("text", "")
     conversation_summary = format_conversation_for_analysis(conversation_history)
     
-    analysis_prompt = f"""
-You are an expert learning analytics AI performing real-time analysis of a student's response for instant adaptation.
+    try:
+        system_prompt = """
+You are an expert learning analytics AI that analyzes student responses in real-time to optimize learning experiences.
 
-USER RESPONSE: "{user_input}"
-QUESTION CONTEXT: "{question_context}"
-CONVERSATION HISTORY: {conversation_summary}
+Your task is to analyze a student's response and provide comprehensive insights for adaptive learning.
 
-Provide instant analysis for real-time learning adaptation:
+ANALYSIS FRAMEWORK:
 
-🧠 UNDERSTANDING LEVEL (0.0-1.0):
-Analyze conceptual grasp, accuracy, and depth of explanation.
+🧠 UNDERSTANDING ASSESSMENT (0.0-1.0):
+- 0.0-0.3: Minimal understanding, significant confusion
+- 0.4-0.6: Developing understanding, some gaps
+- 0.7-0.9: Good understanding, minor gaps
+- 0.9-1.0: Excellent understanding, clear mastery
 
-🎯 CONFIDENCE SIGNALS (0.0-1.0): 
-Detect language certainty, hedging vs definitive statements, clarification requests.
+🎯 CONFIDENCE DETECTION (0.0-1.0):
+- Language patterns indicating certainty vs uncertainty
+- Hedging words, qualifiers, confidence markers
+- Response completeness and detail level
 
-⚡ ENGAGEMENT LEVEL (0.0-1.0):
-Evaluate response enthusiasm, detail level, and question-asking behavior.
+📈 ENGAGEMENT MEASUREMENT (0.0-1.0):
+- Enthusiasm, curiosity, active participation
+- Question asking, elaboration, interest signals
+- Response length and depth
 
 🚨 CONFUSION INDICATORS:
-Identify misconceptions, understanding gaps, and clarification needs.
+- Specific phrases or patterns indicating confusion
+- Misconceptions or errors in reasoning
+- Requests for clarification or help
 
 🎨 LEARNING STYLE SIGNALS:
-Detect visual descriptions, step-by-step thinking, examples, abstract vs concrete preferences.
+- Visual preference indicators
+- Verbal/auditory preference indicators  
+- Experiential/hands-on preference indicators
+- Step-by-step/systematic preference indicators
 
-💭 COGNITIVE LOAD ASSESSMENT:
-Evaluate complexity handling, processing speed, and scaffolding needs.
+⚡ COGNITIVE LOAD ASSESSMENT:
+- "low": Student handling information easily
+- "moderate": Appropriate challenge level
+- "high": Student may be overwhelmed
 
-🚀 ADAPTATION RECOMMENDATIONS:
-Suggest immediate conversation adjustments for optimal learning.
+🔧 ADAPTATION RECOMMENDATIONS:
+- difficulty_adjustment: "increase"|"decrease"|"maintain"
+- teaching_strategy: "more_examples"|"deeper_explanation"|"practice_problems"|"conceptual_focus"
+- conversation_style: "supportive"|"challenging"|"exploratory"|"direct"
 
-Return JSON:
-{{
-    "understanding": 0.85,
-    "confidence": 0.75,
-    "engagement": 0.90,
-    "confusion_indicators": ["specific misconception", "knowledge gap"],
-    "learning_style_signals": {{
+Return comprehensive JSON analysis:
+
+{
+    "understanding": 0.75,
+    "confidence": 0.65,
+    "engagement": 0.80,
+    "confusion_indicators": ["specific phrases indicating confusion"],
+    "learning_style_signals": {
         "visual_preference": 0.3,
-        "verbal_preference": 0.8,
-        "experiential_preference": 0.6,
-        "step_by_step_preference": 0.7
-    }},
+        "verbal_preference": 0.7,
+        "experiential_preference": 0.4,
+        "step_by_step_preference": 0.6
+    },
     "cognitive_load": "moderate",
-    "processing_speed": "fast",
-    "adaptation_recommendations": {{
+    "adaptation_recommendations": {
         "difficulty_adjustment": "maintain",
-        "teaching_strategy": "elaborative_questioning",
-        "conversation_style": "encouragement_focused",
-        "next_question_type": "application"
-    }},
-    "key_insights": ["insight 1", "insight 2"],
-    "response_quality_score": 0.82
-}}
+        "teaching_strategy": "more_examples",
+        "conversation_style": "supportive"
+    },
+    "key_insights": [
+        "Student shows good conceptual understanding",
+        "Could benefit from more concrete examples"
+    ],
+    "response_quality_score": 0.73
+}
 """
 
-    try:
-        analysis = call_ai_with_json_output(analysis_prompt)
+        user_prompt = f"""
+CURRENT QUESTION CONTEXT:
+{format_question_for_analysis(current_question)}
+
+CONVERSATION HISTORY:
+{format_conversation_for_analysis(conversation_history)}
+
+STUDENT'S LATEST RESPONSE:
+"{user_input}"
+
+RESPONSE LENGTH: {len(user_input)} characters
+
+Analyze this response now and provide comprehensive insights.
+"""
+
+        analysis = call_ai_with_json_output(system_prompt, user_prompt)
         
         # Validate and ensure all fields are present
         analysis.setdefault("understanding", 0.5)
@@ -278,21 +309,10 @@ async def determine_adaptive_conversation_strategy(understanding_level: float,
         learning_style = user_preferences.get("detected_learning_style", "mixed")
         cognitive_load = user_preferences.get("cognitive_load_level", "moderate")
         
-        strategy_prompt = f"""
-Design the optimal conversation strategy for real-time adaptation:
+        system_prompt = """
+Design the optimal conversation strategy for real-time adaptation.
 
-LIVE ANALYSIS:
-- Understanding Level: {understanding_level:.2f}/1.0
-- Engagement Level: {engagement_level:.2f}/1.0
-- Confusion Signals: {confusion_signals}
-- Learning Style: {learning_style}
-- Cognitive Load: {cognitive_load}
-- Conversation Length: {conversation_length} exchanges
-
-USER PREFERENCES:
-{json.dumps(user_preferences, indent=2)}
-
-Select optimal teaching approach:
+You are an expert educational strategist that selects the best teaching approach based on live learning analytics.
 
 📚 TEACHING STRATEGIES:
 - socratic_questioning: Guide discovery through questions
@@ -319,23 +339,38 @@ Select optimal teaching approach:
 - personal_relevance: Connect to user's interests
 
 Return JSON strategy:
-{{
+{
     "teaching_strategy": "socratic_questioning",
     "difficulty_adjustment": "maintain_current",
-    "conversation_style": {{
+    "conversation_style": {
         "tone": "encouraging",
         "pacing": "moderate",
         "question_density": "medium",
         "language_level": "accessible"
-    }},
+    },
     "engagement_tactics": ["curiosity_questions", "real_world_applications"],
     "personalization_applied": ["learning_style_adaptation", "cognitive_load_consideration"],
     "adaptation_reasoning": "User shows good understanding but could use more engagement",
     "confidence_score": 0.85
-}}
+}
 """
 
-        strategy = call_ai_with_json_output(strategy_prompt)
+        user_prompt = f"""
+LIVE ANALYSIS:
+- Understanding Level: {understanding_level:.2f}/1.0
+- Engagement Level: {engagement_level:.2f}/1.0
+- Confusion Signals: {confusion_signals}
+- Learning Style: {learning_style}
+- Cognitive Load: {cognitive_load}
+- Conversation Length: {conversation_length} exchanges
+
+USER PREFERENCES:
+{json.dumps(user_preferences, indent=2)}
+
+Select the optimal teaching approach now.
+"""
+
+        strategy = call_ai_with_json_output(system_prompt, user_prompt)
         
         # Validate and provide defaults
         strategy.setdefault("teaching_strategy", "socratic_questioning")
