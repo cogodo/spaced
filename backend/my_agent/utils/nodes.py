@@ -102,6 +102,13 @@ def conversation_node(state: GraphState) -> Dict[str, Any]:
     })
     state["conversation_history"] = conversation_history
     
+    # Check if AI thinks this topic is complete
+    if ai_response.get("action") == "topic_complete":
+        state["ai_suggests_topic_complete"] = True
+        logger.info(f"AI suggests topic '{current_topic}' is complete")
+    else:
+        state["ai_suggests_topic_complete"] = False
+    
     return {
         "next_question": ai_response["content"],
         "current_topic": current_topic,
@@ -1109,7 +1116,7 @@ Generate your comprehensive session analysis now.
         "session_analytics": session_analytics,
         "evaluation_approach": "pure_llm_comprehensive_analysis",
         "phase": "3_advanced_learning_analytics",
-        "conversation_quality_data": analyze_session_conversation_quality(conversation_history, completed_topics),
+        "conversation_quality_data": analyze_overall_dialogue_quality(conversation_history),
         "personalization_effectiveness": calculate_personalization_effectiveness(response_analytics),
         "learning_science_integration": assess_learning_science_effectiveness(topic_evaluations),
         "timestamp": datetime.now(timezone.utc).isoformat()

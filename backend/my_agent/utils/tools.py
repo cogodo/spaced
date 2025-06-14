@@ -5,8 +5,12 @@ from datetime import datetime, timezone
 import os
 import openai
 import json
+from dotenv import load_dotenv
 from my_agent.utils.state import GraphState
 from my_agent.utils.firebase_service import firebase_service
+
+# Load environment variables first
+load_dotenv()
 
 # Initialize OpenAI client (optional for testing)
 openai_client = None
@@ -14,6 +18,9 @@ try:
     api_key = os.getenv("OPENAI_API_KEY")
     if api_key:
         openai_client = openai.OpenAI(api_key=api_key)
+        print(f"OpenAI client initialized successfully")
+    else:
+        print("Warning: OPENAI_API_KEY not found in environment")
 except Exception as e:
     print(f"Warning: OpenAI client not initialized: {e}")
 
@@ -1157,82 +1164,34 @@ def decide_topic_action(state: Dict) -> str:
     if not current_topic:
         return "end_session"
     
+    # First check if the AI conversation response already suggested topic completion
+    if state.get("ai_suggests_topic_complete"):
+        logger.info(f"Using AI's suggestion to evaluate topic: {current_topic}")
+        return "evaluate_topic"
+    
     # Get conversation context for better decision making
     conversation_history = state.get("conversation_history", [])
     topic_messages = [msg for msg in conversation_history if msg.get("topic") == current_topic]
     conversation_quality = analyze_conversation_quality(topic_messages) if topic_messages else {}
     
-    decision_prompt = f"""
-You are the conversation flow manager for a natural learning dialogue. Your job is to decide whether the current topic has been sufficiently explored through conversation or if more discussion would be beneficial.
-
-CONVERSATION CONTEXT:
-Current Topic: {current_topic}
-Remaining Topics: {remaining_topics}
-Message Count: {state.get('message_count', 0)}/40
-
-TOPIC CONVERSATION ANALYSIS:
-- Total exchanges about this topic: {len(topic_messages)}
-- Conversation quality: {conversation_quality.get('quality_level', 'unknown')}
-- Student engagement: {conversation_quality.get('engagement_level', 'unknown')}
-- Response depth: {conversation_quality.get('depth_level', 'unknown')}
-
-RECENT CONVERSATION:
-{format_recent_conversation(state)}
-
-DECISION CRITERIA FOR NATURAL CONVERSATION FLOW:
-
-🔄 CONTINUE TOPIC if:
-- Student is actively engaged and asking questions
-- There are natural opportunities for deeper exploration
-- Recent responses show gaps that warrant follow-up
-- The conversation is building momentum on this topic
-- Student seems curious or wants to explore further
-- Natural teaching moments are emerging
-
-✅ EVALUATE TOPIC if:
-- Student has demonstrated solid understanding through dialogue
-- Conversation has reached a natural conclusion
-- Multiple aspects of the topic have been explored
-- Student shows confidence and can explain concepts clearly
-- Discussion feels complete and ready for closure
-- Natural transition point has been reached
-
-🏁 END SESSION if:
-- All topics have been thoroughly discussed
-- Approaching message limit (35+ messages)
-- Natural conversation endpoint has been reached
-- Student seems fatigued or disengaged
-- Quality of responses is declining
-
-CONVERSATIONAL DECISION MAKING:
-Think like you're observing a natural tutoring conversation. Would a good tutor:
-- Continue exploring this topic because there's more to uncover?
-- Wrap up this topic because it's been well-covered?
-- End the session because it's reached a natural conclusion?
-
-Consider the rhythm and flow of the conversation, not just information coverage.
-
-Return ONLY: "continue_topic", "evaluate_topic", or "end_session"
-"""
+    # Check for basic completion conditions
+    message_count = state.get("message_count", 0)
+    if message_count >= 35:  # Approaching message limit
+        return "evaluate_topic"
     
-    response = call_ai_for_decision(decision_prompt)
+    # If we have enough conversation for this topic, evaluate it
+    if len(topic_messages) >= 4 and conversation_quality.get('quality_level') in ['high', 'good']:
+        return "evaluate_topic"
     
-    # Validate response with enhanced error handling
-    valid_responses = ["continue_topic", "evaluate_topic", "end_session"]
-    if response not in valid_responses:
-        print(f"Invalid AI decision: {response}, analyzing conversation context for fallback")
-        
-        # Intelligent fallback based on conversation analysis
-        if len(topic_messages) < 2:
-            return "continue_topic"  # Need more conversation
-        elif len(topic_messages) >= 4 and conversation_quality.get('quality_level') in ['high', 'good']:
-            return "evaluate_topic"  # Good conversation, ready to evaluate
-        elif state.get('message_count', 0) >= 35:
-            return "end_session"  # Approaching limit
-        else:
-            return "continue_topic"  # Default to continue
+    # Continue if conversation is still building
+    if len(topic_messages) < 2:
+        return "continue_topic"
     
-    return response
+    # Default fallback with some variation to prevent infinite loops
+    if len(topic_messages) >= 6:  # Force evaluation after 6 exchanges
+        return "evaluate_topic"
+    
+    return "continue_topic"
 
 def decide_after_evaluation(state: Dict) -> str:
     """
