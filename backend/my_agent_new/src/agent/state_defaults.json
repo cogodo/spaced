@@ -1,0 +1,15 @@
+{
+    "session_id": "AUTOGENERATE",
+    "session_type": "chat",
+    "user_id": null,
+    "message_count": 0,
+    "max_messages": 20,
+    "session_complete": false,
+    "session_summary": "",
+    "topics": [],
+    "current_topic_index": 0,
+    "completed_topics": [],
+    "topic_scores": {},
+    "topic_evaluations": {}
+  }
+  
