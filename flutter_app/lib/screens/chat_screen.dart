@@ -52,6 +52,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (currentToken != null) {
           // Redirect to the active session's token URL
           context.go('/app/chat/$currentToken');
+        } else {
+          // No session token and no active session - reset to initial state for session selection
+          chatProvider.resetToInitialState();
         }
       }
       // Don't auto-start new sessions - wait for user input
@@ -231,7 +234,7 @@ class _ChatScreenState extends State<ChatScreen> {
         behavior: HitTestBehavior.translucent,
         child: Consumer<ChatProvider>(
           builder: (context, chatProvider, child) {
-            // Show session type selection if no active session
+            // Show session type selection if no active session and in initial state
             if (!chatProvider.hasActiveSession &&
                 chatProvider.sessionState == SessionState.initial) {
               return _buildSessionTypeSelection();

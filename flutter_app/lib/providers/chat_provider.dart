@@ -88,6 +88,20 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Reset to initial state for new session selection
+  void resetToInitialState() {
+    _currentSession = null;
+    _sessionState = SessionState.initial;
+    _messages = [];
+    _currentSessionId = null;
+    _isLoading = false;
+    _finalScores = null;
+    notifyListeners();
+    _logger.info(
+      'Chat provider reset to initial state for new session selection',
+    );
+  }
+
   /// Initialize a new chat session
   Future<void> startNewSession({
     List<String>? initialTopics,
