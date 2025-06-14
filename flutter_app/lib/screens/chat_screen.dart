@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/chat_history_sidebar.dart';
 import '../models/schedule_manager.dart';
 import '../models/task_holder.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -705,7 +707,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  SelectableText(
                     message.text,
                     style: TextStyle(
                       color:
@@ -717,9 +719,45 @@ class _ChatScreenState extends State<ChatScreen> {
                       fontSize: 16,
                       height: 1.4,
                     ),
+                    contextMenuBuilder: (context, editableTextState) {
+                      final List<ContextMenuButtonItem> buttonItems =
+                          <ContextMenuButtonItem>[
+                            ContextMenuButtonItem(
+                              label: 'Copy',
+                              onPressed: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: message.text),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Message copied to clipboard',
+                                    ),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                ContextMenuController.removeAny();
+                              },
+                            ),
+                            ContextMenuButtonItem(
+                              label: 'Select All',
+                              onPressed: () {
+                                editableTextState.selectAll(
+                                  SelectionChangedCause.toolbar,
+                                );
+                                ContextMenuController.removeAny();
+                              },
+                            ),
+                          ];
+
+                      return AdaptiveTextSelectionToolbar.buttonItems(
+                        anchors: editableTextState.contextMenuAnchors,
+                        buttonItems: buttonItems,
+                      );
+                    },
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  SelectableText(
                     _formatTimestamp(message.timestamp),
                     style: TextStyle(
                       color: (message.isSystem
