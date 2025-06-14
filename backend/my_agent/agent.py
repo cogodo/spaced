@@ -65,6 +65,59 @@ def session_initialization_node(state: GraphState) -> Dict[str, Any]:
         }
 
 
+def build_session_init_graph():
+    """
+    Build graph for session initialization only
+    """
+    graph = StateGraph(state_schema=GraphState)
+    graph.add_node("session_init", session_initialization_node)
+    graph.set_entry_point("session_init")
+    graph.add_edge("session_init", END)
+    return graph.compile()
+
+
+def build_conversation_graph():
+    """
+    Build graph for conversation flow (answer processing)
+    """
+    graph = StateGraph(state_schema=GraphState)
+    
+    # Add conversation nodes
+    graph.add_node("conversation", conversation_node)
+    graph.add_node("evaluate_topic", evaluate_topic_node)
+    graph.add_node("complete_session", complete_session_with_topic_scores)
+
+    # Set entry point to conversation
+    graph.set_entry_point("conversation")
+
+    # Define conditional edges for conversation flow
+    graph.add_conditional_edges(
+        "conversation",
+        route_from_conversation,
+        {
+            "continue_topic": "conversation",
+            "evaluate_topic": "evaluate_topic",
+            "end_session": "complete_session",
+            "error": "complete_session"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "evaluate_topic",
+        route_from_evaluation,
+        {
+            "next_topic": "conversation",
+            "end_session": "complete_session",
+            "error": "complete_session"
+        }
+    )
+
+    # complete_session is terminal
+    graph.add_edge("complete_session", END)
+    
+    return graph.compile()
+
+
 def build_graph():
     """
     Build Phase 4: Simplified but Working LangGraph Architecture
@@ -81,8 +134,8 @@ def build_graph():
     # Set entry point to session initialization
     graph.set_entry_point("session_init")
     
-    # Route from session initialization to conversation
-    graph.add_edge("session_init", "conversation")
+    # Route from session initialization directly to END (no conversation loop)
+    graph.add_edge("session_init", END)
 
     # Define conditional edges for Phase 4 architecture
     graph.add_conditional_edges(
@@ -172,7 +225,9 @@ def route_from_evaluation(state: GraphState) -> str:
 
 
 # Use Phase 4 architecture - NEW LANGGRAPH SYSTEM ONLY
-compiled_graph = build_graph()
+session_init_graph = build_session_init_graph()
+conversation_graph = build_conversation_graph()
+compiled_graph = build_graph()  # Keep for backward compatibility
 
 # In‐memory store of session_id -> GraphState
 SESSIONS: Dict[str, GraphState] = {}
@@ -648,9 +703,9 @@ async def start_session(request: Request, payload: StartPayload, user_id: Option
                 logger.warning(f"Error restoring adaptive state for session {session_id}: {e}")
                 # Continue with session even if state restoration fails
         
-        # Get initial response from conversation node
+        # Get initial response from session initialization
         try:
-            result = await asyncio.to_thread(compiled_graph.invoke, state)
+            result = await asyncio.to_thread(session_init_graph.invoke, state)
             
             # Update stored state with result
             SESSIONS[session_id].update(result)
@@ -667,7 +722,7 @@ async def start_session(request: Request, payload: StartPayload, user_id: Option
             }
             
         except Exception as e:
-            logger.error(f"Error invoking graph for session {session_id}: {e}")
+            logger.error(f"Error invoking session initialization for session {session_id}: {e}")
             # Clean up failed session
             SESSIONS.pop(session_id, None)
             SESSION_START_TIMES.pop(session_id, None)
@@ -738,9 +793,9 @@ async def answer_question(request: Request, payload: AnswerPayload):
         # Set user input for next graph invocation
         state["user_input"] = user_input
         
-        # Invoke the graph to get AI response
+        # Invoke the conversation graph to get AI response
         try:
-            result = await asyncio.to_thread(compiled_graph.invoke, state)
+            result = await asyncio.to_thread(conversation_graph.invoke, state)
             
             # Update stored state
             SESSIONS[session_id].update(result)
@@ -787,7 +842,7 @@ async def answer_question(request: Request, payload: AnswerPayload):
             }
             
         except Exception as e:
-            logger.error(f"Error invoking graph for session {session_id}: {e}")
+            logger.error(f"Error invoking conversation graph for session {session_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Error processing answer: {str(e)}")
             
     except HTTPException:
