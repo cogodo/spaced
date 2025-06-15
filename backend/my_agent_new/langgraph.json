@@ -3,11 +3,7 @@
     "./pyproject.toml"
   ],
   "graphs": {
-    "main": "./src/agent/graph.py:graph",
-    "conversation": "./src/agent/graph.py:conversation_graph",
-    "init": "./src/agent/graph.py:init_graph",
-    "langsmith_testing": "./src/agent/graph.py:langsmith_graph",
-    "simple_chat": "./src/agent/graph.py:simple_chat_graph"
+    "main": "./src/agent/graph.py:graph"
   },
   "env": ".env",
   "image_distro": "wolfi"
