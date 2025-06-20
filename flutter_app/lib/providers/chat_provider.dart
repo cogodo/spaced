@@ -3,7 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'package:go_router/go_router.dart';
 import '../models/chat_session.dart';
 import '../screens/chat_screen.dart'; // For SessionState and ChatMessage
-import '../services/langgraph_api.dart';
+import '../services/session_api.dart';
 import '../services/chat_session_service.dart';
 import '../services/logger_service.dart';
 
@@ -24,7 +24,7 @@ class ChatProvider extends ChangeNotifier {
   bool _isLoadingHistory = false;
 
   // Services
-  late final LangGraphApi _api;
+  late final SessionApi _api;
   late final ChatSessionService _sessionService;
 
   // Session configuration
@@ -37,6 +37,16 @@ class ChatProvider extends ChangeNotifier {
   // Navigation context for URL updates
   GoRouter? _router;
 
+  // Popular topics support
+  List<PopularTopic> _popularTopics = [];
+  bool _isLoadingPopularTopics = false;
+
+  // Enhanced loading and typing states
+  bool _isTyping = false;
+  String? _typingMessage;
+  bool _isGeneratingQuestions = false;
+  bool _isProcessingAnswer = false;
+
   ChatProvider() {
     // Use environment-based backend URL
     const String? backendUrl = String.fromEnvironment(
@@ -44,7 +54,7 @@ class ChatProvider extends ChangeNotifier {
       defaultValue: 'https://spaced-staging.onrender.com',
     );
 
-    _api = LangGraphApi(baseUrl: backendUrl);
+    _api = SessionApi(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
   }
 
@@ -60,6 +70,14 @@ class ChatProvider extends ChangeNotifier {
   bool get hasActiveSession => _currentSession != null;
   bool get isLoadingHistory => _isLoadingHistory;
   String? get userId => _userId;
+  List<PopularTopic> get popularTopics => List.unmodifiable(_popularTopics);
+  bool get isLoadingPopularTopics => _isLoadingPopularTopics;
+
+  // Enhanced loading state getters
+  bool get isTyping => _isTyping;
+  String? get typingMessage => _typingMessage;
+  bool get isGeneratingQuestions => _isGeneratingQuestions;
+  bool get isProcessingAnswer => _isProcessingAnswer;
 
   /// Set the router for navigation
   void setRouter(GoRouter router) {
@@ -71,12 +89,77 @@ class ChatProvider extends ChangeNotifier {
     if (_userId != userId) {
       _userId = userId;
       if (userId != null) {
-        // Load session history when user is set
+        // Load session history and popular topics when user is set
         loadSessionHistory();
+        loadPopularTopics();
       } else {
         // Clear data when user is signed out
         clear();
       }
+    }
+  }
+
+  /// Load popular topics for quick-pick menu
+  Future<void> loadPopularTopics() async {
+    if (_isLoadingPopularTopics) return;
+
+    _isLoadingPopularTopics = true;
+    notifyListeners();
+
+    try {
+      _popularTopics = await _api.getPopularTopics();
+      _logger.info('Loaded ${_popularTopics.length} popular topics');
+    } catch (e) {
+      _logger.warning('Failed to load popular topics: $e');
+      // Use fallback popular topics
+      _popularTopics = [
+        PopularTopic(
+          name: 'Python Programming',
+          description: 'Learn Python fundamentals',
+        ),
+        PopularTopic(
+          name: 'Machine Learning',
+          description: 'ML algorithms and models',
+        ),
+        PopularTopic(
+          name: 'Web Development',
+          description: 'Frontend and backend technologies',
+        ),
+        PopularTopic(
+          name: 'Data Science',
+          description: 'Data analysis and visualization',
+        ),
+        PopularTopic(
+          name: 'Mobile Development',
+          description: 'iOS, Android development',
+        ),
+        PopularTopic(name: 'Cloud Computing', description: 'AWS, Azure, GCP'),
+      ];
+    } finally {
+      _isLoadingPopularTopics = false;
+      notifyListeners();
+    }
+  }
+
+  /// Validate topics and get suggestions
+  Future<TopicValidationResponse?> validateTopics(List<String> topics) async {
+    try {
+      return await _api.validateTopics(topics);
+    } catch (e) {
+      _logger.warning('Failed to validate topics: $e');
+      return null;
+    }
+  }
+
+  /// Search user's existing topics
+  Future<List<UserTopic>> searchTopics(String query) async {
+    if (query.trim().isEmpty) return [];
+
+    try {
+      return await _api.searchTopics(query);
+    } catch (e) {
+      _logger.warning('Failed to search topics: $e');
+      return [];
     }
   }
 
@@ -161,17 +244,8 @@ class ChatProvider extends ChangeNotifier {
 
       // Start the backend session immediately for due items
       await _startBackendSession(sessionType, topics);
-    } else if (sessionType == 'custom_topics') {
-      _addSystemMessage(
-        "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
-        "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
-        "To get started, please tell me what topics you'd like to study today. "
-        "You can list multiple topics separated by commas.\n\n"
-        "For example: 'Flutter widgets, Dart programming, Mobile development'",
-      );
-      _sessionState = SessionState.collectingTopics;
     } else {
-      // Default behavior
+      // Default behavior - show topic selection
       _addSystemMessage(
         "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
         "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
@@ -207,11 +281,28 @@ class ChatProvider extends ChangeNotifier {
     _logger.info('New chat session started with ID: $sessionId, token: $token');
   }
 
+  /// Start a session with popular topic
+  Future<void> startSessionWithPopularTopic(PopularTopic topic) async {
+    await startNewSession(
+      initialTopics: [topic.name],
+      sessionType: 'custom_topics',
+    );
+
+    // Immediately start the backend session
+    await _handleTopicsInput(topic.name);
+  }
+
   /// Start the backend session
   Future<void> _startBackendSession(
     String? sessionType,
     List<String> topics,
   ) async {
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Starting your learning session...",
+      generatingQuestions: true,
+    );
+
     try {
       final response = await _api.startSession(
         topics: topics,
@@ -220,21 +311,45 @@ class ChatProvider extends ChangeNotifier {
         sessionType: sessionType ?? 'custom_topics',
       );
 
+      _currentSessionId = response.sessionId;
+      _sessionState = SessionState.active;
+
+      // Update session with actual topics
+      _currentSession = _currentSession!.copyWith(
+        topics: response.topics,
+        state: SessionState.active,
+        updatedAt: DateTime.now(),
+      );
+
+      // Show the response message which includes the first question
+      _addAIMessage(response.message);
+
       _logger.info('Backend session started successfully');
 
-      // Add the initial AI message
-      final initialMessage = response.nextQuestion;
-      if (initialMessage.isNotEmpty) {
-        _addSystemMessage(initialMessage);
+      // Navigate to token URL after session is active
+      if (_router != null && _currentSession != null) {
+        _router!.go('/app/chat/${_currentSession!.token}');
       }
     } catch (e) {
       _logger.severe('Error starting backend session: $e');
-      _addSystemMessage(
-        'Sorry, there was an error starting your session. Please try again.',
-      );
       _sessionState = SessionState.error;
-      notifyListeners();
+
+      if (e is SessionApiException) {
+        _addAIMessage(
+          'Sorry, I encountered an error starting your session: ${e.message}\n\n'
+          'Would you like to try again with different topics?',
+        );
+      } else {
+        _addAIMessage(
+          'Sorry, there was an error starting your session. Please try again.',
+        );
+      }
+    } finally {
+      _setLoadingWithTyping(false);
     }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
   }
 
   /// Load an existing session from Firebase
@@ -319,7 +434,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Handle user input based on current session state
-  Future<void> _handleUserInput(String userInput) async {
+  Future<void> _handleUserInput(String input) async {
     _setLoading(true);
 
     try {
@@ -327,33 +442,35 @@ class ChatProvider extends ChangeNotifier {
         case SessionState.initial:
         case SessionState.selectingSessionType:
         case SessionState.selectingDueTopics:
-          // These states are handled by UI, not user input
+          // These states should be handled by UI, not text input
+          _addAIMessage("Please use the buttons above to make your selection.");
           break;
+
         case SessionState.collectingTopics:
-          await _handleTopicsInput(userInput);
+          await _handleTopicsInput(input);
           break;
 
         case SessionState.active:
-          await _handleAnswerInput(userInput);
+          await _handleAnswerInput(input);
           break;
 
         case SessionState.completed:
-          await _handleCompletedState(userInput);
-          break;
-
         case SessionState.error:
-          await _handleErrorState(userInput);
+          // Allow starting new session
+          _addAIMessage(
+            "This session has ended. Would you like to start a new session?\n\n"
+            "You can say 'new session' or use the button above.",
+          );
           break;
       }
     } catch (e) {
-      _logger.severe('Error handling user input: $e');
       await _handleError(e);
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Handle topics input during session setup
+  /// Handle topics input during topic collection
   Future<void> _handleTopicsInput(String input) async {
     // Parse topics from user input
     List<String> topics =
@@ -379,53 +496,31 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    // Start the session
-    try {
-      _addAIMessage(
-        "Great! I'll create a learning session for: ${topics.join(', ')}\n\nStarting your session...",
-      );
-
-      final response = await _api.startSession(
-        topics: topics,
-        maxTopics: _maxTopics,
-        maxQuestions: _maxQuestions,
-      );
-
-      _currentSessionId = response.sessionId;
-      _sessionState = SessionState.active;
-
-      // Update session with actual topics
-      _currentSession = _currentSession!.copyWith(
-        topics: topics,
-        state: SessionState.active,
-        updatedAt: DateTime.now(),
-      );
-
-      await Future.delayed(
-        const Duration(milliseconds: 500),
-      ); // Brief pause for UX
-
-      _addAIMessage(
-        "📚 **Session Started!**\n\n"
-        "I'll ask you up to $_maxQuestions questions per topic to assess your knowledge. "
-        "Answer as best as you can - this helps me understand what you know and what needs more practice.\n\n"
-        "**Question 1:**\n${response.nextQuestion}",
-      );
-
-      // Now navigate to the token URL after session is active
-      if (_router != null && _currentSession != null) {
-        _router!.go('/app/chat/${_currentSession!.token}');
-      }
-    } on LangGraphApiException catch (e) {
-      _sessionState = SessionState.error;
-      _addAIMessage(
-        "Sorry, I encountered an error starting your session: ${e.message}\n\n"
-        "Would you like to try again with different topics?",
-      );
+    // Validate topics first
+    final validation = await validateTopics(topics);
+    if (validation != null && validation.hasErrors) {
+      _addTopicSuggestions(validation);
+      return;
     }
 
-    _updateCurrentSession();
-    await _autoSaveSession();
+    // Start the session
+    await _startBackendSession('custom_topics', topics);
+  }
+
+  /// Add topic suggestions to chat
+  void _addTopicSuggestions(TopicValidationResponse validation) {
+    String message = "I found some topics that might need clarification:\n\n";
+
+    for (final suggestion in validation.suggestions) {
+      message += "• You typed: **${suggestion.input}**\n";
+      message += "  Did you mean: **${suggestion.suggestion}**?\n\n";
+    }
+
+    message +=
+        "Please clarify your topics, or I can proceed with the ones I understood: ";
+    message += validation.validTopics.join(', ');
+
+    _addAIMessage(message);
   }
 
   /// Handle answer input during active session
@@ -442,6 +537,12 @@ class ChatProvider extends ChangeNotifier {
       await _handleExpiredSession(answer);
       return;
     }
+
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Analyzing your response...",
+      processingAnswer: true,
+    );
 
     try {
       final response = await _api.answer(
@@ -461,12 +562,17 @@ class ChatProvider extends ChangeNotifier {
           updatedAt: DateTime.now(),
         );
 
-        _addAIMessage(_buildCompletionMessage(response.scores!));
+        // Use the formatted message from the backend
+        _addAIMessage(
+          response.message ?? _buildCompletionMessage(response.scores!),
+        );
       } else {
-        // Continue with next question
-        _addAIMessage("**Next Question:**\n${response.nextQuestion!}");
+        // Continue with next question - use the formatted message from backend
+        _addAIMessage(
+          response.message ?? "**Next Question:**\n${response.nextQuestion!}",
+        );
       }
-    } on LangGraphApiException catch (e) {
+    } on SessionApiException catch (e) {
       if (e.statusCode == 404) {
         // Backend session expired - handle gracefully
         await _handleExpiredSession(answer);
@@ -477,6 +583,8 @@ class ChatProvider extends ChangeNotifier {
           "Would you like to try answering again, or start a new session?",
         );
       }
+    } finally {
+      _setLoadingWithTyping(false);
     }
 
     _updateCurrentSession();
@@ -518,11 +626,15 @@ class ChatProvider extends ChangeNotifier {
               updatedAt: DateTime.now(),
             );
 
-            _addAIMessage(_buildCompletionMessage(continueResponse.scores!));
+            _addAIMessage(
+              continueResponse.message ??
+                  _buildCompletionMessage(continueResponse.scores!),
+            );
           } else {
             // Continue with next question
             _addAIMessage(
-              "**Next Question:**\n${continueResponse.nextQuestion!}",
+              continueResponse.message ??
+                  "**Next Question:**\n${continueResponse.nextQuestion!}",
             );
           }
         } catch (e) {
@@ -530,129 +642,26 @@ class ChatProvider extends ChangeNotifier {
           _logger.warning(
             'Failed to process answer after restart, showing first question: $e',
           );
-          _addAIMessage("**Question:**\n${response.nextQuestion}");
+          _addAIMessage(response.message);
         }
       } else {
-        // No topics available, ask user to restart
-        _addAIMessage("Please tell me what topics you'd like to study.");
-        _sessionState = SessionState.collectingTopics;
-        _currentSessionId = null;
+        // No topics available, ask user to start over
+        _addAIMessage(
+          "I'm sorry, but your session has expired and I don't have the topic information to continue. "
+          "Would you like to start a new session?",
+        );
+        _sessionState = SessionState.initial;
       }
     } catch (e) {
-      // If restart fails, gracefully degrade
-      _logger.warning('Failed to restart expired session: $e');
-      _addAIMessage("Please tell me what topics you'd like to study today.");
-      _sessionState = SessionState.collectingTopics;
-      _currentSessionId = null;
-    }
-  }
-
-  /// Handle input when session is completed
-  Future<void> _handleCompletedState(String input) async {
-    final lowerInput = input.toLowerCase();
-
-    if (lowerInput.contains('new') ||
-        lowerInput.contains('again') ||
-        lowerInput.contains('restart')) {
+      _logger.severe('Failed to handle expired session: $e');
       _addAIMessage(
-        "Starting a new session! What topics would you like to study this time?",
+        "I'm having trouble reconnecting your session. Would you like to start a new one?",
       );
-      await startNewSession();
-    } else if (lowerInput.contains('score') || lowerInput.contains('result')) {
-      if (_finalScores != null) {
-        _addAIMessage(_buildCompletionMessage(_finalScores!));
-      }
-    } else {
-      _addAIMessage(
-        "Your learning session is complete! 🎉\n\n"
-        "Would you like to:\n"
-        "• Start a **new session** with different topics\n"
-        "• **Review** your scores again\n"
-        "• Ask me anything about spaced repetition learning",
-      );
+      _sessionState = SessionState.error;
     }
-  }
-
-  /// Handle input when session is in error state
-  Future<void> _handleErrorState(String input) async {
-    final lowerInput = input.toLowerCase();
-
-    if (lowerInput.contains('try') ||
-        lowerInput.contains('again') ||
-        lowerInput.contains('restart')) {
-      _addAIMessage("Let's start fresh! What topics would you like to study?");
-      await startNewSession();
-    } else {
-      _addAIMessage(
-        "I'm still having issues. Would you like to **try again** or **restart** with new topics?",
-      );
-    }
-  }
-
-  /// Handle errors
-  Future<void> _handleError(dynamic error) async {
-    _sessionState = SessionState.error;
-    String errorMessage = "I encountered an unexpected error.";
-
-    if (error is LangGraphApiException) {
-      errorMessage = "API Error: ${error.message}";
-    } else {
-      errorMessage = "Error: ${error.toString()}";
-    }
-
-    _addAIMessage(
-      "$errorMessage\n\n"
-      "Would you like to try again or start a new session?",
-    );
 
     _updateCurrentSession();
     await _autoSaveSession();
-  }
-
-  /// Reset the current session
-  void _resetSession() {
-    _sessionState = SessionState.initial;
-    _currentSessionId = null;
-    _finalScores = null;
-    // Note: We keep _currentSession and _messages for persistence
-    notifyListeners();
-  }
-
-  /// Add system message
-  void _addSystemMessage(String text) {
-    final message = ChatMessage(
-      text: text,
-      isUser: false,
-      timestamp: DateTime.now(),
-      isSystem: true,
-    );
-    _messages.add(message);
-    _updateCurrentSession();
-    notifyListeners();
-  }
-
-  /// Add user message
-  void _addUserMessage(String text) {
-    final message = ChatMessage(
-      text: text,
-      isUser: true,
-      timestamp: DateTime.now(),
-    );
-    _messages.add(message);
-    _updateCurrentSession();
-    notifyListeners();
-  }
-
-  /// Add AI message
-  void _addAIMessage(String text) {
-    final message = ChatMessage(
-      text: text,
-      isUser: false,
-      timestamp: DateTime.now(),
-    );
-    _messages.add(message);
-    _updateCurrentSession();
-    notifyListeners();
   }
 
   /// Update current session with latest messages and metadata
@@ -685,6 +694,40 @@ class ChatProvider extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  /// Set typing indicator with optional custom message
+  void _setTyping(
+    bool typing, {
+    String? message,
+    bool? generatingQuestions,
+    bool? processingAnswer,
+  }) {
+    _isTyping = typing;
+    _typingMessage = message;
+    _isGeneratingQuestions = generatingQuestions ?? false;
+    _isProcessingAnswer = processingAnswer ?? false;
+    notifyListeners();
+  }
+
+  /// Enhanced loading with contextual typing
+  void _setLoadingWithTyping(
+    bool loading, {
+    String? typingMessage,
+    bool? generatingQuestions,
+    bool? processingAnswer,
+  }) {
+    _isLoading = loading;
+    if (loading) {
+      _setTyping(
+        true,
+        message: typingMessage,
+        generatingQuestions: generatingQuestions,
+        processingAnswer: processingAnswer,
+      );
+    } else {
+      _setTyping(false);
+    }
   }
 
   /// Build completion message
@@ -895,4 +938,70 @@ class ChatProvider extends ChangeNotifier {
 
   /// Get the current session token for routing
   String? get currentSessionToken => _currentSession?.token;
+
+  /// Handle errors
+  Future<void> _handleError(dynamic error) async {
+    _sessionState = SessionState.error;
+    String errorMessage = "I encountered an unexpected error.";
+
+    if (error is SessionApiException) {
+      errorMessage = "API Error: ${error.message}";
+    } else {
+      errorMessage = "Error: ${error.toString()}";
+    }
+
+    _addAIMessage(
+      "$errorMessage\n\n"
+      "Would you like to try again or start a new session?",
+    );
+
+    _updateCurrentSession();
+    await _autoSaveSession();
+  }
+
+  /// Reset the current session
+  void _resetSession() {
+    _sessionState = SessionState.initial;
+    _currentSessionId = null;
+    _finalScores = null;
+    // Note: We keep _currentSession and _messages for persistence
+    notifyListeners();
+  }
+
+  /// Add system message
+  void _addSystemMessage(String text) {
+    final message = ChatMessage(
+      text: text,
+      isUser: false,
+      timestamp: DateTime.now(),
+      isSystem: true,
+    );
+    _messages.add(message);
+    _updateCurrentSession();
+    notifyListeners();
+  }
+
+  /// Add user message
+  void _addUserMessage(String text) {
+    final message = ChatMessage(
+      text: text,
+      isUser: true,
+      timestamp: DateTime.now(),
+    );
+    _messages.add(message);
+    _updateCurrentSession();
+    notifyListeners();
+  }
+
+  /// Add AI message
+  void _addAIMessage(String text) {
+    final message = ChatMessage(
+      text: text,
+      isUser: false,
+      timestamp: DateTime.now(),
+    );
+    _messages.add(message);
+    _updateCurrentSession();
+    notifyListeners();
+  }
 }

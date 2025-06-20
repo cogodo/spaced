@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/chat_history_sidebar.dart';
+import '../widgets/chat_progress_widget.dart';
+import '../widgets/typing_indicator_widget.dart';
+import '../widgets/topic_selection_widget.dart';
 import '../models/schedule_manager.dart';
 import '../models/task_holder.dart';
 import 'package:go_router/go_router.dart';
@@ -242,6 +245,11 @@ class _ChatScreenState extends State<ChatScreen> {
               return _buildSessionTypeSelection();
             }
 
+            // Show topic selection for new items
+            if (chatProvider.sessionState == SessionState.collectingTopics) {
+              return _buildTopicSelectionScreen();
+            }
+
             // Show due topics selection
             if (chatProvider.sessionState == SessionState.selectingDueTopics) {
               return _buildDueTopicsSelection();
@@ -359,6 +367,97 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopicSelectionScreen() {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      final chatProvider = Provider.of<ChatProvider>(
+                        context,
+                        listen: false,
+                      );
+                      chatProvider.setSessionState(SessionState.initial);
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Topics to Learn',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Choose which topics you\'d like to learn today',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Topic Selection Widget
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: TopicSelectionWidget(
+              onTopicsSelected: (topics) async {
+                final chatProvider = Provider.of<ChatProvider>(
+                  context,
+                  listen: false,
+                );
+                // Start the session with the selected topics
+                await chatProvider.startNewSession(
+                  initialTopics: topics,
+                  sessionType: 'custom_topics',
+                );
+                // The session should automatically transition to active state
+              },
+              onPopularTopicSelected: (topic) async {
+                final chatProvider = Provider.of<ChatProvider>(
+                  context,
+                  listen: false,
+                );
+                await chatProvider.startSessionWithPopularTopic(topic);
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -646,18 +745,37 @@ class _ChatScreenState extends State<ChatScreen> {
             _scrollToBottom();
           }
 
-          return ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount:
-                chatProvider.messages.length + (chatProvider.isLoading ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == chatProvider.messages.length &&
-                  chatProvider.isLoading) {
-                return _buildLoadingIndicator(chatProvider);
-              }
-              return _buildMessageBubble(chatProvider.messages[index]);
-            },
+          return Column(
+            children: [
+              // Progress indicator for active sessions
+              ChatProgressWidget(),
+
+              // Messages list
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  itemCount:
+                      chatProvider.messages.length +
+                      (chatProvider.isTyping ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == chatProvider.messages.length &&
+                        chatProvider.isTyping) {
+                      return SmartTypingIndicator(
+                        sessionState: chatProvider.sessionState.toString(),
+                        isGeneratingQuestions:
+                            chatProvider.isGeneratingQuestions,
+                        isProcessingAnswer: chatProvider.isProcessingAnswer,
+                      );
+                    }
+                    return _buildMessageBubble(chatProvider.messages[index]);
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -778,65 +896,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildLoadingIndicator(ChatProvider chatProvider) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  _getLoadingText(chatProvider.sessionState),
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getLoadingText(SessionState sessionState) {
-    switch (sessionState) {
-      case SessionState.collectingTopics:
-        return "Starting your session...";
-      case SessionState.active:
-        return "Processing your answer...";
-      case SessionState.completed:
-      case SessionState.error:
-        return "Thinking...";
-      default:
-        return "Loading...";
-    }
-  }
-
   Widget _buildInputArea() {
     final theme = Theme.of(context);
     return Container(
@@ -853,7 +912,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    enabled: !chatProvider.isLoading,
+                    enabled: !chatProvider.isLoading && !chatProvider.isTyping,
                     focusNode: _textFieldFocusNode,
                     decoration: InputDecoration(
                       hintText: _getInputHint(chatProvider.sessionState),
@@ -882,13 +941,21 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       isDense: false,
+                      // Show typing indicator in input when AI is thinking
+                      suffixIcon:
+                          chatProvider.isTyping
+                              ? Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: CompactTypingIndicator(),
+                              )
+                              : null,
                     ),
                     maxLines: 5,
                     minLines: 1,
                     textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) {
-                      if (!chatProvider.isLoading) {
+                      if (!chatProvider.isLoading && !chatProvider.isTyping) {
                         _sendMessage();
                       }
                     },
@@ -907,10 +974,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 12),
                 // Send button
                 IconButton(
-                  onPressed: chatProvider.isLoading ? null : _sendMessage,
+                  onPressed:
+                      (chatProvider.isLoading || chatProvider.isTyping)
+                          ? null
+                          : _sendMessage,
                   style: IconButton.styleFrom(
                     backgroundColor:
-                        chatProvider.isLoading
+                        (chatProvider.isLoading || chatProvider.isTyping)
                             ? theme.colorScheme.primary.withValues(alpha: 0.5)
                             : theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
@@ -920,7 +990,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         .withValues(alpha: 0.7),
                     fixedSize: const Size(56, 56), // Consistent size
                     shape: const CircleBorder(),
-                    elevation: chatProvider.isLoading ? 0 : 2,
+                    elevation:
+                        (chatProvider.isLoading || chatProvider.isTyping)
+                            ? 0
+                            : 2,
                     shadowColor: theme.colorScheme.primary.withValues(
                       alpha: 0.3,
                     ),
