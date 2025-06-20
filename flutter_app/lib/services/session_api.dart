@@ -35,9 +35,9 @@ class StartSessionResponse {
   factory StartSessionResponse.fromJson(Map<String, dynamic> json) {
     return StartSessionResponse(
       sessionId: json['session_id'] as String,
-      nextQuestion: json['next_question'] as String? ?? '',
+      nextQuestion: json['message'] as String? ?? '',
       message: json['message'] as String? ?? '',
-      topics: List<String>.from(json['topics'] as List? ?? []),
+      topics: List<String>.from(json['remaining_topics'] as List? ?? []),
     );
   }
 }
@@ -281,95 +281,55 @@ class SessionApi {
 
   /// Get popular topics for quick-pick menu
   Future<List<PopularTopic>> getPopularTopics({int limit = 6}) async {
-    final url = Uri.parse('$baseUrl/api/v1/chat/popular-topics?limit=$limit');
-
+    // NOTE: This endpoint doesn't exist in deployed backend - using fallback topics
     try {
-      final response = await _topicBreaker.execute(() async {
-        final headers = await _getHeaders();
-        return await http.get(url, headers: headers).timeout(timeout);
-      });
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final topics = data['topics'] as List;
-        return topics
-            .map((t) => PopularTopic.fromJson(t as Map<String, dynamic>))
-            .toList();
-      } else {
-        final errorBody =
-            response.body.isNotEmpty ? response.body : 'No error details';
-        throw SessionApiException(
-          'Failed to get popular topics: $errorBody',
-          response.statusCode,
-        );
-      }
-    } on CircuitBreakerException catch (e) {
-      throw SessionApiException(
-        'Popular topics service unavailable: ${e.message}',
-      );
+      // Use fallback popular topics since the API endpoint is not available
+      return [
+        PopularTopic(
+          name: 'Python Programming',
+          description: 'Learn Python fundamentals',
+        ),
+        PopularTopic(
+          name: 'Machine Learning',
+          description: 'ML algorithms and models',
+        ),
+        PopularTopic(
+          name: 'Web Development',
+          description: 'Frontend and backend technologies',
+        ),
+        PopularTopic(
+          name: 'Data Science',
+          description: 'Data analysis and visualization',
+        ),
+        PopularTopic(
+          name: 'Mobile Development',
+          description: 'iOS, Android development',
+        ),
+        PopularTopic(name: 'Cloud Computing', description: 'AWS, Azure, GCP'),
+      ];
     } catch (e) {
-      if (e is SessionApiException) rethrow;
       throw SessionApiException('Network error: $e');
     }
   }
 
   /// Validate topics and get suggestions
   Future<TopicValidationResponse> validateTopics(List<String> topics) async {
-    final url = Uri.parse('$baseUrl/api/v1/chat/validate-topics');
-
+    // NOTE: This endpoint doesn't exist in deployed backend - return simple validation
     try {
-      final headers = await _getHeaders();
-      final payload = {'topics': topics};
-
-      final response = await http
-          .post(url, headers: headers, body: jsonEncode(payload))
-          .timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return TopicValidationResponse.fromJson(data);
-      } else {
-        final errorBody =
-            response.body.isNotEmpty ? response.body : 'No error details';
-        throw SessionApiException(
-          'Failed to validate topics: $errorBody',
-          response.statusCode,
-        );
-      }
+      return TopicValidationResponse(
+        validTopics: topics,
+        suggestions: [],
+        hasErrors: false,
+      );
     } catch (e) {
-      if (e is SessionApiException) rethrow;
       throw SessionApiException('Network error: $e');
     }
   }
 
   /// Search user's existing topics
   Future<List<UserTopic>> searchTopics(String query) async {
-    final url = Uri.parse(
-      '$baseUrl/api/v1/chat/search-topics?q=${Uri.encodeComponent(query)}',
-    );
-
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(url, headers: headers).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final topics = data['topics'] as List;
-        return topics
-            .map((t) => UserTopic.fromJson(t as Map<String, dynamic>))
-            .toList();
-      } else {
-        final errorBody =
-            response.body.isNotEmpty ? response.body : 'No error details';
-        throw SessionApiException(
-          'Failed to search topics: $errorBody',
-          response.statusCode,
-        );
-      }
-    } catch (e) {
-      if (e is SessionApiException) rethrow;
-      throw SessionApiException('Network error: $e');
-    }
+    // NOTE: This endpoint doesn't exist in deployed backend - return empty list
+    return [];
   }
 
   /// Starts a new study session with the specified topics.
@@ -409,10 +369,10 @@ class SessionApi {
       );
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/start_session');
+    final url = Uri.parse('$baseUrl/start_session');
     final payload = {
-      'topics': topics,
       'session_type': sessionType,
+      'topics': topics,
       'max_topics': maxTopics,
       'max_questions': maxQuestions,
     };
@@ -476,7 +436,7 @@ class SessionApi {
       throw ArgumentError('userInput cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/answer');
+    final url = Uri.parse('$baseUrl/answer');
     final payload = {
       'session_id': sessionId.trim(),
       'user_input': userInput.trim(),
@@ -526,29 +486,10 @@ class SessionApi {
     }
   }
 
-  /// Get current session status
+  /// Get session status
   Future<SessionStatus> getSessionStatus(String sessionId) async {
-    final url = Uri.parse('$baseUrl/api/v1/chat/session/$sessionId/status');
-
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(url, headers: headers).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return SessionStatus.fromJson(data);
-      } else {
-        final errorBody =
-            response.body.isNotEmpty ? response.body : 'No error details';
-        throw SessionApiException(
-          'Failed to get session status: $errorBody',
-          response.statusCode,
-        );
-      }
-    } catch (e) {
-      if (e is SessionApiException) rethrow;
-      throw SessionApiException('Network error: $e');
-    }
+    // NOTE: This endpoint doesn't exist in deployed backend
+    throw SessionApiException('Session status endpoint not available');
   }
 
   /// Test if the API is reachable

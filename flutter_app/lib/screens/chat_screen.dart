@@ -440,19 +440,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   context,
                   listen: false,
                 );
-                // Start the session with the selected topics
-                await chatProvider.startNewSession(
-                  initialTopics: topics,
-                  sessionType: 'custom_topics',
-                );
-                // The session should automatically transition to active state
+                // Use existing session and handle topics input instead of creating new session
+                await chatProvider.handleTopicsInput(topics);
               },
               onPopularTopicSelected: (topic) async {
                 final chatProvider = Provider.of<ChatProvider>(
                   context,
                   listen: false,
                 );
-                await chatProvider.startSessionWithPopularTopic(topic);
+                // Use existing session and handle the popular topic
+                await chatProvider.handleTopicsInput([topic.name]);
               },
             ),
           ),

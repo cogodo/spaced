@@ -245,14 +245,7 @@ class ChatProvider extends ChangeNotifier {
       // Start the backend session immediately for due items
       await _startBackendSession(sessionType, topics);
     } else {
-      // Default behavior - show topic selection
-      _addSystemMessage(
-        "Welcome to your personalized spaced repetition learning session! 🧠✨\n\n"
-        "I'll help you learn and retain information using scientifically-proven spaced repetition techniques.\n\n"
-        "To get started, please tell me what topics you'd like to study today. "
-        "You can list multiple topics separated by commas.\n\n"
-        "For example: 'Flutter widgets, Dart programming, Mobile development'",
-      );
+      // Default behavior - show topic selection (no intro message)
       _sessionState = SessionState.collectingTopics;
     }
 
@@ -289,7 +282,7 @@ class ChatProvider extends ChangeNotifier {
     );
 
     // Immediately start the backend session
-    await _handleTopicsInput(topic.name);
+    await handleTopicsInput([topic.name]);
   }
 
   /// Start the backend session
@@ -447,7 +440,7 @@ class ChatProvider extends ChangeNotifier {
           break;
 
         case SessionState.collectingTopics:
-          await _handleTopicsInput(input);
+          await _handleTopicsInputFromString(input);
           break;
 
         case SessionState.active:
@@ -470,20 +463,11 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Handle topics input during topic collection
-  Future<void> _handleTopicsInput(String input) async {
-    // Parse topics from user input
-    List<String> topics =
-        input
-            .split(',')
-            .map((topic) => topic.trim())
-            .where((topic) => topic.isNotEmpty)
-            .toList();
-
+  /// Handle topics input with a list of topics (public method for UI)
+  Future<void> handleTopicsInput(List<String> topics) async {
     if (topics.isEmpty) {
       _addAIMessage(
-        "I couldn't find any topics in your message. Please list the topics you'd like to study, separated by commas.\n\n"
-        "For example: 'Machine Learning, Python, Data Science'",
+        "I couldn't find any topics in your selection. Please select at least one topic to study.",
       );
       return;
     }
@@ -1003,5 +987,18 @@ class ChatProvider extends ChangeNotifier {
     _messages.add(message);
     _updateCurrentSession();
     notifyListeners();
+  }
+
+  /// Handle topics input during topic collection (from string input)
+  Future<void> _handleTopicsInputFromString(String input) async {
+    // Parse topics from user input
+    List<String> topics =
+        input
+            .split(',')
+            .map((topic) => topic.trim())
+            .where((topic) => topic.isNotEmpty)
+            .toList();
+
+    await handleTopicsInput(topics);
   }
 }
