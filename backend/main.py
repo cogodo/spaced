@@ -4,9 +4,8 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import asyncio
 
-# Import routers
-from api.v1.endpoints.topics import router as topics_router
-from api.v1.endpoints.sessions import router as sessions_router
+# Import centralized API router
+from api.v1.router import api_router
 from api.monitoring import router as monitoring_router
 
 # Import services and configs
@@ -100,8 +99,7 @@ async def health_check():
     return {"status": "healthy", "service": "learning_chatbot_api"}
 
 # Include routers
-app.include_router(topics_router)
-app.include_router(sessions_router)
+app.include_router(api_router, prefix="/api/v1")
 app.include_router(monitoring_router)
 
 # Circuit breakers for external services
@@ -161,7 +159,8 @@ async def startup_event():
                        "rate_limiting",
                        "circuit_breakers",
                        "security_logging",
-                       "metrics_collection"
+                       "metrics_collection",
+                       "chat_api"  # New chat API feature
                    ])
         
     except Exception as e:
@@ -199,6 +198,7 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "monitoring": "/monitoring/status",
+        "chat_api": "/api/v1/chat",  # New chat API
         "features": {
             "spaced_repetition": "FSRS algorithm",
             "ai_question_generation": "OpenAI GPT-3.5",
@@ -206,7 +206,8 @@ async def root():
             "session_management": "Redis + Firebase",
             "monitoring": "Comprehensive observability",
             "reliability": "Circuit breakers + retries",
-            "security": "Rate limiting + logging"
+            "security": "Rate limiting + logging",
+            "chat_interface": "Chat-compatible API endpoints"  # New feature
         }
     }
 
@@ -214,8 +215,8 @@ if __name__ == "__main__":
     # Enhanced uvicorn configuration for production readiness
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=settings.host,  # Use config values
+        port=settings.port,  # Use config values
         reload=settings.debug,
         log_level="info",
         access_log=True,

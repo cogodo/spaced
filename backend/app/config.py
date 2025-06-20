@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     debug: bool = Field(True, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")
     
+    # Server Configuration
+    host: str = Field("0.0.0.0", env="HOST")
+    port: int = Field(8000, env="PORT")
+    
     # Firebase Configuration
     firebase_service_account_path: Optional[str] = Field(env="FIREBASE_SERVICE_ACCOUNT_PATH")
     firebase_project_id: str = Field(env="FIREBASE_PROJECT_ID")
@@ -31,7 +35,8 @@ class Settings(BaseSettings):
     
     model_config = {
         "env_file": ".env",
-        "case_sensitive": False
+        "case_sensitive": False,
+        "extra": "ignore"  # Allow extra fields to be ignored
     }
 
 
