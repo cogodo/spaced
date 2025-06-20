@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For FilteringTextInputFormatter
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/logger_service.dart';
-import '../models/schedule_manager.dart';
+import '../themes/theme_data.dart';
 import '../widgets/theme_toggle.dart';
 
 /// User profile screen showing account information and settings
@@ -15,19 +14,14 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
-  final _logger = getLogger('UserProfileScreen');
   bool _isSigningOut = false;
   late TextEditingController _maxRepsController;
 
   @override
   void initState() {
     super.initState();
-    final scheduleManager = Provider.of<ScheduleManager>(
-      context,
-      listen: false,
-    );
     _maxRepsController = TextEditingController(
-      text: scheduleManager.maxRepetitions.toString(),
+      text: '5', // Default value, as the ScheduleManager is removed
     );
   }
 
@@ -70,13 +64,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Sync Status Section
-                  _buildSyncStatusSection(context),
-
-                  const SizedBox(height: 32),
-
-                  // App Settings Section (inline)
-                  _buildAppSettingsSection(context),
+                  // Theme Settings Section
+                  _buildThemeSettingsSection(context),
 
                   const SizedBox(height: 32),
 
@@ -218,236 +207,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildSyncStatusSection(BuildContext context) {
-    return Consumer<ScheduleManager>(
-      builder: (context, scheduleManager, child) {
-        return Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Data Sync',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                FutureBuilder<bool>(
-                  future: scheduleManager.hasPendingSync(),
-                  builder: (context, snapshot) {
-                    final hasPending = snapshot.data ?? false;
-                    final isConnected = scheduleManager.storage.supportsSync;
-
-                    return Column(
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              isConnected ? Icons.cloud_done : Icons.cloud_off,
-                              color: isConnected ? Colors.green : Colors.orange,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isConnected
-                                  ? 'Connected to Cloud'
-                                  : 'Using Local Storage',
-                              style: TextStyle(
-                                color:
-                                    isConnected ? Colors.green : Colors.orange,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        if (hasPending) ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.sync,
-                                color: Colors.blue,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Changes pending sync',
-                                  style: TextStyle(color: Colors.blue),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  await scheduleManager.triggerSync();
-                                  if (mounted) {
-                                    setState(() {}); // Refresh the UI
-                                  }
-                                },
-                                child: const Text('Sync Now'),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        const SizedBox(height: 12),
-                        Text(
-                          isConnected
-                              ? 'Your data is automatically synced to the cloud'
-                              : 'Your data is stored locally. It will sync when cloud connection is available.',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
+  Widget _buildThemeSettingsSection(BuildContext context) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Theme Settings',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAppSettingsSection(BuildContext context) {
-    return Consumer<ScheduleManager>(
-      builder: (context, scheduleManager, child) {
-        // Update controller if needed
-        if (_maxRepsController.text !=
-            scheduleManager.maxRepetitions.toString()) {
-          _maxRepsController.text = scheduleManager.maxRepetitions.toString();
-          _maxRepsController.selection = TextSelection.fromPosition(
-            TextPosition(offset: _maxRepsController.text.length),
-          );
-        }
-
-        return Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'App Settings',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Theme Toggle
-                Row(
-                  children: [
-                    Icon(
-                      Icons.palette,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Theme:',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const Spacer(),
-                    ThemeToggle(),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Max Repetitions Setting
-                Row(
-                  children: [
-                    Icon(
-                      Icons.repeat,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Max Repetitions',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          Text(
-                            'Task is considered learned after this many successful reviews',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 80,
-                      child: TextField(
-                        controller: _maxRepsController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 12,
-                          ),
-                          isDense: true,
-                        ),
-                        onSubmitted: (String value) {
-                          final int? newValue = int.tryParse(value);
-                          if (newValue != null) {
-                            _logger.info("Submitting max reps: $newValue");
-                            scheduleManager.setMaxRepetitions(newValue);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Max Repetitions updated to $newValue',
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          } else {
-                            _logger.warning(
-                              "Invalid input for max reps: $value",
-                            );
-                            _maxRepsController.text =
-                                scheduleManager.maxRepetitions.toString();
-                          }
-                          FocusScope.of(context).unfocus();
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+            const SizedBox(height: 16),
+            const ThemeToggle(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -555,15 +333,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       });
 
       try {
-        _logger.info('User initiated sign out');
         await authProvider.signOut();
-        _logger.info('Sign out successful');
-
-        // Don't show success message since user will be redirected to landing page
-        // The success will be evident by the redirect itself
       } catch (e) {
-        _logger.severe('Sign out failed: $e');
-
         if (mounted) {
           messenger.showSnackBar(
             SnackBar(

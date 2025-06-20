@@ -1,5 +1,6 @@
-from typing import List, Dict, Any
 from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 
 class FSRSParams(BaseModel):
@@ -15,4 +16,6 @@ class Topic(BaseModel):
     description: str
     questionBank: List[str] = []
     fsrsParams: FSRSParams = FSRSParams()
-    regenerating: bool = False 
+    regenerating: bool = False
+    createdAt: Optional[datetime] = None
+    nextReviewAt: Optional[datetime] = None 

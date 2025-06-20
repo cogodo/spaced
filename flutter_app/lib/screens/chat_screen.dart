@@ -6,8 +6,6 @@ import '../widgets/chat_history_sidebar.dart';
 import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
-import '../models/schedule_manager.dart';
-import '../models/task_holder.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
@@ -35,8 +33,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
 
-  // For due topics selection
-  List<Task> _dueTasks = [];
+  // For due topics selection (kept for backwards compatibility)
+  List<dynamic> _dueTasks = []; // Changed from List<Task> to List<dynamic>
   Set<String> _selectedTopics = {};
   bool _isLoadingDueTasks = false;
 
@@ -109,13 +107,9 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      final scheduleManager = Provider.of<ScheduleManager>(
-        context,
-        listen: false,
-      );
-      final dueTasks = scheduleManager.getTodaysTasks();
+      // Since we removed the old task system, just set empty tasks
       setState(() {
-        _dueTasks = dueTasks;
+        _dueTasks = [];
         _selectedTopics.clear();
       });
     } catch (e) {
@@ -642,7 +636,11 @@ class _ChatScreenState extends State<ChatScreen> {
       itemCount: _dueTasks.length,
       itemBuilder: (context, index) {
         final task = _dueTasks[index];
-        final isSelected = _selectedTopics.contains(task.task);
+        // Since we no longer have the old Task model, we'll need to handle this differently
+        // For now, treat tasks as simple strings or maps
+        final taskName =
+            task is String ? task : (task['name'] ?? 'Unknown Task');
+        final isSelected = _selectedTopics.contains(taskName);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -651,14 +649,14 @@ class _ChatScreenState extends State<ChatScreen> {
             onChanged: (bool? value) {
               setState(() {
                 if (value == true) {
-                  _selectedTopics.add(task.task);
+                  _selectedTopics.add(taskName);
                 } else {
-                  _selectedTopics.remove(task.task);
+                  _selectedTopics.remove(taskName);
                 }
               });
             },
             title: Text(
-              task.task,
+              taskName,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
@@ -670,12 +668,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 Row(
                   children: [
                     _buildTaskChip(
-                      'Difficulty: ${(task.difficulty * 100).round()}%',
+                      'No difficulty data',
                       theme.colorScheme.secondary,
                     ),
                     const SizedBox(width: 8),
                     _buildTaskChip(
-                      'Repetition: ${task.repetition}',
+                      'No repetition data',
                       theme.colorScheme.tertiary,
                     ),
                   ],
@@ -714,52 +712,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  String _getTaskDueText(Task task) {
-    if (task.nextReviewDate == null) {
-      return 'Never reviewed';
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final reviewDate = DateTime(
-      task.nextReviewDate!.year,
-      task.nextReviewDate!.month,
-      task.nextReviewDate!.day,
-    );
-
-    final daysDifference = today.difference(reviewDate).inDays;
-
-    if (daysDifference > 0) {
-      return '$daysDifference day${daysDifference == 1 ? '' : 's'} overdue';
-    } else if (daysDifference == 0) {
-      return 'Due today';
-    } else {
-      return 'Due in ${-daysDifference} day${daysDifference == -1 ? '' : 's'}';
-    }
+  String _getTaskDueText(dynamic task) {
+    // Since we no longer have the Task model, return empty or placeholder text
+    return 'No due date available';
   }
 
-  Color _getTaskDueColor(Task task, ThemeData theme) {
-    if (task.nextReviewDate == null) {
-      return theme.colorScheme.primary;
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final reviewDate = DateTime(
-      task.nextReviewDate!.year,
-      task.nextReviewDate!.month,
-      task.nextReviewDate!.day,
-    );
-
-    final daysDifference = today.difference(reviewDate).inDays;
-
-    if (daysDifference > 0) {
-      return theme.colorScheme.error; // Overdue
-    } else if (daysDifference == 0) {
-      return theme.colorScheme.primary; // Due today
-    } else {
-      return theme.colorScheme.onSurface.withValues(alpha: 0.6); // Future
-    }
+  Color _getTaskDueColor(dynamic task, ThemeData theme) {
+    // Since we no longer have the Task model, return default color
+    return theme.colorScheme.onSurface.withValues(alpha: 0.6);
   }
 
   Widget _buildMessagesArea() {
@@ -858,10 +818,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Message content without background bubble
                   SelectableText(
                     message.text,
-                    style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                      fontSize: 16,
-                      height: 1.4,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.5,
+                      letterSpacing: 0.2,
                     ),
                     textAlign: isUser ? TextAlign.right : TextAlign.left,
                     contextMenuBuilder: (context, editableTextState) {
@@ -905,9 +864,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   // Timestamp
                   Text(
                     _formatTimestamp(message.timestamp),
-                    style: TextStyle(
-                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
-                      fontSize: 12,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      letterSpacing: 0.3,
                     ),
                     textAlign: isUser ? TextAlign.right : TextAlign.left,
                   ),
@@ -958,13 +916,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         !chatProvider.isTyping &&
                         !_isSending,
                     focusNode: _textFieldFocusNode,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.4,
+                      letterSpacing: 0.2,
+                    ),
                     decoration: InputDecoration(
                       hintText: _getInputHint(chatProvider.sessionState),
-                      hintStyle: TextStyle(
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.textTheme.bodyMedium?.color?.withValues(
                           alpha: 0.6,
                         ),
-                        fontSize: 16,
+                        letterSpacing: 0.2,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/models/task_holder.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
 class AllReviewItemsScreen extends StatefulWidget {
-  final List<Task> allTasks;
-  final Function(Task) onDeleteTask;
+  final List<dynamic> allTasks; // Changed from List<Task> to List<dynamic>
+  final Function(dynamic)
+  onDeleteTask; // Changed from Function(Task) to Function(dynamic)
 
   const AllReviewItemsScreen({
     super.key,
@@ -26,21 +26,14 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allItems = List<Task>.from(widget.allTasks);
+    final allItems = List<dynamic>.from(widget.allTasks);
     final isDesktop = MediaQuery.of(context).size.width > 600;
 
-    // Sort by next review date, null dates at the bottom
-    allItems.sort((a, b) {
-      if (a.nextReviewDate == null && b.nextReviewDate == null) {
-        return a.task.compareTo(b.task); // If both null, sort by name
-      } else if (a.nextReviewDate == null) {
-        return 1; // a goes after b
-      } else if (b.nextReviewDate == null) {
-        return -1; // a goes before b
-      } else {
-        return a.nextReviewDate!.compareTo(b.nextReviewDate!);
-      }
-    });
+    // Since we no longer have Task objects, we can't sort by nextReviewDate
+    // Just sort by name if items are strings, or keep original order
+    if (allItems.isNotEmpty && allItems.first is String) {
+      allItems.sort();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +82,7 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Add new items from the "Add" tab',
+                    'Use the chat interface to create learning sessions',
                     style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
                   ),
                 ],
@@ -104,6 +97,8 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
               itemCount: allItems.length,
               itemBuilder: (context, index) {
                 final task = allItems[index];
+                final taskName =
+                    task is String ? task : (task['name'] ?? 'Unknown Item');
 
                 return Card(
                   margin: EdgeInsets.symmetric(vertical: 8),
@@ -121,7 +116,7 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                task.task,
+                                taskName,
                                 style: TextStyle(
                                   fontSize: isDesktop ? 20 : 18,
                                   fontWeight: FontWeight.bold,
@@ -144,79 +139,13 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
                         SizedBox(height: 12),
 
-                        // Task details in a more readable format
-                        // Add a label to indicate this is using FSRS algorithm
-
-                        // Group stats into two rows for better organization
-                        // Row 1: Next review date and repetition count
+                        // Since we no longer have the old task data structure, show placeholder info
                         Row(
                           children: [
-                            // Next review date chip
                             Expanded(
                               child: Chip(
                                 label: Text(
-                                  'Next: ${_formatDate(task.nextReviewDate)}',
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 14 : 12,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                backgroundColor:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-
-                            // Repetition count chip
-                            Expanded(
-                              child: Chip(
-                                label: Text(
-                                  'Reps: ${task.repetition}',
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 14 : 12,
-                                  ),
-                                ),
-                                backgroundColor:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        SizedBox(height: 8),
-
-                        // Row 2: FSRS specific stats - stability and difficulty
-                        Row(
-                          children: [
-                            // Stability chip (FSRS metric)
-                            Expanded(
-                              child: Chip(
-                                label: Text(
-                                  'Stability: ${task.stability.toStringAsFixed(1)}',
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 14 : 12,
-                                  ),
-                                ),
-                                backgroundColor:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-
-                            // Difficulty chip (FSRS metric)
-                            Expanded(
-                              child: Chip(
-                                label: Text(
-                                  'Difficulty: ${(task.difficulty * 100).round()}%',
+                                  'Legacy item (no scheduling data)',
                                   style: TextStyle(
                                     fontSize: isDesktop ? 14 : 12,
                                   ),
@@ -241,13 +170,18 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
     );
   }
 
-  Future<void> _showDeleteConfirmation(BuildContext context, Task task) async {
+  Future<void> _showDeleteConfirmation(
+    BuildContext context,
+    dynamic task,
+  ) async {
     final bool? confirmDelete = await showDialog<bool>(
       context: context,
       builder:
           (context) => AlertDialog(
             title: Text('Delete Item'),
-            content: Text('Are you sure you want to delete "${task.task}"?'),
+            content: Text(
+              'Are you sure you want to delete "${task is String ? task : (task['name'] ?? 'Unknown Item')}"?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),

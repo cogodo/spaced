@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
-import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
 
 // Class to hold theme data along with metadata
 class ThemeMetadata {
@@ -15,97 +14,134 @@ class ThemeMetadata {
   });
 }
 
-// Create text theme with Fira Code for all text styles
-TextTheme _createFiraCodeTextTheme(Color textColor, Brightness brightness) {
+// Create text theme with Chiron Sung HK font
+TextTheme _createChironSungTextTheme(Color textColor, Brightness brightness) {
   final Color secondaryTextColor =
       brightness == Brightness.light
           ? textColor.withValues(alpha: 208 / 255.0)
           : textColor.withValues(alpha: 230 / 255.0);
 
+  const String fontFamily = 'ChironSungHK';
+
   return TextTheme(
-    // Headings
-    displayLarge: GoogleFonts.firaCode(
+    // Headings - using Chiron Sung HK for elegant look
+    displayLarge: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 57,
-      fontWeight: FontWeight.bold,
+      fontWeight: FontWeight.w700,
       color: textColor,
       letterSpacing: -0.25,
+      height: 1.1,
     ),
-    displayMedium: GoogleFonts.firaCode(
+    displayMedium: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 45,
       fontWeight: FontWeight.w600,
       color: textColor,
+      height: 1.2,
     ),
-    displaySmall: GoogleFonts.firaCode(
+    displaySmall: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 36,
       fontWeight: FontWeight.w600,
       color: textColor,
+      height: 1.2,
     ),
-    headlineLarge: GoogleFonts.firaCode(
+    headlineLarge: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 32,
       fontWeight: FontWeight.w600,
       color: textColor,
+      height: 1.25,
     ),
-    headlineMedium: GoogleFonts.firaCode(
+    headlineMedium: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 28,
       fontWeight: FontWeight.w600,
       color: textColor,
+      height: 1.25,
     ),
-    headlineSmall: GoogleFonts.firaCode(
+    headlineSmall: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 24,
       fontWeight: FontWeight.w600,
       color: textColor,
+      height: 1.3,
     ),
-    titleLarge: GoogleFonts.firaCode(
+    titleLarge: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 22,
       fontWeight: FontWeight.w500,
       color: textColor,
+      height: 1.3,
     ),
 
-    // Body text
-    titleMedium: GoogleFonts.firaCode(
+    // Body text - using Chiron Sung HK for excellent readability
+    titleMedium: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 16,
       fontWeight: FontWeight.w500,
       color: textColor,
-      letterSpacing: 0.15,
+      letterSpacing: 0.1,
+      height: 1.4,
     ),
-    titleSmall: GoogleFonts.firaCode(
+    titleSmall: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 14,
       fontWeight: FontWeight.w500,
       color: textColor,
       letterSpacing: 0.1,
+      height: 1.4,
     ),
-    bodyLarge: GoogleFonts.firaCode(
+    bodyLarge: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 16,
-      fontWeight: FontWeight.normal,
+      fontWeight: FontWeight.w400,
       color: textColor,
+      letterSpacing: 0.15,
+      height: 1.5,
     ),
-    bodyMedium: GoogleFonts.firaCode(
+    bodyMedium: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 14,
-      fontWeight: FontWeight.normal,
+      fontWeight: FontWeight.w400,
       color: textColor,
+      letterSpacing: 0.2,
+      height: 1.5,
     ),
-    bodySmall: GoogleFonts.firaCode(
+    bodySmall: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 12,
-      fontWeight: FontWeight.normal,
+      fontWeight: FontWeight.w400,
       color: secondaryTextColor,
       letterSpacing: 0.4,
+      height: 1.4,
     ),
 
-    // Labels
-    labelLarge: GoogleFonts.firaCode(
-      fontSize: 18,
-      fontWeight: FontWeight.w500,
-      color: textColor,
-    ),
-    labelMedium: GoogleFonts.firaCode(
-      fontSize: 16,
-      fontWeight: FontWeight.w500,
-      color: textColor,
-    ),
-    labelSmall: GoogleFonts.firaCode(
+    // Labels - using Chiron Sung HK for consistency
+    labelLarge: TextStyle(
+      fontFamily: fontFamily,
       fontSize: 14,
       fontWeight: FontWeight.w500,
       color: textColor,
+      letterSpacing: 0.1,
+      height: 1.4,
+    ),
+    labelMedium: TextStyle(
+      fontFamily: fontFamily,
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: textColor,
+      letterSpacing: 0.5,
+      height: 1.33,
+    ),
+    labelSmall: TextStyle(
+      fontFamily: fontFamily,
+      fontSize: 11,
+      fontWeight: FontWeight.w500,
+      color: textColor,
+      letterSpacing: 0.5,
+      height: 1.45,
     ),
   );
 }
@@ -122,8 +158,8 @@ final Map<String, ThemeMetadata> appThemes = {
         brightness: Brightness.light,
       ),
       // Apply our custom text theme with dark text for readability
-      textTheme: _createFiraCodeTextTheme(Colors.black87, Brightness.light),
-      primaryTextTheme: _createFiraCodeTextTheme(
+      textTheme: _createChironSungTextTheme(Colors.black87, Brightness.light),
+      primaryTextTheme: _createChironSungTextTheme(
         Colors.white,
         Brightness.light,
       ),
@@ -144,7 +180,8 @@ final Map<String, ThemeMetadata> appThemes = {
           backgroundColor: const Color(0xFF6750A4), // Same purple as dark theme
           foregroundColor: Colors.white, // White text for contrast
           elevation: 1, // Slight elevation
-          textStyle: GoogleFonts.firaCode(
+          textStyle: TextStyle(
+            fontFamily: 'ChironSungHK',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -163,7 +200,8 @@ final Map<String, ThemeMetadata> appThemes = {
             color: Color(0xFF6750A4),
             width: 1.5,
           ), // Purple border
-          textStyle: GoogleFonts.firaCode(
+          textStyle: TextStyle(
+            fontFamily: 'ChironSungHK',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -199,9 +237,10 @@ final Map<String, ThemeMetadata> appThemes = {
           ), // Purple focus
           borderRadius: BorderRadius.circular(8),
         ),
-        hintStyle: GoogleFonts.firaCode(
+        hintStyle: TextStyle(
           color: const Color(0xFF6750A4).withValues(alpha: 0.6),
           fontStyle: FontStyle.italic,
+          fontFamily: 'ChironSungHK',
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -216,7 +255,6 @@ final Map<String, ThemeMetadata> appThemes = {
       iconTheme: const IconThemeData(color: Color(0xFF6750A4)), // Purple icons
 
       useMaterial3: true,
-      fontFamily: GoogleFonts.firaCode().fontFamily,
     ),
   ),
   'Dark': ThemeMetadata(
@@ -229,8 +267,11 @@ final Map<String, ThemeMetadata> appThemes = {
         brightness: Brightness.dark,
       ),
       // Apply our custom text theme for dark mode
-      textTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
-      primaryTextTheme: _createFiraCodeTextTheme(Colors.white, Brightness.dark),
+      textTheme: _createChironSungTextTheme(Colors.white, Brightness.dark),
+      primaryTextTheme: _createChironSungTextTheme(
+        Colors.white,
+        Brightness.dark,
+      ),
 
       // Apply system overlay style for status bar icons
       appBarTheme: AppBarTheme(
@@ -244,7 +285,8 @@ final Map<String, ThemeMetadata> appThemes = {
           backgroundColor: const Color(0xFF9A86FD), // Lighter purple
           foregroundColor: Colors.white, // White text for better contrast
           elevation: 0, // Flat design
-          textStyle: GoogleFonts.firaCode(
+          textStyle: TextStyle(
+            fontFamily: 'ChironSungHK',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -264,7 +306,8 @@ final Map<String, ThemeMetadata> appThemes = {
             0xFFB4A9FF,
           ), // Light purple for outlined buttons
           side: const BorderSide(color: Color(0xFF7B68EE), width: 1.5),
-          textStyle: GoogleFonts.firaCode(
+          textStyle: TextStyle(
+            fontFamily: 'ChironSungHK',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -299,9 +342,10 @@ final Map<String, ThemeMetadata> appThemes = {
           borderSide: const BorderSide(color: Color(0xFF9A86FD), width: 1.5),
           borderRadius: BorderRadius.circular(8),
         ),
-        hintStyle: GoogleFonts.firaCode(
+        hintStyle: TextStyle(
           color: Colors.grey[400],
           fontStyle: FontStyle.italic,
+          fontFamily: 'ChironSungHK',
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -316,7 +360,6 @@ final Map<String, ThemeMetadata> appThemes = {
       iconTheme: const IconThemeData(color: Color(0xFF9A86FD)),
 
       useMaterial3: true,
-      fontFamily: GoogleFonts.firaCode().fontFamily,
     ),
   ),
   // Removed Red and Green themes to simplify to just Light/Dark toggle

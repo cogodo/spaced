@@ -10,12 +10,9 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/privacy_policy_screen.dart';
 import '../screens/tab_navigation_screen.dart';
-import '../screens/home_screen.dart';
-import '../screens/add_screen.dart';
 import '../screens/all_review_items_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/user_profile_screen.dart';
-import '../models/schedule_manager.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
 import '../main.dart';
@@ -59,9 +56,9 @@ GoRouter createAppRouter(AuthProvider authProvider) {
             Routes.forgotPassword,
           ].contains(currentPath)) {
         _logger.info(
-          '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appHome}',
+          '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appChat}',
         );
-        return Routes.appHome;
+        return Routes.appChat;
       }
 
       // PROTECT /app routes - redirect unsigned users to landing
@@ -108,55 +105,19 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       ),
 
       // ===== APP ROUTES (Protected by redirect above) =====
-      GoRoute(
-        path: Routes.appHome,
-        name: 'app-home',
-        builder: (context, state) {
-          _logger.info('🏠 Building app home route');
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(child: HomeScreen()),
-          );
-        },
-      ),
 
-      GoRoute(
-        path: Routes.appAdd,
-        name: 'app-add',
-        builder: (context, state) {
-          _logger.info('➕ Building app add route');
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(
-              child: Consumer<ScheduleManager>(
-                builder: (context, scheduleManager, child) {
-                  return AdderScreen(
-                    onAddTask: (task) async {
-                      return await scheduleManager.addTask(task);
-                    },
-                  );
-                },
-              ),
-            ),
-          );
-        },
-      ),
-
+      // Removed old home and add routes since we only need chat now
       GoRoute(
         path: Routes.appAll,
         name: 'app-all',
         builder: (context, state) {
           _logger.info('📋 Building app all items route');
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(
-              child: Consumer<ScheduleManager>(
-                builder: (context, scheduleManager, child) {
-                  return AllReviewItemsScreen(
-                    allTasks: scheduleManager.allTasks,
-                    onDeleteTask: (task) async {
-                      await scheduleManager.removeTask(task);
-                    },
-                  );
-                },
-              ),
+          return TabNavigationScreen(
+            child: AllReviewItemsScreen(
+              allTasks: const [],
+              onDeleteTask: (task) async {
+                // No-op - no more task management
+              },
             ),
           );
         },
@@ -167,9 +128,7 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         name: 'app-chat',
         builder: (context, state) {
           _logger.info('💬 Building app chat route');
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(child: ChatScreen()),
-          );
+          return TabNavigationScreen(child: ChatScreen());
         },
       ),
 
@@ -182,10 +141,8 @@ GoRouter createAppRouter(AuthProvider authProvider) {
           _logger.info(
             '💬 Building app chat route with session token: $sessionToken',
           );
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(
-              child: ChatScreen(sessionToken: sessionToken),
-            ),
+          return TabNavigationScreen(
+            child: ChatScreen(sessionToken: sessionToken),
           );
         },
       ),
@@ -195,10 +152,21 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         name: 'app-profile',
         builder: (context, state) {
           _logger.info('👤 Building app profile route');
-          return ScheduleManagerProvider(
-            child: TabNavigationScreen(child: UserProfileScreen()),
-          );
+          return TabNavigationScreen(child: UserProfileScreen());
         },
+      ),
+
+      // Add missing routes that might still be referenced
+      GoRoute(
+        path: Routes.appHome,
+        name: 'app-home-redirect',
+        redirect: (context, state) => Routes.appChat,
+      ),
+
+      GoRoute(
+        path: Routes.appAdd,
+        name: 'app-add-redirect',
+        redirect: (context, state) => Routes.appChat,
       ),
     ],
 

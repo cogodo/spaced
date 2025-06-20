@@ -1,53 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:spaced/models/schedule_manager.dart';
-import 'package:spaced/providers/auth_provider.dart';
-import 'package:spaced/providers/chat_provider.dart';
-import 'themes/theme_data.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'services/firestore_service.dart';
-import 'services/logger_service.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'dart:async';
-import 'routing/app_router.dart';
-import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
-
-// Import URL strategy for web
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
-// Custom page transition builder with no animations
-class NoTransitionPageTransitionsBuilder extends PageTransitionsBuilder {
-  const NoTransitionPageTransitionsBuilder();
+import 'themes/theme_data.dart';
+import 'providers/auth_provider.dart';
+import 'providers/chat_provider.dart';
+import 'routing/app_router.dart';
+import 'services/logger_service.dart';
+import 'firebase_options.dart';
 
-  @override
-  Widget buildTransitions<T extends Object?>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    return child; // No transition, just return the child directly
-  }
-}
-
-// Define a global key for the root ScaffoldMessenger
+// Global key for showing snackbars from anywhere in the app
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-// Logger for main.dart
+// Main logger
 final _logger = getLogger('Main');
 
-// Key for storing theme preference
-const String THEME_PREF_KEY = 'selectedThemeKey';
+// Constants for SharedPreferences
+const String THEME_PREF_KEY = 'selected_theme';
 
-// Fix for web: declare as const at compile time
-const bool kIsProduction = bool.fromEnvironment('dart.vm.product');
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  _logger.info('🚀 Starting app initialization');
 
   // Configure URL strategy for web (path-based routing, no hash)
   if (kIsWeb) {
@@ -55,15 +35,30 @@ void main() async {
   }
 
   // Initialize Firebase
+  _logger.info('🔥 Initializing Firebase');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  _logger.info('🚀 Starting Spaced app...');
+  // Initialize services
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  // Initialize SharedPreferences
+  // Load shared preferences
+  _logger.info('📦 Loading SharedPreferences');
   final prefs = await SharedPreferences.getInstance();
 
-  runApp(
-    MultiProvider(
+  _logger.info('✅ Initialization complete, starting app');
+
+  runApp(MyAppProvider(prefs: prefs));
+}
+
+/// Root provider widget that sets up all global providers
+class MyAppProvider extends StatelessWidget {
+  final SharedPreferences prefs;
+
+  const MyAppProvider({super.key, required this.prefs});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
       providers: [
         // Provide SharedPreferences instance
         Provider<SharedPreferences>.value(value: prefs),
@@ -85,8 +80,8 @@ void main() async {
         ),
       ],
       child: const MyApp(),
-    ),
-  );
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -132,82 +127,6 @@ class MyApp extends StatelessWidget {
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: _router!,
     );
-  }
-}
-
-/// Wrapper that provides ScheduleManager for authenticated users
-class ScheduleManagerProvider extends StatelessWidget {
-  final Widget child;
-
-  const ScheduleManagerProvider({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-
-    if (!authProvider.isSignedIn || authProvider.user == null) {
-      // Show loading screen during sign-out transition instead of returning child
-      // This prevents ProviderNotFoundException while router redirect is processing
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Signing out...'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return FutureBuilder<ScheduleManager>(
-      future: _createScheduleManager(context, authProvider.user!.uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
-        if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text('Error loading user data: ${snapshot.error}'),
-            ),
-          );
-        }
-
-        return ChangeNotifierProvider<ScheduleManager>.value(
-          value: snapshot.data!,
-          child: child,
-        );
-      },
-    );
-  }
-}
-
-/// Creates a ScheduleManager for the authenticated user
-Future<ScheduleManager> _createScheduleManager(
-  BuildContext context,
-  String userId,
-) async {
-  _logger.info('Creating ScheduleManager for user: $userId');
-
-  try {
-    // Create storage service based on authentication status
-    final storageService = FirestoreService();
-
-    // Create the ScheduleManager
-    final scheduleManager = ScheduleManager(
-      userId: userId,
-      storage: storageService,
-    );
-
-    _logger.info('✅ ScheduleManager created successfully');
-    return scheduleManager;
-  } catch (e, stackTrace) {
-    _logger.severe('❌ Error creating ScheduleManager: $e', e, stackTrace);
-    rethrow;
   }
 }
 
@@ -261,5 +180,21 @@ class ThemeNotifier with ChangeNotifier {
     } else {
       _logger.warning('Attempted to set unknown theme: $themeKey');
     }
+  }
+}
+
+/// Custom PageTransitionsBuilder that removes all transitions
+class NoTransitionPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NoTransitionPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T extends Object?>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child; // Return child directly without any transitions
   }
 }
