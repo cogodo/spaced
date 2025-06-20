@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     port: int = Field(8000, env="PORT")
     
     # Firebase Configuration
-    firebase_service_account_path: Optional[str] = Field(env="FIREBASE_SERVICE_ACCOUNT_PATH")
+    firebase_service_account_path: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_PATH")
+    firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
     firebase_project_id: str = Field(env="FIREBASE_PROJECT_ID")
     
     # OpenAI Configuration

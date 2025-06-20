@@ -263,7 +263,7 @@ class ChatProvider extends ChangeNotifier {
 
         // Navigate to token URL for due items sessions
         if (sessionType == 'due_items' && _router != null) {
-          _router!.go('/app/chat/${token}');
+          _router!.go('/app/chat/$token');
         }
       } catch (e) {
         _logger.warning('Failed to save new session to Firebase: $e');

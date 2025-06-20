@@ -1,6 +1,9 @@
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from app.config import settings
+import json
+import tempfile
+import os
 
 
 _app = None
@@ -11,10 +14,23 @@ def initialize_firebase():
     global _app, _firestore_client
     
     if _app is None:
-        if settings.firebase_service_account_path:
+        cred = None
+        
+        # Priority 1: Use JSON content from environment variable
+        if settings.firebase_service_account_json:
+            try:
+                # Parse the JSON string and create credentials from dict
+                service_account_info = json.loads(settings.firebase_service_account_json)
+                cred = credentials.Certificate(service_account_info)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+        
+        # Priority 2: Use file path if provided
+        elif settings.firebase_service_account_path:
             cred = credentials.Certificate(settings.firebase_service_account_path)
+        
+        # Priority 3: Use default credentials from environment
         else:
-            # Use default credentials from environment
             cred = credentials.ApplicationDefault()
             
         _app = firebase_admin.initialize_app(cred, {
