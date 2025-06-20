@@ -369,7 +369,7 @@ class SessionApi {
       );
     }
 
-    final url = Uri.parse('$baseUrl/start_session');
+    final url = Uri.parse('$baseUrl/api/v1/start_session');
     final payload = {
       'session_type': sessionType,
       'topics': topics,
@@ -436,7 +436,7 @@ class SessionApi {
       throw ArgumentError('userInput cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/answer');
+    final url = Uri.parse('$baseUrl/api/v1/chat/answer');
     final payload = {
       'session_id': sessionId.trim(),
       'user_input': userInput.trim(),

@@ -49,7 +49,10 @@ class ChatProvider extends ChangeNotifier {
 
   ChatProvider() {
     // Use environment-based backend URL
-    const String backendUrl = 'https://spaced-1.onrender.com';
+    const String? backendUrl = String.fromEnvironment(
+      'BACKEND_URL',
+      defaultValue: 'https://spaced-1.onrender.com',
+    );
 
     _api = SessionApi(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
@@ -910,7 +913,6 @@ class ChatProvider extends ChangeNotifier {
       return [];
     }
   }
-
 
   /// Get the current session token for routing
   String? get currentSessionToken => _currentSession?.token;
