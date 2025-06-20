@@ -22,10 +22,11 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = Field(env="OPENAI_API_KEY")
     
+    # Redis Configuration (using Render's managed Redis env vars)
     redis_host: str = Field(env="REDIS_HOST")
-    redis_port: int = Field(6379, env="REDIS_PORT")
-    redis_db: int = Field(0, env="REDIS_DB")
-    redis_password: Optional[str] = Field(None, env="REDIS_PASSWORD")
+    redis_port: int = Field(env="REDIS_PORT")
+    redis_password: str = Field(env="REDIS_PASSWORD")
+    redis_db: int = Field(0, env="REDIS_DB")  # Default to database 0
     
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
