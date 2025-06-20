@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     cors_origins: list = Field(["*"], env="CORS_ORIGINS")
     api_prefix: str = Field("/api/v1", env="API_PREFIX")
     
+    # External Service URLs (example)
+    # external_service_url: str = Field("https://api.example.com", env="EXTERNAL_SERVICE_URL")
+    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False,
