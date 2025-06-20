@@ -51,7 +51,7 @@ class ChatProvider extends ChangeNotifier {
     // Use environment-based backend URL
     const String? backendUrl = String.fromEnvironment(
       'BACKEND_URL',
-      defaultValue: 'https://spaced-staging.onrender.com',
+      defaultValue: 'https://spaced-1.onrender.com',
     );
 
     _api = SessionApi(baseUrl: backendUrl);
@@ -914,11 +914,6 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Auto-naming placeholder (will be implemented in Phase 5)
-  Future<void> autoNameSession() async {
-    // TODO: Implement in Phase 5 with AI naming
-    _logger.info('Auto-naming will be implemented in Phase 5');
-  }
 
   /// Get the current session token for routing
   String? get currentSessionToken => _currentSession?.token;
