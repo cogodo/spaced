@@ -71,33 +71,49 @@ class _SessionItemState extends State<SessionItem> {
   }
 
   Future<void> _deleteSession() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Delete Session'),
-            content: Text(
-              'Are you sure you want to delete "${widget.session.displayName}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-    );
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    if (confirmed == true && mounted) {
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-      await chatProvider.deleteSession(widget.session.id);
+    // Store session info for potential undo
+    final sessionId = widget.session.id;
+    final sessionName = widget.session.displayName;
+
+    // Delete immediately
+    try {
+      await chatProvider.deleteSession(sessionId);
+
+      // Show undo snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted "$sessionName"'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () {
+                // Note: For now, just show a message.
+                // Full undo would require backend support for session restoration
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Undo not yet supported. Session permanently deleted.',
+                    ),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete session: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 

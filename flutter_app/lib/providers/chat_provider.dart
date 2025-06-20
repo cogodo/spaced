@@ -551,10 +551,24 @@ class ChatProvider extends ChangeNotifier {
           response.message ?? _buildCompletionMessage(response.scores!),
         );
       } else {
-        // Continue with next question - use the formatted message from backend
-        _addAIMessage(
-          response.message ?? "**Next Question:**\n${response.nextQuestion!}",
-        );
+        // Check if we have a next question or message
+        if (response.nextQuestion?.trim().isEmpty == true &&
+            response.message?.trim().isEmpty == true) {
+          // Empty response - show informative message
+          _addAIMessage(
+            "It looks like there are no more questions available for this topic. "
+            "This might happen if:\n\n"
+            "• The topic doesn't have enough questions generated yet\n"
+            "• You've completed all available questions\n\n"
+            "Would you like me to generate more questions for this topic, "
+            "or would you prefer to start a new session with different topics?",
+          );
+        } else {
+          // Continue with next question - use the formatted message from backend
+          _addAIMessage(
+            response.message ?? "**Next Question:**\n${response.nextQuestion!}",
+          );
+        }
       }
     } on SessionApiException catch (e) {
       if (e.statusCode == 404) {

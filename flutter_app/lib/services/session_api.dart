@@ -454,7 +454,20 @@ class SessionApi {
       if (response.statusCode == 200) {
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
-          return AnswerResponse.fromJson(data);
+
+          // Clean up any malformed string fields that might cause format specifier errors
+          final cleanedData = <String, dynamic>{};
+          data.forEach((key, value) {
+            if (value is String) {
+              // Remove any format specifiers or malformed characters
+              cleanedData[key] =
+                  value.replaceAll(RegExp(r'[^\x00-\x7F]'), '').trim();
+            } else {
+              cleanedData[key] = value;
+            }
+          });
+
+          return AnswerResponse.fromJson(cleanedData);
         } catch (e) {
           throw SessionApiException('Invalid response format: $e');
         }

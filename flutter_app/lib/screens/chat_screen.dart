@@ -40,6 +40,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Set<String> _selectedTopics = {};
   bool _isLoadingDueTasks = false;
 
+  // Prevent duplicate sends
+  bool _isSending = false;
+
   @override
   void initState() {
     super.initState();
@@ -166,26 +169,55 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _sendMessage() {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     if (chatProvider.isLoading) return;
 
-    // If no active session exists, start a new one first
-    if (!chatProvider.hasActiveSession) {
-      chatProvider.startNewSession().then((_) {
-        // Send the message after the session is started
-        chatProvider.sendMessage(text);
-      });
-    } else {
-      chatProvider.sendMessage(text);
-    }
+    // Set sending state to prevent duplicates
+    setState(() {
+      _isSending = true;
+    });
 
-    _messageController.clear();
+    try {
+      // If no active session exists, start a new one first
+      if (!chatProvider.hasActiveSession) {
+        chatProvider
+            .startNewSession()
+            .then((_) {
+              // Send the message after the session is started
+              chatProvider.sendMessage(text);
+            })
+            .whenComplete(() {
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+            });
+      } else {
+        chatProvider.sendMessage(text).whenComplete(() {
+          if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+        });
+      }
 
-    // Keep focus on text field for better UX
-    if (!_textFieldFocusNode.hasFocus) {
-      _textFieldFocusNode.requestFocus();
+      _messageController.clear();
+
+      // Keep focus on text field for better UX
+      if (!_textFieldFocusNode.hasFocus) {
+        _textFieldFocusNode.requestFocus();
+      }
+    } catch (e) {
+      // Reset sending state on error
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 
@@ -784,56 +816,54 @@ class _ChatScreenState extends State<ChatScreen> {
     final theme = Theme.of(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      // Add horizontal padding to keep all messages within the same area
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!isUser) ...[
+            // AI avatar
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color:
+                    message.isSystem
+                        ? theme.colorScheme.secondaryContainer
+                        : theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                message.isSystem ? Icons.info : Icons.smart_toy,
+                size: 18,
+                color:
+                    message.isSystem
+                        ? theme.colorScheme.onSecondaryContainer
+                        : theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ],
           Flexible(
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-              decoration: BoxDecoration(
-                color:
-                    message.isSystem
-                        ? theme.colorScheme.secondaryContainer
-                        : isUser
-                        ? theme.colorScheme.primary
-                        : theme.cardColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
+                  // Message content without background bubble
                   SelectableText(
                     message.text,
                     style: TextStyle(
-                      color:
-                          isUser
-                              ? theme.colorScheme.onPrimary
-                              : message.isSystem
-                              ? theme.colorScheme.onSecondaryContainer
-                              : theme.textTheme.bodyLarge?.color,
+                      color: theme.textTheme.bodyLarge?.color,
                       fontSize: 16,
                       height: 1.4,
                     ),
+                    textAlign: isUser ? TextAlign.right : TextAlign.left,
                     contextMenuBuilder: (context, editableTextState) {
                       final List<ContextMenuButtonItem> buttonItems =
                           <ContextMenuButtonItem>[
@@ -872,22 +902,36 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
                   const SizedBox(height: 4),
-                  SelectableText(
+                  // Timestamp
+                  Text(
                     _formatTimestamp(message.timestamp),
                     style: TextStyle(
-                      color: (message.isSystem
-                              ? theme.colorScheme.onSecondaryContainer
-                              : isUser
-                              ? theme.colorScheme.onPrimary
-                              : theme.textTheme.bodyLarge?.color)
-                          ?.withValues(alpha: 0.7),
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
                       fontSize: 12,
                     ),
+                    textAlign: isUser ? TextAlign.right : TextAlign.left,
                   ),
                 ],
               ),
             ),
           ),
+          if (isUser) ...[
+            // User avatar
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.person,
+                size: 18,
+                color: theme.colorScheme.onPrimary,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -909,7 +953,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    enabled: !chatProvider.isLoading && !chatProvider.isTyping,
+                    enabled:
+                        !chatProvider.isLoading &&
+                        !chatProvider.isTyping &&
+                        !_isSending,
                     focusNode: _textFieldFocusNode,
                     decoration: InputDecoration(
                       hintText: _getInputHint(chatProvider.sessionState),
@@ -952,7 +999,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) {
-                      if (!chatProvider.isLoading && !chatProvider.isTyping) {
+                      if (!chatProvider.isLoading &&
+                          !chatProvider.isTyping &&
+                          !_isSending) {
                         _sendMessage();
                       }
                     },
@@ -972,12 +1021,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 // Send button
                 IconButton(
                   onPressed:
-                      (chatProvider.isLoading || chatProvider.isTyping)
+                      (chatProvider.isLoading ||
+                              chatProvider.isTyping ||
+                              _isSending)
                           ? null
                           : _sendMessage,
                   style: IconButton.styleFrom(
                     backgroundColor:
-                        (chatProvider.isLoading || chatProvider.isTyping)
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
                             ? theme.colorScheme.primary.withValues(alpha: 0.5)
                             : theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
@@ -988,15 +1041,27 @@ class _ChatScreenState extends State<ChatScreen> {
                     fixedSize: const Size(56, 56), // Consistent size
                     shape: const CircleBorder(),
                     elevation:
-                        (chatProvider.isLoading || chatProvider.isTyping)
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
                             ? 0
                             : 2,
                     shadowColor: theme.colorScheme.primary.withValues(
                       alpha: 0.3,
                     ),
                   ),
-                  icon: const Icon(Icons.arrow_upward, size: 24),
-                  tooltip: 'Send message',
+                  icon:
+                      _isSending
+                          ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: theme.colorScheme.onPrimary,
+                            ),
+                          )
+                          : const Icon(Icons.arrow_upward, size: 24),
+                  tooltip: _isSending ? 'Sending...' : 'Send message',
                 ),
               ],
             );
