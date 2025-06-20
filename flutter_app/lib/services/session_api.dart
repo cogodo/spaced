@@ -369,7 +369,7 @@ class SessionApi {
       );
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/start_session');
+    final url = Uri.parse('$baseUrl/api/v1/chat/start_session');
     final payload = {
       'session_type': sessionType,
       'topics': topics,
