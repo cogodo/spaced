@@ -811,66 +811,147 @@ class _ChatScreenState extends State<ChatScreen> {
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-              child: Column(
-                crossAxisAlignment:
-                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  // Message content without background bubble
-                  SelectableText(
-                    message.text,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      height: 1.5,
-                      letterSpacing: 0.2,
-                    ),
-                    textAlign: isUser ? TextAlign.right : TextAlign.left,
-                    contextMenuBuilder: (context, editableTextState) {
-                      final List<ContextMenuButtonItem> buttonItems =
-                          <ContextMenuButtonItem>[
-                            ContextMenuButtonItem(
-                              label: 'Copy',
-                              onPressed: () {
-                                Clipboard.setData(
-                                  ClipboardData(text: message.text),
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Message copied to clipboard',
-                                    ),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                ContextMenuController.removeAny();
-                              },
+              child:
+                  isUser
+                      ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.1,
                             ),
-                            ContextMenuButtonItem(
-                              label: 'Select All',
-                              onPressed: () {
-                                editableTextState.selectAll(
-                                  SelectionChangedCause.toolbar,
-                                );
-                                ContextMenuController.removeAny();
-                              },
-                            ),
-                          ];
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // Message content without background bubble
+                            SelectableText(
+                              message.text,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                height: 1.5,
+                                letterSpacing: 0.2,
+                              ),
+                              textAlign: TextAlign.right,
+                              contextMenuBuilder: (context, editableTextState) {
+                                final List<ContextMenuButtonItem> buttonItems =
+                                    <ContextMenuButtonItem>[
+                                      ContextMenuButtonItem(
+                                        label: 'Copy',
+                                        onPressed: () {
+                                          Clipboard.setData(
+                                            ClipboardData(text: message.text),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Message copied to clipboard',
+                                              ),
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                          ContextMenuController.removeAny();
+                                        },
+                                      ),
+                                      ContextMenuButtonItem(
+                                        label: 'Select All',
+                                        onPressed: () {
+                                          editableTextState.selectAll(
+                                            SelectionChangedCause.toolbar,
+                                          );
+                                          ContextMenuController.removeAny();
+                                        },
+                                      ),
+                                    ];
 
-                      return AdaptiveTextSelectionToolbar.buttonItems(
-                        anchors: editableTextState.contextMenuAnchors,
-                        buttonItems: buttonItems,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  // Timestamp
-                  Text(
-                    _formatTimestamp(message.timestamp),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      letterSpacing: 0.3,
-                    ),
-                    textAlign: isUser ? TextAlign.right : TextAlign.left,
-                  ),
-                ],
-              ),
+                                return AdaptiveTextSelectionToolbar.buttonItems(
+                                  anchors: editableTextState.contextMenuAnchors,
+                                  buttonItems: buttonItems,
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            // Timestamp
+                            Text(
+                              _formatTimestamp(message.timestamp),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                letterSpacing: 0.3,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ],
+                        ),
+                      )
+                      : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Message content without background bubble
+                          SelectableText(
+                            message.text,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              height: 1.5,
+                              letterSpacing: 0.2,
+                            ),
+                            textAlign: TextAlign.left,
+                            contextMenuBuilder: (context, editableTextState) {
+                              final List<ContextMenuButtonItem> buttonItems =
+                                  <ContextMenuButtonItem>[
+                                    ContextMenuButtonItem(
+                                      label: 'Copy',
+                                      onPressed: () {
+                                        Clipboard.setData(
+                                          ClipboardData(text: message.text),
+                                        );
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Message copied to clipboard',
+                                            ),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        ContextMenuController.removeAny();
+                                      },
+                                    ),
+                                    ContextMenuButtonItem(
+                                      label: 'Select All',
+                                      onPressed: () {
+                                        editableTextState.selectAll(
+                                          SelectionChangedCause.toolbar,
+                                        );
+                                        ContextMenuController.removeAny();
+                                      },
+                                    ),
+                                  ];
+
+                              return AdaptiveTextSelectionToolbar.buttonItems(
+                                anchors: editableTextState.contextMenuAnchors,
+                                buttonItems: buttonItems,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          // Timestamp
+                          Text(
+                            _formatTimestamp(message.timestamp),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              letterSpacing: 0.3,
+                            ),
+                            textAlign: TextAlign.left,
+                          ),
+                        ],
+                      ),
             ),
           ),
           if (isUser) ...[
@@ -914,7 +995,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     enabled:
                         !chatProvider.isLoading &&
                         !chatProvider.isTyping &&
-                        !_isSending,
+                        !_isSending &&
+                        chatProvider.sessionState != SessionState.error,
                     focusNode: _textFieldFocusNode,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       height: 1.4,
@@ -985,7 +1067,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   onPressed:
                       (chatProvider.isLoading ||
                               chatProvider.isTyping ||
-                              _isSending)
+                              _isSending ||
+                              chatProvider.sessionState == SessionState.error)
                           ? null
                           : _sendMessage,
                   style: IconButton.styleFrom(
@@ -1043,9 +1126,9 @@ class _ChatScreenState extends State<ChatScreen> {
       case SessionState.active:
         return 'Type your answer...';
       case SessionState.completed:
-        return 'Ask for new session or review scores...';
+        return 'Session completed';
       case SessionState.error:
-        return 'Type "try again" or "restart"...';
+        return 'Input disabled due to error';
     }
   }
 

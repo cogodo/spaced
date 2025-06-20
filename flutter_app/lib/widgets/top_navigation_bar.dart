@@ -14,18 +14,16 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
   int _getSelectedIndex(String currentPath) {
     // Handle chat routes with tokens (e.g., /app/chat/abc123)
     if (currentPath.startsWith('/app/chat')) {
-      return 3;
+      return 2;
     }
 
     switch (currentPath) {
       case Routes.appHome:
         return 0;
-      case Routes.appAdd:
-        return 1;
       case Routes.appAll:
-        return 2;
+        return 1;
       case Routes.appChat:
-        return 3;
+        return 2;
       default:
         return 0;
     }
@@ -35,7 +33,6 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
   void _navigateToIndex(BuildContext context, int index) {
     final routes = [
       Routes.appHome, // /app
-      Routes.appAdd, // /app/add
       Routes.appAll, // /app/all
       Routes.appChat, // /app/chat
     ];
@@ -96,22 +93,16 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
             onTap: () => _navigateToIndex(context, 0),
           ),
           _NavigationTab(
-            icon: Icons.add_circle_outline,
-            label: 'Add',
+            icon: Icons.list,
+            label: 'All Items',
             isSelected: selectedIndex == 1,
             onTap: () => _navigateToIndex(context, 1),
           ),
           _NavigationTab(
-            icon: Icons.list,
-            label: 'All Items',
-            isSelected: selectedIndex == 2,
-            onTap: () => _navigateToIndex(context, 2),
-          ),
-          _NavigationTab(
             icon: Icons.chat,
             label: 'Chat',
-            isSelected: selectedIndex == 3,
-            onTap: () => _navigateToIndex(context, 3),
+            isSelected: selectedIndex == 2,
+            onTap: () => _navigateToIndex(context, 2),
           ),
           const SizedBox(width: 16),
         ] else if (isTablet) ...[
@@ -123,21 +114,15 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
             showLabel: false,
           ),
           _NavigationTab(
-            icon: Icons.add_circle_outline,
+            icon: Icons.list,
             isSelected: selectedIndex == 1,
             onTap: () => _navigateToIndex(context, 1),
             showLabel: false,
           ),
           _NavigationTab(
-            icon: Icons.list,
+            icon: Icons.chat,
             isSelected: selectedIndex == 2,
             onTap: () => _navigateToIndex(context, 2),
-            showLabel: false,
-          ),
-          _NavigationTab(
-            icon: Icons.chat,
-            isSelected: selectedIndex == 3,
-            onTap: () => _navigateToIndex(context, 3),
             showLabel: false,
           ),
           const SizedBox(width: 16),
@@ -203,7 +188,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               child: Row(
                 children: [
                   Icon(
-                    Icons.add_circle_outline,
+                    Icons.list,
                     color:
                         selectedIndex == 1
                             ? Theme.of(context).colorScheme.primary
@@ -211,7 +196,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Add',
+                    'All Items',
                     style: TextStyle(
                       color:
                           selectedIndex == 1
@@ -228,34 +213,9 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               child: Row(
                 children: [
                   Icon(
-                    Icons.list,
-                    color:
-                        selectedIndex == 2
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'All Items',
-                    style: TextStyle(
-                      color:
-                          selectedIndex == 2
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                      fontWeight: selectedIndex == 2 ? FontWeight.bold : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 3,
-              child: Row(
-                children: [
-                  Icon(
                     Icons.chat,
                     color:
-                        selectedIndex == 3
+                        selectedIndex == 2
                             ? Theme.of(context).colorScheme.primary
                             : null,
                   ),
@@ -264,10 +224,10 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
                     'Chat',
                     style: TextStyle(
                       color:
-                          selectedIndex == 3
+                          selectedIndex == 2
                               ? Theme.of(context).colorScheme.primary
                               : null,
-                      fontWeight: selectedIndex == 3 ? FontWeight.bold : null,
+                      fontWeight: selectedIndex == 2 ? FontWeight.bold : null,
                     ),
                   ),
                 ],

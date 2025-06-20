@@ -12,6 +12,7 @@ import '../screens/privacy_policy_screen.dart';
 import '../screens/tab_navigation_screen.dart';
 import '../screens/all_review_items_screen.dart';
 import '../screens/chat_screen.dart';
+import '../screens/todays_reviews_screen.dart';
 import '../screens/user_profile_screen.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
@@ -106,7 +107,17 @@ GoRouter createAppRouter(AuthProvider authProvider) {
 
       // ===== APP ROUTES (Protected by redirect above) =====
 
-      // Removed old home and add routes since we only need chat now
+      // Today's Reviews screen
+      GoRoute(
+        path: Routes.appHome,
+        name: 'app-home',
+        builder: (context, state) {
+          _logger.info('🏠 Building app home route');
+          return TabNavigationScreen(child: TodaysReviewsScreen());
+        },
+      ),
+
+      // All Items screen
       GoRoute(
         path: Routes.appAll,
         name: 'app-all',
@@ -157,12 +168,6 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       ),
 
       // Add missing routes that might still be referenced
-      GoRoute(
-        path: Routes.appHome,
-        name: 'app-home-redirect',
-        redirect: (context, state) => Routes.appChat,
-      ),
-
       GoRoute(
         path: Routes.appAdd,
         name: 'app-add-redirect',

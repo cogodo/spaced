@@ -328,14 +328,9 @@ class ChatProvider extends ChangeNotifier {
       _sessionState = SessionState.error;
 
       if (e is SessionApiException) {
-        _addAIMessage(
-          'Sorry, I encountered an error starting your session: ${e.message}\n\n'
-          'Would you like to try again with different topics?',
-        );
+        _addAIMessage('Error starting session: ${e.message}');
       } else {
-        _addAIMessage(
-          'Sorry, there was an error starting your session. Please try again.',
-        );
+        _addAIMessage('Error starting session: ${e.toString()}');
       }
     } finally {
       _setLoadingWithTyping(false);
@@ -449,11 +444,7 @@ class ChatProvider extends ChangeNotifier {
 
         case SessionState.completed:
         case SessionState.error:
-          // Allow starting new session
-          _addAIMessage(
-            "This session has ended. Would you like to start a new session?\n\n"
-            "You can say 'new session' or use the button above.",
-          );
+          // Session has ended - no user input allowed
           break;
       }
     } catch (e) {
@@ -556,12 +547,10 @@ class ChatProvider extends ChangeNotifier {
             response.message?.trim().isEmpty == true) {
           // Empty response - show informative message
           _addAIMessage(
-            "It looks like there are no more questions available for this topic. "
+            "No more questions available for this topic. "
             "This might happen if:\n\n"
             "• The topic doesn't have enough questions generated yet\n"
-            "• You've completed all available questions\n\n"
-            "Would you like me to generate more questions for this topic, "
-            "or would you prefer to start a new session with different topics?",
+            "• You've completed all available questions",
           );
         } else {
           // Continue with next question - use the formatted message from backend
@@ -576,10 +565,7 @@ class ChatProvider extends ChangeNotifier {
         await _handleExpiredSession(answer);
       } else {
         _sessionState = SessionState.error;
-        _addAIMessage(
-          "I encountered an error: ${e.message}\n\n"
-          "Would you like to try answering again, or start a new session?",
-        );
+        _addAIMessage("Error: ${e.message}");
       }
     } finally {
       _setLoadingWithTyping(false);
@@ -643,18 +629,13 @@ class ChatProvider extends ChangeNotifier {
           _addAIMessage(response.message);
         }
       } else {
-        // No topics available, ask user to start over
-        _addAIMessage(
-          "I'm sorry, but your session has expired and I don't have the topic information to continue. "
-          "Would you like to start a new session?",
-        );
-        _sessionState = SessionState.initial;
+        // No topics available, session expired
+        _addAIMessage("Session expired. No topic information available.");
+        _sessionState = SessionState.error;
       }
     } catch (e) {
       _logger.severe('Failed to handle expired session: $e');
-      _addAIMessage(
-        "I'm having trouble reconnecting your session. Would you like to start a new one?",
-      );
+      _addAIMessage("Error reconnecting session: ${e.toString()}");
       _sessionState = SessionState.error;
     }
 
@@ -934,7 +915,7 @@ class ChatProvider extends ChangeNotifier {
   /// Handle errors
   Future<void> _handleError(dynamic error) async {
     _sessionState = SessionState.error;
-    String errorMessage = "I encountered an unexpected error.";
+    String errorMessage = "Unexpected error occurred";
 
     if (error is SessionApiException) {
       errorMessage = "API Error: ${error.message}";
@@ -942,10 +923,7 @@ class ChatProvider extends ChangeNotifier {
       errorMessage = "Error: ${error.toString()}";
     }
 
-    _addAIMessage(
-      "$errorMessage\n\n"
-      "Would you like to try again or start a new session?",
-    );
+    _addAIMessage(errorMessage);
 
     _updateCurrentSession();
     await _autoSaveSession();
