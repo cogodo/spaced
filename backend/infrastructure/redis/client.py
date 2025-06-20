@@ -6,16 +6,18 @@ from typing import Optional
 _redis_client: Optional[redis.Redis] = None
 
 
-async def initialize_redis() -> redis.Redis:
+async def initialize_redis() -> Optional[redis.Redis]:
     """Initialize Redis client"""
     global _redis_client
     
+    # Check if Redis is configured
+    if not settings.redis_url:
+        print("Redis is not configured - skipping Redis initialization")
+        return None
+    
     if _redis_client is None:
-        _redis_client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
-            password=settings.redis_password,
+        _redis_client = redis.from_url(
+            settings.redis_url,
             decode_responses=True,  # Automatically decode responses to strings
             socket_timeout=5.0,
             socket_connect_timeout=5.0,
