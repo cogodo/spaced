@@ -56,37 +56,47 @@ class LearningChatbotLogger:
     def __init__(self, name: str):
         self.logger = logging.getLogger(name)
     
-    def info(self, message: str, **kwargs):
-        """Log info message with optional extra context"""
-        self._log(logging.INFO, message, kwargs)
+    def info(self, message: str, *args, **kwargs):
+        """Log info message with optional format arguments and extra context"""
+        self._log(logging.INFO, message, args, kwargs)
     
-    def warning(self, message: str, **kwargs):
-        """Log warning message with optional extra context"""
-        self._log(logging.WARNING, message, kwargs)
+    def warning(self, message: str, *args, **kwargs):
+        """Log warning message with optional format arguments and extra context"""
+        self._log(logging.WARNING, message, args, kwargs)
     
-    def error(self, message: str, **kwargs):
-        """Log error message with optional extra context"""
-        self._log(logging.ERROR, message, kwargs)
+    def error(self, message: str, *args, **kwargs):
+        """Log error message with optional format arguments and extra context"""
+        self._log(logging.ERROR, message, args, kwargs)
     
-    def debug(self, message: str, **kwargs):
-        """Log debug message with optional extra context"""
-        self._log(logging.DEBUG, message, kwargs)
+    def debug(self, message: str, *args, **kwargs):
+        """Log debug message with optional format arguments and extra context"""
+        self._log(logging.DEBUG, message, args, kwargs)
     
-    def critical(self, message: str, **kwargs):
-        """Log critical message with optional extra context"""
-        self._log(logging.CRITICAL, message, kwargs)
+    def critical(self, message: str, *args, **kwargs):
+        """Log critical message with optional format arguments and extra context"""
+        self._log(logging.CRITICAL, message, args, kwargs)
     
-    def _log(self, level: int, message: str, extra: Dict[str, Any]):
-        """Internal logging method with extra context"""
+    def _log(self, level: int, message: str, args: tuple, extra: Dict[str, Any]):
+        """Internal logging method with format arguments and extra context"""
+        # Apply format arguments if provided
+        if args:
+            try:
+                formatted_message = message % args
+            except (TypeError, ValueError) as e:
+                # Fallback if formatting fails
+                formatted_message = f"{message} [Format Error: {e}]"
+        else:
+            formatted_message = message
+            
         if extra:
             # Create a LogRecord with extra data
             record = self.logger.makeRecord(
-                self.logger.name, level, "", 0, message, (), None, 
+                self.logger.name, level, "", 0, formatted_message, (), None, 
                 func="", extra=extra
             )
             self.logger.handle(record)
         else:
-            self.logger.log(level, message)
+            self.logger.log(level, formatted_message)
     
     # Context managers for request tracking
     def with_request_context(self, request_id: str, user_id: str = ""):
@@ -109,9 +119,10 @@ class LearningChatbotLogger:
         """Log external service calls"""
         level = logging.INFO if success else logging.WARNING
         status = "SUCCESS" if success else "FAILURE"
-        self._log(level, f"Service Call: {service}.{operation} - {status} ({duration_ms:.2f}ms)",
-                 {"service": service, "operation": operation, "duration_ms": duration_ms, 
-                  "success": success, **kwargs})
+        message = f"Service Call: {service}.{operation} - {status} ({duration_ms:.2f}ms)"
+        extra = {"service": service, "operation": operation, "duration_ms": duration_ms, 
+                 "success": success, **kwargs}
+        self._log(level, message, (), extra)
     
     def log_user_action(self, action: str, user_id: str, **kwargs):
         """Log user actions for analytics"""
