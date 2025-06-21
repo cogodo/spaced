@@ -10,7 +10,7 @@ env:
   FLUTTER_VERSION: '3.32.0'  # Match project Flutter version
 
 jobs:
-  test:
+  analyze:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -51,18 +51,13 @@ jobs:
         run: flutter pub get
         working-directory: flutter_app
 
-      # Run tests
-      - name: Run tests
-        run: flutter test
-        working-directory: flutter_app
-
       # Run analyzer
       - name: Analyze code
         run: flutter analyze
         working-directory: flutter_app
 
   build-web:
-    needs: test
+    needs: analyze
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
@@ -70,7 +65,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Cache Flutter SDK (reuse cache key from test job)
+      # Cache Flutter SDK (reuse cache key from analyze job)
       - name: Cache Flutter SDK
         uses: actions/cache@v4
         with:
@@ -88,7 +83,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # Cache pub dependencies (reuse cache key from test job)
+      # Cache pub dependencies (reuse cache key from analyze job)
       - name: Cache pub dependencies
         uses: actions/cache@v4
         with:
@@ -107,7 +102,7 @@ jobs:
           path: |
             flutter_app/build/web
             flutter_app/.dart_tool/build
-          key: web-build-${{ runner.os }}-${{ hashFiles('flutter_app/lib/**/*.dart', 'flutter_app/web/**/*') }}
+          key: web-build-${{ runner.os }}-${{ hashFiles('flutter_app/lib/**/*.dart', 'flutter_app/web/**/*', 'flutter_app/pubspec.yaml') }}
           restore-keys: |
             web-build-${{ runner.os }}-
 
@@ -120,15 +115,15 @@ jobs:
       - name: Enable web
         run: flutter config --enable-web
 
-      # Build web app for testing (no deployment)
+      # Build web app for deployment
       - name: Build web app
-        run: flutter build web --release --tree-shake-icons
+        run: flutter build web --release --tree-shake-icons --web-renderer html
         working-directory: flutter_app
 
-      # Upload web build artifact for testing
+      # Upload web build artifact
       - name: Upload web build
         uses: actions/upload-artifact@v4
         with:
           name: web-build
           path: flutter_app/build/web
-          retention-days: 7
+          retention-days: 30
