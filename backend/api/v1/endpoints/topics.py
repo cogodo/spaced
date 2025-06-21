@@ -4,7 +4,9 @@ from pydantic import BaseModel
 from core.models import Topic
 from core.services import TopicService, QuestionService
 from api.v1.dependencies import get_current_user
+from core.monitoring.logger import get_logger
 
+logger = get_logger("topics_api")
 router = APIRouter()
 
 
@@ -29,7 +31,9 @@ async def create_topic(
         )
         return topic
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create topic: {str(e)}")
+        logger.error("Error creating topic", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to create topic: {safe_error_message}")
 
 
 @router.get("/{user_uid}")
@@ -79,10 +83,12 @@ async def generate_questions(
         question_ids = [q.id for q in questions]
         await topic_service.update_question_bank(topic_id, question_ids)
         
-        return {"generatedCount": len(questions)}
+        return {"message": f"Generated {len(questions)} questions", "questions": len(questions)}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
+        logger.error("Error generating questions", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to generate questions: {safe_error_message}")
     
     finally:
         # Always mark as not regenerating

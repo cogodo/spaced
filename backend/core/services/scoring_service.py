@@ -64,11 +64,11 @@ Scoring Guidelines:
 - 5: Excellent understanding, comprehensive answer
 
 Return your response in this JSON format:
-{
+{{
     "score": 3,
     "feedback": "Your explanation covers the main concept but misses...",
     "explanation": "The answer demonstrates understanding of..."
-}
+}}
 """
 
         # Add question-type specific guidance
@@ -86,11 +86,12 @@ Return your response in this JSON format:
         response = await self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are an expert educator who provides fair, constructive feedback on student responses."},
+                {"role": "system", "content": "You are an expert educator who provides fair, constructive feedback on student responses. Always respond with valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300,
-            temperature=0.3  # Lower temperature for more consistent scoring
+            temperature=0.3,  # Lower temperature for more consistent scoring
+            response_format={"type": "json_object"}  # Force JSON response
         )
         return response.choices[0].message.content
 

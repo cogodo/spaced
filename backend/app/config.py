@@ -1,7 +1,8 @@
 import os
-from typing import Optional
+import json
+from typing import Optional, List
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -29,8 +30,30 @@ class Settings(BaseSettings):
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
     
     # API Configuration
-    cors_origins: list = Field(["*"], env="CORS_ORIGINS")
+    cors_origins: List[str] = Field(
+        default=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000", 
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://10.0.2.2:3000",
+            "http://10.0.2.2:8080"
+        ], 
+        env="CORS_ORIGINS"
+    )
     api_prefix: str = Field("/api/v1", env="API_PREFIX")
+    
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from JSON string or return as-is if already a list"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # If not valid JSON, treat as single origin
+                return [v]
+        return v
     
     # External Service URLs (example)
     # external_service_url: str = Field("https://api.example.com", env="EXTERNAL_SERVICE_URL")

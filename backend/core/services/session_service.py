@@ -19,6 +19,21 @@ class SessionService:
         self.fsrs_service = FSRSService()
         self.redis_manager = RedisSessionManager()
 
+    def _normalize_firestore_timestamps(self, session: Session) -> None:
+        """Convert Firestore DatetimeWithNanoseconds to native datetime objects"""
+        # Check if startedAt is a Firestore timestamp and convert it
+        if hasattr(session.startedAt, 'to_datetime'):
+            session.startedAt = session.startedAt.to_datetime()
+        elif hasattr(session.startedAt, 'ToDatetime'):
+            session.startedAt = session.startedAt.ToDatetime()
+        
+        # Convert response timestamps
+        for response in session.responses:
+            if hasattr(response.timestamp, 'to_datetime'):
+                response.timestamp = response.timestamp.to_datetime()
+            elif hasattr(response.timestamp, 'ToDatetime'):
+                response.timestamp = response.timestamp.ToDatetime()
+
     async def start_session(self, user_uid: str, topic_id: str) -> Session:
         """Start a new learning session for a topic"""
         
@@ -44,6 +59,7 @@ class SessionService:
         
         # Store in both Firebase (persistence) and Redis (fast access)
         await self.repository.create(session)
+        # Store in Redis (the existing store_learning_session method handles serialization)
         await self.redis_manager.store_learning_session(session)
         
         return session
@@ -57,7 +73,9 @@ class SessionService:
             # Fallback to Firebase
             session = await self.repository.get_by_id(session_id)
             if session:
-                # Store in Redis for future fast access
+                # Convert Firestore timestamps to native datetime before storing in Redis
+                self._normalize_firestore_timestamps(session)
+                # Store in Redis (existing method handles serialization)
                 await self.redis_manager.store_learning_session(session)
         
         return session
@@ -188,11 +206,25 @@ class SessionService:
     async def _update_session_storage(self, session: Session) -> None:
         """Update session in both Redis and Firebase"""
         try:
-            # Update Redis for fast access
+            # Normalize any Firestore timestamps first
+            self._normalize_firestore_timestamps(session)
+            
+            # Prepare responses for Redis - convert timestamps to ensure JSON serialization
+            responses_for_redis = []
+            for response in session.responses:
+                response_dict = response.dict()
+                # Ensure timestamp is native datetime before Redis serialization
+                if hasattr(response.timestamp, 'to_datetime'):
+                    response.timestamp = response.timestamp.to_datetime()
+                elif hasattr(response.timestamp, 'ToDatetime'):
+                    response.timestamp = response.timestamp.ToDatetime()
+                responses_for_redis.append(response_dict)
+            
+            # Update Redis using existing method (it handles JSON serialization internally)
             await self.redis_manager.update_session_progress(
                 session.id,
                 session.questionIndex,
-                session.responses
+                responses_for_redis
             )
             
             # Update Firebase for persistence

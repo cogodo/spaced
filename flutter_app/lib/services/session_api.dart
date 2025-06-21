@@ -223,6 +223,18 @@ class SessionApi {
 
   /// Get authorization headers with Firebase ID token
   Future<Map<String, String>> _getHeaders() async {
+    // Check if we're running locally
+    final isDevelopment = _isLocalDevelopment();
+
+    if (isDevelopment) {
+      // Use development test token for local development
+      return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer dev-test-token',
+      };
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw SessionApiException('User not authenticated');
@@ -241,6 +253,18 @@ class SessionApi {
   Future<Map<String, String>> _getHeadersWithRefresh({
     bool forceRefresh = false,
   }) async {
+    // Check if we're running locally
+    final isDevelopment = _isLocalDevelopment();
+
+    if (isDevelopment) {
+      // Use development test token for local development
+      return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer dev-test-token',
+      };
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw SessionApiException('User not authenticated');
@@ -253,6 +277,20 @@ class SessionApi {
       'Accept': 'application/json',
       'Authorization': 'Bearer $idToken',
     };
+  }
+
+  /// Check if we're running in local development mode
+  bool _isLocalDevelopment() {
+    // Check if backend URL indicates local development
+    final isLocal =
+        baseUrl.contains('localhost') ||
+        baseUrl.contains('127.0.0.1') ||
+        baseUrl.contains('0.0.0.0') ||
+        baseUrl.startsWith('http://localhost:') ||
+        baseUrl.startsWith('http://127.0.0.1:');
+
+    print('SessionApi: baseUrl=$baseUrl, isLocal=$isLocal'); // Debug log
+    return isLocal;
   }
 
   /// Make HTTP request with automatic token refresh retry
@@ -454,26 +492,18 @@ class SessionApi {
       if (response.statusCode == 200) {
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-          // Clean up any malformed string fields that might cause format specifier errors
-          final cleanedData = <String, dynamic>{};
-          data.forEach((key, value) {
-            if (value is String) {
-              // Remove any format specifiers or malformed characters
-              cleanedData[key] =
-                  value.replaceAll(RegExp(r'[^\x00-\x7F]'), '').trim();
-            } else {
-              cleanedData[key] = value;
-            }
-          });
-
-          return AnswerResponse.fromJson(cleanedData);
+          return AnswerResponse.fromJson(data);
         } catch (e) {
           throw SessionApiException('Invalid response format: $e');
         }
       } else if (response.statusCode == 404) {
         throw SessionApiException(
           'Session not found. The session may have expired or is invalid.',
+          response.statusCode,
+        );
+      } else if (response.statusCode == 401) {
+        throw SessionApiException(
+          'Authentication failed. Please sign out and sign back in.',
           response.statusCode,
         );
       } else if (response.statusCode == 403) {

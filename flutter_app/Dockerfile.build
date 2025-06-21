@@ -1,0 +1,33 @@
+FROM ghcr.io/cirruslabs/flutter:stable as builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy pubspec files
+COPY pubspec.yaml pubspec.lock ./
+
+# Get dependencies
+RUN flutter pub get
+
+# Copy source code
+COPY . .
+
+# Enable Flutter web
+RUN flutter config --enable-web
+
+# Build for production
+RUN flutter build web --release
+
+# Create a lightweight final image
+FROM alpine:latest
+
+# Install basic tools
+RUN apk add --no-cache bash
+
+# Create build output directory
+RUN mkdir -p /app/build/web
+
+# Copy built files from builder stage
+COPY --from=builder /app/build/web /app/build/web
+
+WORKDIR /app 

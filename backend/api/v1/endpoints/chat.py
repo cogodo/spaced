@@ -51,8 +51,9 @@ async def get_popular_topics(
         return PopularTopicsResponse(topics=topics)
         
     except Exception as e:
-        logger.error("Error getting popular topics: %s", str(e))
-        raise HTTPException(500, f"Failed to get popular topics: {str(e)}")
+        logger.error("Error getting popular topics", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to get popular topics: {safe_error_message}")
 
 
 @router.post("/validate-topics")
@@ -68,8 +69,9 @@ async def validate_topics(
         return ValidateTopicsResponse(**result)
         
     except Exception as e:
-        logger.error("Error validating topics: %s", str(e))
-        raise HTTPException(500, f"Failed to validate topics: {str(e)}")
+        logger.error("Error validating topics", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to validate topics: {safe_error_message}")
 
 
 @router.post("/start_session")
@@ -83,7 +85,7 @@ async def start_chat_session(
         session_service = SessionService()
         question_service = QuestionService()
         
-        logger.info(f"Starting chat session for user {current_user['uid']} with topics: {request.topics}")
+        logger.info("Starting chat session for user %s with topics: %s", current_user['uid'], request.topics)
         
         # 1. Find or create topics
         topics = await topic_service.find_or_create_topics(
@@ -101,7 +103,7 @@ async def start_chat_session(
         questions = await question_service.get_topic_questions(primary_topic.id)
         if not questions:
             # Generate questions for the topic if none exist
-            logger.info(f"No questions found for topic {primary_topic.name}, generating...")
+            logger.info("No questions found for topic %s, generating...", primary_topic.name)
             try:
                 questions = await question_service.generate_question_bank(primary_topic)
                 if questions:
@@ -109,12 +111,15 @@ async def start_chat_session(
                         primary_topic.id, 
                         [q.id for q in questions]
                     )
-                    logger.info(f"Generated {len(questions)} questions for topic {primary_topic.name}")
+                    logger.info("Generated %d questions for topic %s", len(questions), primary_topic.name)
                 else:
-                    raise HTTPException(500, f"Failed to generate questions for topic: {primary_topic.name}")
+                    # Safe error message for topic name
+                    safe_topic_name = primary_topic.name.replace("{", "{{").replace("}", "}}")
+                    raise HTTPException(500, f"Failed to generate questions for topic: {safe_topic_name}")
             except Exception as e:
-                logger.error("Error generating questions for topic %s: %s", primary_topic.name, str(e))
-                raise HTTPException(500, f"Failed to generate questions for topic: {primary_topic.name}")
+                logger.error("Error generating questions for topic %s", primary_topic.name, extra={"error_detail": str(e)})
+                safe_topic_name = primary_topic.name.replace("{", "{{").replace("}", "}}")
+                raise HTTPException(500, f"Failed to generate questions for topic: {safe_topic_name}")
         
         # 4. Start learning session
         session = await session_service.start_session(
@@ -136,14 +141,15 @@ async def start_chat_session(
             "topics": [t.name for t in topics]
         }
         
-        logger.info(f"Successfully started chat session {session.id} for user {current_user['uid']}")
+        logger.info("Successfully started chat session %s for user %s", session.id, current_user['uid'])
         return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error starting chat session: %s", str(e))
-        raise HTTPException(500, f"Failed to start session: {str(e)}")
+        logger.error("Error starting chat session", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to start session: {safe_error_message}")
 
 
 @router.post("/answer")
@@ -155,7 +161,7 @@ async def submit_chat_answer(
     try:
         session_service = SessionService()
         
-        logger.info(f"Processing answer for session {request.session_id} by user {current_user['uid']}")
+        logger.info("Processing answer for session %s by user %s", request.session_id, current_user['uid'])
         
         # 1. Verify session belongs to user
         session = await session_service.get_session(request.session_id)
@@ -208,7 +214,9 @@ async def submit_chat_answer(
             # Build response message with feedback
             response_message = ""
             if result.get("feedback") and result["feedback"].strip():
-                response_message += f"💡 **Feedback:** {result['feedback']}\n\n"
+                # Escape curly braces in feedback to prevent f-string formatting errors
+                safe_feedback = result["feedback"].replace("{", "{{").replace("}", "}}")
+                response_message += f"💡 **Feedback:** {safe_feedback}\n\n"
             
             current_question_index = result.get("questionIndex", 1)
             response_message += f"**Question {current_question_index + 1}:**\n{next_question.text}"
@@ -223,14 +231,16 @@ async def submit_chat_answer(
                 "total_questions": result.get("totalQuestions", 1)
             }
         
-        logger.info(f"Successfully processed answer for session {request.session_id}")
+        logger.info("Successfully processed answer for session %s", request.session_id)
         return response_data
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error processing answer for session %s: %s", request.session_id, str(e))
-        raise HTTPException(500, f"Failed to process answer: {str(e)}")
+        logger.error("Error processing answer for session %s", request.session_id, extra={"error_detail": str(e)})
+        # Escape curly braces in exception message to prevent f-string formatting errors
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to process answer: {safe_error_message}")
 
 
 @router.get("/search-topics")
@@ -249,8 +259,9 @@ async def search_topics(
         }
         
     except Exception as e:
-        logger.error("Error searching topics: %s", str(e))
-        raise HTTPException(500, f"Failed to search topics: {str(e)}")
+        logger.error("Error searching topics", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to search topics: {safe_error_message}")
 
 
 @router.get("/session/{session_id}/status")
@@ -288,5 +299,6 @@ async def get_session_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error getting session status: %s", str(e))
-        raise HTTPException(500, f"Failed to get session status: {str(e)}") 
+        logger.error("Error getting session status", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to get session status: {safe_error_message}") 

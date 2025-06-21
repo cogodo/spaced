@@ -72,11 +72,12 @@ class TopicService:
                 continue
                 
             # First, try to find existing topic for this user
-            existing_topic = await self._find_user_topic_by_name(user_uid, topic_name)
+            existing_topics = await self._find_user_topic_by_name(user_uid, topic_name)
             
-            if existing_topic:
-                topics.append(existing_topic)
-                logger.info(f"Found existing topic: {topic_name} for user {user_uid}")
+            if existing_topics:
+                # Use the first matching topic
+                topics.append(existing_topics[0])
+                logger.info("Found existing topic: %s for user %s", topic_name, user_uid)
             else:
                 # Create new topic
                 new_topic = await self.create_topic(
@@ -85,7 +86,7 @@ class TopicService:
                     description=f"Learning topic: {topic_name}"
                 )
                 topics.append(new_topic)
-                logger.info(f"Created new topic: {topic_name} for user {user_uid}")
+                logger.info("Created new topic: %s for user %s", topic_name, user_uid)
         
         return topics
 
@@ -171,12 +172,13 @@ class TopicService:
             "has_errors": len(suggestions) > 0
         }
 
-    async def _find_user_topic_by_name(self, user_uid: str, topic_name: str) -> Optional[Topic]:
+    async def _find_user_topic_by_name(self, user_uid: str, topic_name: str) -> List[Topic]:
         """Find a user's topic by name (case insensitive)"""
         user_topics = await self.get_user_topics(user_uid)
         
+        matching_topics = []
         for topic in user_topics:
             if topic.name.lower() == topic_name.lower():
-                return topic
+                matching_topics.append(topic)
         
-        return None 
+        return matching_topics 

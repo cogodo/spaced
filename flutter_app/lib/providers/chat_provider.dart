@@ -50,11 +50,18 @@ class ChatProvider extends ChangeNotifier {
       false; // Add flag to prevent multiple simultaneous sessions
 
   ChatProvider() {
-    // Use environment-based backend URL
-    const String? backendUrl = String.fromEnvironment(
+    // Use environment-based backend URL with local development support
+    String backendUrl;
+
+    // Force localhost for local development (more explicit)
+    backendUrl = const String.fromEnvironment(
       'BACKEND_URL',
-      defaultValue: 'https://spaced-1.onrender.com',
+      defaultValue:
+          'http://localhost:8000', // Default to localhost for development
     );
+
+    // Log the backend URL for debugging
+    _logger.info('ChatProvider initialized with backend URL: $backendUrl');
 
     _api = SessionApi(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
@@ -670,16 +677,22 @@ class ChatProvider extends ChangeNotifier {
       if (e.statusCode == 404) {
         // Backend session expired - handle gracefully
         await _handleExpiredSession(answer);
+      } else if (e.statusCode == 401) {
+        // Authentication issue - user needs to re-authenticate
+        _sessionState = SessionState.error;
+        _addAIMessage(
+          "Authentication expired. Please sign out and sign back in to continue.",
+        );
       } else if ((e.message.contains('formatting error') ||
               e.message.contains('Invalid format specifier') ||
               e.message.contains('for object of type \'str\'')) &&
           retryCount < 2) {
-        // Auto-retry with more aggressive sanitization
+        // Auto-retry with basic sanitization only
         _logger.warning(
           'Format error detected, retrying with sanitized input (attempt ${retryCount + 1})',
         );
 
-        final sanitizedAnswer = _extraSanitizeInput(answer);
+        final sanitizedAnswer = _basicSanitizeInput(answer);
         await _submitAnswerWithRetry(
           sanitizedAnswer,
           retryCount: retryCount + 1,
@@ -709,16 +722,15 @@ class ChatProvider extends ChangeNotifier {
     await _autoSaveSession();
   }
 
-  /// Extra sanitization for retry attempts
-  String _extraSanitizeInput(String input) {
+  /// Basic sanitization for retry attempts - less aggressive than before
+  String _basicSanitizeInput(String input) {
     return input
         .replaceAll(
-          RegExp(r'[^\w\s.,!?-]'),
-          ' ',
-        ) // Keep only alphanumeric, whitespace, and basic punctuation
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim()
-        .toLowerCase(); // Convert to lowercase for consistency
+          RegExp(r'[{}%]'),
+          '',
+        ) // Remove only problematic format characters
+        .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
+        .trim();
   }
 
   /// Handle expired backend sessions gracefully

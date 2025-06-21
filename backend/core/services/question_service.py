@@ -167,7 +167,9 @@ Return ONLY the improved question text. If the original is already excellent, re
             )
             return response.choices[0].message.content
         except Exception as e:
-            raise Exception(f"OpenAI API error: {e}")
+            # Escape curly braces in error message to prevent f-string formatting errors
+            safe_error = str(e).replace("{", "{{").replace("}", "}}")
+            raise Exception(f"OpenAI API error: {safe_error}")
 
     async def get_question(self, question_id: str) -> Optional[Question]:
         """Get a specific question by ID"""
@@ -191,7 +193,7 @@ Rate the question on these criteria (1-5 scale):
 4. ENGAGEMENT: How engaging is it for learners?
 
 Provide your analysis in this JSON format:
-{
+{{
     "clarity": 4,
     "educational_value": 3,
     "difficulty_match": 5,
@@ -199,7 +201,7 @@ Provide your analysis in this JSON format:
     "overall_score": 3.75,
     "suggestions": "Brief suggestion for improvement",
     "strengths": "What works well about this question"
-}
+}}
 """
 
         try:

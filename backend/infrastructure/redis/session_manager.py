@@ -121,32 +121,47 @@ class RedisSessionManager:
         """Convert datetime objects to ISO strings for JSON serialization"""
         serialized = {}
         for key, value in data.items():
-            if isinstance(value, datetime):
-                serialized[key] = value.isoformat()
-            elif isinstance(value, list):
-                serialized[key] = [
-                    item.isoformat() if isinstance(item, datetime) else
-                    item.dict() if hasattr(item, 'dict') else item
-                    for item in value
-                ]
-            elif hasattr(value, 'dict'):  # Pydantic models
-                serialized[key] = value.dict()
-            else:
-                serialized[key] = value
+            serialized[key] = self._serialize_value(value)
         return serialized
+
+    def _serialize_value(self, value):
+        """Recursively serialize datetime values, including Firestore timestamps"""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        elif hasattr(value, 'to_datetime'):  # Firestore DatetimeWithNanoseconds
+            return value.to_datetime().isoformat()
+        elif hasattr(value, 'ToDatetime'):  # Alternative Firestore timestamp method
+            return value.ToDatetime().isoformat()
+        elif isinstance(value, list):
+            return [self._serialize_value(item) for item in value]
+        elif isinstance(value, dict):
+            return {k: self._serialize_value(v) for k, v in value.items()}
+        elif hasattr(value, 'dict'):  # Pydantic models
+            # Recursively serialize the dict to handle nested timestamps
+            return self._serialize_value(value.dict())
+        else:
+            return value
 
     def _deserialize_datetime_objects(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert ISO strings back to datetime objects"""
         deserialized = {}
         for key, value in data.items():
-            if isinstance(value, str) and self._is_iso_datetime(value):
-                try:
-                    deserialized[key] = datetime.fromisoformat(value)
-                except ValueError:
-                    deserialized[key] = value
-            else:
-                deserialized[key] = value
+            deserialized[key] = self._deserialize_value(value)
         return deserialized
+
+    def _deserialize_value(self, value):
+        """Recursively deserialize datetime values from ISO strings"""
+        if isinstance(value, str) and self._is_iso_datetime(value):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        elif isinstance(value, list):
+            return [self._deserialize_value(item) for item in value]
+        elif isinstance(value, dict):
+            return {k: self._deserialize_value(v) for k, v in value.items()}
+        else:
+            return value
 
     def _is_iso_datetime(self, value: str) -> bool:
         """Check if string is an ISO datetime format"""

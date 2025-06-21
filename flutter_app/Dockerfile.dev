@@ -1,0 +1,22 @@
+FROM ghcr.io/cirruslabs/flutter:stable
+
+# Set working directory
+WORKDIR /app
+
+# Copy pubspec files
+COPY pubspec.yaml pubspec.lock ./
+
+# Get dependencies
+RUN flutter pub get
+
+# Copy source code
+COPY . .
+
+# Expose port for Flutter web dev server
+EXPOSE 3000
+
+# Enable Flutter web
+RUN flutter config --enable-web
+
+# Default command for development
+CMD ["flutter", "run", "-d", "web-server", "--web-hostname", "0.0.0.0", "--web-port", "3000"] 

@@ -75,6 +75,12 @@ class ChatProgressWidget extends StatelessWidget {
         7; // Max questions per topic
     final currentQuestion = userMessages + 1;
 
+    // Prevent division by zero
+    final safeEstimatedTotal =
+        estimatedTotalQuestions > 0 ? estimatedTotalQuestions : 1;
+    final progressPercentage =
+        ((currentQuestion / safeEstimatedTotal) * 100).clamp(0, 100).round();
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -91,14 +97,19 @@ class ChatProgressWidget extends StatelessWidget {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-              TextSpan(text: ' of ~$estimatedTotalQuestions'),
+              TextSpan(
+                text:
+                    estimatedTotalQuestions > 0
+                        ? ' of ~$estimatedTotalQuestions'
+                        : '',
+              ),
             ],
           ),
         ),
 
         // Percentage
         Text(
-          '${((currentQuestion / estimatedTotalQuestions) * 100).round()}%',
+          '$progressPercentage%',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: Theme.of(context).colorScheme.secondary,
@@ -112,7 +123,11 @@ class ChatProgressWidget extends StatelessWidget {
     final userMessages = chatProvider.messages.where((m) => m.isUser).length;
     final estimatedTotalQuestions =
         chatProvider.currentSession!.topics.length * 7;
-    final progress = (userMessages / estimatedTotalQuestions).clamp(0.0, 1.0);
+
+    // Prevent division by zero and ensure valid progress value
+    final safeEstimatedTotal =
+        estimatedTotalQuestions > 0 ? estimatedTotalQuestions : 1;
+    final progress = (userMessages / safeEstimatedTotal).clamp(0.0, 1.0);
 
     return Column(
       children: [
@@ -170,12 +185,13 @@ class CompactProgressWidget extends StatelessWidget {
 
         final userMessages =
             chatProvider.messages.where((m) => m.isUser).length;
-        final estimatedTotalQuestions =
-            chatProvider.currentSession?.topics.length ?? 1 * 7;
-        final progress = (userMessages / estimatedTotalQuestions).clamp(
-          0.0,
-          1.0,
-        );
+        final topicsLength = chatProvider.currentSession?.topics.length ?? 0;
+        final estimatedTotalQuestions = topicsLength * 7;
+
+        // Prevent division by zero
+        final safeEstimatedTotal =
+            estimatedTotalQuestions > 0 ? estimatedTotalQuestions : 1;
+        final progress = (userMessages / safeEstimatedTotal).clamp(0.0, 1.0);
 
         return SizedBox(
           width: 60,
