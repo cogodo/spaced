@@ -51,7 +51,7 @@ async def get_popular_topics(
         return PopularTopicsResponse(topics=topics)
         
     except Exception as e:
-        logger.error(f"Error getting popular topics: {e}")
+        logger.error("Error getting popular topics: %s", str(e))
         raise HTTPException(500, f"Failed to get popular topics: {str(e)}")
 
 
@@ -68,7 +68,7 @@ async def validate_topics(
         return ValidateTopicsResponse(**result)
         
     except Exception as e:
-        logger.error(f"Error validating topics: {e}")
+        logger.error("Error validating topics: %s", str(e))
         raise HTTPException(500, f"Failed to validate topics: {str(e)}")
 
 
@@ -113,7 +113,7 @@ async def start_chat_session(
                 else:
                     raise HTTPException(500, f"Failed to generate questions for topic: {primary_topic.name}")
             except Exception as e:
-                logger.error(f"Error generating questions for topic {primary_topic.name}: {e}")
+                logger.error("Error generating questions for topic %s: %s", primary_topic.name, str(e))
                 raise HTTPException(500, f"Failed to generate questions for topic: {primary_topic.name}")
         
         # 4. Start learning session
@@ -142,7 +142,7 @@ async def start_chat_session(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting chat session: {e}")
+        logger.error("Error starting chat session: %s", str(e))
         raise HTTPException(500, f"Failed to start session: {str(e)}")
 
 
@@ -208,9 +208,7 @@ async def submit_chat_answer(
             # Build response message with feedback
             response_message = ""
             if result.get("feedback") and result["feedback"].strip():
-                # Safely format feedback to avoid format specifier errors
-                feedback_text = str(result["feedback"]).replace("{", "{{").replace("}", "}}")
-                response_message += f"💡 **Feedback:** {feedback_text}\n\n"
+                response_message += f"💡 **Feedback:** {result['feedback']}\n\n"
             
             current_question_index = result.get("questionIndex", 1)
             response_message += f"**Question {current_question_index + 1}:**\n{next_question.text}"
@@ -231,7 +229,7 @@ async def submit_chat_answer(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing answer for session {request.session_id}: {e}")
+        logger.error("Error processing answer for session %s: %s", request.session_id, str(e))
         raise HTTPException(500, f"Failed to process answer: {str(e)}")
 
 
@@ -251,7 +249,7 @@ async def search_topics(
         }
         
     except Exception as e:
-        logger.error(f"Error searching topics: {e}")
+        logger.error("Error searching topics: %s", str(e))
         raise HTTPException(500, f"Failed to search topics: {str(e)}")
 
 
@@ -290,5 +288,5 @@ async def get_session_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting session status: {e}")
+        logger.error("Error getting session status: %s", str(e))
         raise HTTPException(500, f"Failed to get session status: {str(e)}") 

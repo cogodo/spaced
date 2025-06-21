@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'circuit_breaker.dart';
-import 'logger_service.dart';
 
 /// Exception thrown when the Session API returns an error
 class SessionApiException implements Exception {
@@ -206,9 +205,6 @@ class SessionApi {
   late final CircuitBreaker _sessionBreaker;
   late final CircuitBreaker _topicBreaker;
   late final CircuitBreaker _searchBreaker;
-
-  /// Logger instance
-  final _logger = getLogger('SessionApi');
 
   SessionApi({
     required this.baseUrl,
@@ -440,20 +436,10 @@ class SessionApi {
       throw ArgumentError('userInput cannot be empty');
     }
 
-    // Sanitize user input to prevent backend formatting issues
-    final sanitizedInput = _sanitizeUserInput(userInput.trim());
-
-    // Log sanitization for debugging if input was changed
-    if (sanitizedInput != userInput.trim()) {
-      _logger.info(
-        'Input sanitized: "${userInput.trim()}" -> "$sanitizedInput"',
-      );
-    }
-
     final url = Uri.parse('$baseUrl/api/v1/chat/answer');
     final payload = {
       'session_id': sessionId.trim(),
-      'user_input': sanitizedInput,
+      'user_input': userInput.trim(),
     };
 
     try {
@@ -566,52 +552,5 @@ class SessionApi {
     return _sessionBreaker.state == CircuitBreakerState.open ||
         _topicBreaker.state == CircuitBreakerState.open ||
         _searchBreaker.state == CircuitBreakerState.open;
-  }
-
-  /// Sanitize user input to prevent backend format specifier errors
-  String _sanitizeUserInput(String input) {
-    if (input.isEmpty) return input;
-
-    // Step 1: Handle potential format specifiers
-    String sanitized = input
-        // Remove standalone % characters that could be format specifiers
-        .replaceAll(RegExp(r'(?<!\w)%(?!\w)'), ' percent ')
-        // Replace % followed by formatting characters
-        .replaceAll(RegExp(r'%[sdiouxXeEfFgGcrn]'), ' ')
-        // Handle curly braces that could be f-string formatters
-        .replaceAll(RegExp(r'\{[^}]*\}'), ' ')
-        // Replace standalone braces
-        .replaceAll('{', '(')
-        .replaceAll('}', ')')
-        // Handle escape sequences that could cause issues
-        .replaceAll(RegExp(r'\\[nrtbfav]'), ' ')
-        .replaceAll(RegExp(r'\\x[0-9a-fA-F]{2}'), ' ')
-        .replaceAll(RegExp(r'\\u[0-9a-fA-F]{4}'), ' ')
-        .replaceAll(RegExp(r'\\U[0-9a-fA-F]{8}'), ' ');
-
-    // Step 2: Handle other problematic characters
-    sanitized = sanitized
-        // Replace potential template/interpolation markers
-        .replaceAll(RegExp(r'\$\{[^}]*\}'), ' ')
-        .replaceAll(RegExp(r'`[^`]*`'), ' ')
-        // Handle quotes that might break JSON
-        .replaceAll(RegExp(r'(?<!\\)"'), "'")
-        // Remove or replace control characters
-        .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), ' ');
-
-    // Step 3: Normalize whitespace and length
-    sanitized = sanitized.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-    // Step 4: Ensure reasonable length (prevent extremely long inputs)
-    if (sanitized.length > 2000) {
-      sanitized = '${sanitized.substring(0, 1997)}...';
-    }
-
-    // Step 5: Fallback for empty result
-    if (sanitized.isEmpty) {
-      return 'user response'; // Fallback if sanitization removes everything
-    }
-
-    return sanitized;
   }
 }
