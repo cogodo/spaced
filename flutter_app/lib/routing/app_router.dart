@@ -17,6 +17,7 @@ import '../screens/user_profile_screen.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
 import '../main.dart';
+import '../widgets/loading_screen.dart';
 import 'route_constants.dart';
 
 /// Create router with auth provider context
@@ -43,10 +44,10 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         '🧭 Router redirect: path=$currentPath, signed_in=$isSignedIn, initialized=$isInitialized',
       );
 
-      // Wait for auth initialization
+      // Instead of returning null, redirect to a loading page while auth initializes
       if (!isInitialized) {
-        _logger.info('⏳ Auth not initialized yet, waiting...');
-        return null;
+        _logger.info('⏳ Auth not initialized yet, showing loading...');
+        return '/loading'; // Redirect to loading page instead of null
       }
 
       // Redirect signed-in users away from auth pages
@@ -74,6 +75,13 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       return null;
     },
     routes: [
+      // ===== LOADING ROUTE =====
+      GoRoute(
+        path: '/loading',
+        name: 'loading',
+        builder: (context, state) => const LoadingScreen(),
+      ),
+
       // ===== LANDING & AUTH ROUTES (No protection) =====
       GoRoute(
         path: Routes.landing,

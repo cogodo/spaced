@@ -98,6 +98,42 @@ class MyApp extends StatelessWidget {
 
     _logger.info('Building app with theme: ${themeNotifier.currentThemeKey}');
 
+    // Show loading screen while auth is initializing to prevent white screens
+    if (!authProvider.isInitialized) {
+      return MaterialApp(
+        title: 'Spaced',
+        theme: themeNotifier.currentTheme,
+        home: Scaffold(
+          backgroundColor: themeNotifier.currentTheme.scaffoldBackgroundColor,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.psychology,
+                  size: 64,
+                  color: themeNotifier.currentTheme.colorScheme.primary,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Spaced',
+                  style: themeNotifier.currentTheme.textTheme.headlineMedium
+                      ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: themeNotifier.currentTheme.colorScheme.primary,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                CircularProgressIndicator(
+                  color: themeNotifier.currentTheme.colorScheme.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // Create router only once
     if (_router == null) {
       _logger.info('🚀 Creating new router instance');
