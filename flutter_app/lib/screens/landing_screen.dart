@@ -616,7 +616,8 @@ class _LandingScreenState extends State<LandingScreen>
   Widget _buildGetSpacedButton(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        final buttonText = authProvider.isSignedIn ? 'BACK TO APP' : 'LOGIN';
+        final buttonText =
+            authProvider.isSignedIn ? 'BACK TO APP' : 'GET SPACED';
         final iconData =
             authProvider.isSignedIn ? Icons.arrow_back : Icons.arrow_forward;
 
