@@ -474,8 +474,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   context,
                   listen: false,
                 );
-                // Use existing session and handle the popular topic
-                await chatProvider.handleTopicsInput([topic.name]);
+                // Use the proper method that handles state transitions
+                await chatProvider.startSessionWithPopularTopic(topic);
               },
             ),
           ),

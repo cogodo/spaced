@@ -208,7 +208,9 @@ async def submit_chat_answer(
             # Build response message with feedback
             response_message = ""
             if result.get("feedback") and result["feedback"].strip():
-                response_message += f"💡 **Feedback:** {result['feedback']}\n\n"
+                # Safely format feedback to avoid format specifier errors
+                feedback_text = str(result["feedback"]).replace("{", "{{").replace("}", "}}")
+                response_message += f"💡 **Feedback:** {feedback_text}\n\n"
             
             current_question_index = result.get("questionIndex", 1)
             response_message += f"**Question {current_question_index + 1}:**\n{next_question.text}"

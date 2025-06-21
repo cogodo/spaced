@@ -46,6 +46,8 @@ class ChatProvider extends ChangeNotifier {
   String? _typingMessage;
   bool _isGeneratingQuestions = false;
   bool _isProcessingAnswer = false;
+  bool _isStartingSession =
+      false; // Add flag to prevent multiple simultaneous sessions
 
   ChatProvider() {
     // Use environment-based backend URL
@@ -78,6 +80,7 @@ class ChatProvider extends ChangeNotifier {
   String? get typingMessage => _typingMessage;
   bool get isGeneratingQuestions => _isGeneratingQuestions;
   bool get isProcessingAnswer => _isProcessingAnswer;
+  bool get isStartingSession => _isStartingSession;
 
   /// Set the router for navigation
   void setRouter(GoRouter router) {
@@ -276,13 +279,109 @@ class ChatProvider extends ChangeNotifier {
 
   /// Start a session with popular topic
   Future<void> startSessionWithPopularTopic(PopularTopic topic) async {
-    await startNewSession(
-      initialTopics: [topic.name],
-      sessionType: 'custom_topics',
+    // Prevent multiple simultaneous session starts
+    if (_isStartingSession) {
+      _logger.warning('Session start already in progress, ignoring request');
+      return;
+    }
+
+    _isStartingSession = true;
+    _logger.info('Starting session with popular topic: ${topic.name}');
+
+    // Set loading state immediately for UI feedback
+    _sessionState = SessionState.active;
+    _messages = [];
+    _isLoading = false;
+    _finalScores = null;
+
+    // Notify listeners for immediate loading state
+    notifyListeners();
+
+    // Start the backend session first to get the proper session ID
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Starting your learning session...",
+      generatingQuestions: true,
     );
 
-    // Immediately start the backend session
-    await handleTopicsInput([topic.name]);
+    try {
+      final response = await _api.startSession(
+        topics: [topic.name],
+        maxTopics: _maxTopics,
+        maxQuestions: _maxQuestions,
+        sessionType: 'custom_topics',
+      );
+
+      // Now create the session with the backend session ID
+      final now = DateTime.now();
+
+      // Generate unique token if user is authenticated
+      String? token;
+      if (_userId != null) {
+        try {
+          token = await _sessionService.generateUniqueToken(_userId!);
+        } catch (e) {
+          _logger.warning('Failed to generate unique token: $e');
+          // Fall back to default token generation
+          token = ChatSession.generateSessionToken();
+        }
+      } else {
+        // Generate default token when no user
+        token = ChatSession.generateSessionToken();
+      }
+
+      // Create session with backend session ID and actual topics from response
+      _currentSession = ChatSession.create(
+        id: response.sessionId, // Use backend session ID
+        topics: response.topics.isNotEmpty ? response.topics : [topic.name],
+        name: 'New Session - ${_formatTimestamp(now)}',
+        token: token,
+      );
+
+      _currentSessionId = response.sessionId; // Consistent with session
+      _sessionState = SessionState.active;
+
+      // Show the response message which includes the first question
+      _addAIMessage(response.message);
+
+      _logger.info('Backend session started successfully');
+
+      _updateCurrentSession();
+
+      // Save session to Firebase if user is authenticated
+      if (_userId != null) {
+        try {
+          await _sessionService.saveSession(_userId!, _currentSession!);
+          _logger.info('New session saved to Firebase');
+
+          // Refresh session history to show the new session immediately
+          await loadSessionHistory();
+        } catch (e) {
+          _logger.warning('Failed to save new session to Firebase: $e');
+          // Continue without Firebase - session will be saved later
+        }
+      }
+
+      // Navigate to token URL after session is properly set up
+      if (_router != null && _currentSession != null) {
+        _router!.go('/app/chat/${_currentSession!.token}');
+      }
+    } catch (e) {
+      _logger.severe('Error starting session with popular topic: $e');
+      _sessionState = SessionState.error;
+
+      if (e is SessionApiException) {
+        _addAIMessage('Error starting session: ${e.message}');
+      } else {
+        _addAIMessage('Error starting session: ${e.toString()}');
+      }
+    } finally {
+      _setLoadingWithTyping(false);
+      _isStartingSession = false; // Always reset the flag
+    }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
   }
 
   /// Start the backend session
@@ -513,6 +612,14 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
+    await _submitAnswerWithRetry(answer);
+  }
+
+  /// Submit answer with automatic retry for format errors
+  Future<void> _submitAnswerWithRetry(
+    String answer, {
+    int retryCount = 0,
+  }) async {
     _setLoadingWithTyping(
       true,
       typingMessage: "Analyzing your response...",
@@ -563,6 +670,33 @@ class ChatProvider extends ChangeNotifier {
       if (e.statusCode == 404) {
         // Backend session expired - handle gracefully
         await _handleExpiredSession(answer);
+      } else if ((e.message.contains('formatting error') ||
+              e.message.contains('Invalid format specifier') ||
+              e.message.contains('for object of type \'str\'')) &&
+          retryCount < 2) {
+        // Auto-retry with more aggressive sanitization
+        _logger.warning(
+          'Format error detected, retrying with sanitized input (attempt ${retryCount + 1})',
+        );
+
+        final sanitizedAnswer = _extraSanitizeInput(answer);
+        await _submitAnswerWithRetry(
+          sanitizedAnswer,
+          retryCount: retryCount + 1,
+        );
+        return; // Don't execute the rest of the method
+      } else if (e.message.contains('formatting error') ||
+          e.message.contains('Invalid format specifier')) {
+        // Handle backend formatting errors with user-friendly message after retries failed
+        _addAIMessage(
+          "I'm having trouble processing your answer due to a technical issue. "
+          "Please try rephrasing your answer using simpler language.\n\n"
+          "Tips:\n"
+          "• Use basic words and sentences\n"
+          "• Avoid mathematical symbols or special characters\n"
+          "• Keep your response concise\n\n"
+          "You can also type 'new question' to skip to the next question.",
+        );
       } else {
         _sessionState = SessionState.error;
         _addAIMessage("Error: ${e.message}");
@@ -573,6 +707,18 @@ class ChatProvider extends ChangeNotifier {
 
     _updateCurrentSession();
     await _autoSaveSession();
+  }
+
+  /// Extra sanitization for retry attempts
+  String _extraSanitizeInput(String input) {
+    return input
+        .replaceAll(
+          RegExp(r'[^\w\s.,!?-]'),
+          ' ',
+        ) // Keep only alphanumeric, whitespace, and basic punctuation
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase(); // Convert to lowercase for consistency
   }
 
   /// Handle expired backend sessions gracefully
@@ -986,5 +1132,58 @@ class ChatProvider extends ChangeNotifier {
             .toList();
 
     await handleTopicsInput(topics);
+  }
+
+  /// Request a new question when encountering errors
+  Future<void> requestNewQuestion() async {
+    if (_currentSessionId == null) {
+      _addAIMessage("Session error: No active session ID. Let's start over.");
+      _resetSession();
+      return;
+    }
+
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Getting a new question...",
+      generatingQuestions: true,
+    );
+
+    try {
+      // Try to get a new question by sending a simple "new question" request
+      final response = await _api.answer(
+        sessionId: _currentSessionId!,
+        userInput: "new question",
+      );
+
+      if (response.isDone) {
+        // Session completed
+        _sessionState = SessionState.completed;
+        _finalScores = response.scores;
+
+        _currentSession = _currentSession!.copyWith(
+          state: SessionState.completed,
+          isCompleted: true,
+          finalScores: response.scores,
+          updatedAt: DateTime.now(),
+        );
+
+        _addAIMessage(
+          response.message ?? _buildCompletionMessage(response.scores!),
+        );
+      } else {
+        // Show the new question
+        _addAIMessage(
+          response.message ?? "**New Question:**\n${response.nextQuestion!}",
+        );
+      }
+    } catch (e) {
+      // If getting a new question fails, restart the session
+      await _handleExpiredSession("continue");
+    } finally {
+      _setLoadingWithTyping(false);
+    }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
   }
 }

@@ -52,13 +52,16 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
                     chatProvider.popularTopics.map((topic) {
                       return ActionChip(
                         label: Text(topic.name),
-                        onPressed: () {
-                          if (widget.onPopularTopicSelected != null) {
-                            widget.onPopularTopicSelected!(topic);
-                          } else {
-                            widget.onTopicsSelected([topic.name]);
-                          }
-                        },
+                        onPressed:
+                            chatProvider.isStartingSession
+                                ? null
+                                : () {
+                                  if (widget.onPopularTopicSelected != null) {
+                                    widget.onPopularTopicSelected!(topic);
+                                  } else {
+                                    widget.onTopicsSelected([topic.name]);
+                                  }
+                                },
                         backgroundColor:
                             Theme.of(context).colorScheme.primaryContainer,
                         labelStyle: TextStyle(
@@ -178,24 +181,59 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed:
-                    _controller.text.trim().isNotEmpty ? _submitTopics : null,
+                    (_controller.text.trim().isNotEmpty &&
+                            !chatProvider.isStartingSession)
+                        ? _submitTopics
+                        : null,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Start Learning Session',
-                  style: TextStyle(fontSize: 16),
-                ),
+                child:
+                    chatProvider.isStartingSession
+                        ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('Starting Session...'),
+                          ],
+                        )
+                        : const Text(
+                          'Start Learning Session',
+                          style: TextStyle(fontSize: 16),
+                        ),
               ),
             ),
 
             // Loading indicator
-            if (chatProvider.isLoadingPopularTopics || _isSearching) ...[
+            if (chatProvider.isLoadingPopularTopics ||
+                _isSearching ||
+                chatProvider.isStartingSession) ...[
               const SizedBox(height: 16),
-              const Center(child: CircularProgressIndicator()),
+              Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    if (chatProvider.isStartingSession) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Starting your learning session...',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ],
         );
