@@ -66,6 +66,15 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
     }
 
+    // Add a failsafe timeout to ensure initialization completes
+    Timer(const Duration(milliseconds: 1500), () {
+      if (!_isInitialized) {
+        _isInitialized = true;
+        _logger.info('🔥 Auth initialized via failsafe timeout');
+        notifyListeners();
+      }
+    });
+
     // Set up the stream listener
     _authStateSubscription = _authService.authStateChanges.listen(
       (User? user) {

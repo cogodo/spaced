@@ -16,7 +16,6 @@ import '../screens/todays_reviews_screen.dart';
 import '../screens/user_profile_screen.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
-import '../main.dart';
 import '../widgets/loading_screen.dart';
 import 'route_constants.dart';
 
