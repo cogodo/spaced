@@ -8,6 +8,7 @@ from core.reliability.circuit_breaker import list_circuit_breakers, get_circuit_
 from middleware.rate_limiting import get_rate_limiter
 from api.v1.dependencies import get_current_user
 from core.monitoring.logger import get_logger
+from app.config import get_settings
 
 logger = get_logger("monitoring_api")
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -285,6 +286,8 @@ async def get_system_info():
     import psutil
     from datetime import datetime
     
+    settings = get_settings()
+    
     try:
         return {
             "system": {
@@ -305,7 +308,7 @@ async def get_system_info():
             "application": {
                 "start_time": datetime.utcnow().isoformat() + "Z",  # Would be better to track actual start time
                 "version": "1.0.0",  # Should come from config or package
-                "environment": "development"  # Should come from config
+                "environment": settings.environment
             }
         }
     except Exception as e:

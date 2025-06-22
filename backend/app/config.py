@@ -6,8 +6,7 @@ from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
-    # Application Configuration
-    environment: str = Field("development", env="ENVIRONMENT")
+    # Application Configuration - Use DEVELOPMENT_MODE instead of ENVIRONMENT
     debug: bool = Field(True, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")
     
@@ -42,6 +41,16 @@ class Settings(BaseSettings):
         env="CORS_ORIGINS"
     )
     api_prefix: str = Field("/api/v1", env="API_PREFIX")
+    
+    @property
+    def is_development(self) -> bool:
+        """Check if we're in development mode"""
+        return os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
+    
+    @property 
+    def environment(self) -> str:
+        """Get environment name based on DEVELOPMENT_MODE"""
+        return "development" if self.is_development else "production"
     
     @field_validator('cors_origins', mode='before')
     @classmethod

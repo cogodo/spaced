@@ -3,12 +3,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from infrastructure.firebase import get_auth
 from core.monitoring.logger import get_logger
+from app.config import get_settings
 
 logger = get_logger("auth_dependencies")
 security = HTTPBearer()
 
-# Check if we're in development mode
-DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
+settings = get_settings()
 DEV_TEST_TOKEN = "dev-test-token"
 DEV_USER_UID = "dev-user-123"
 
@@ -16,7 +16,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Validate Firebase JWT token and return user info"""
     
     # Development mode bypass
-    if DEVELOPMENT_MODE and credentials.credentials == DEV_TEST_TOKEN:
+    if settings.is_development and credentials.credentials == DEV_TEST_TOKEN:
         logger.info("Using development mode authentication bypass")
         return {
             "uid": DEV_USER_UID,
@@ -33,7 +33,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception as e:
         logger.error("Authentication failed", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        if DEVELOPMENT_MODE:
+        if settings.is_development:
             logger.warning("Firebase auth failed in dev mode: %s", safe_error_message)
             # In development, provide helpful error message
             raise HTTPException(
