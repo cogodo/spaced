@@ -33,7 +33,7 @@ flutter_app/.env.*
 flutter_app/.pub-cache/
 flutter_app/.pub/
 flutter_app/build/
-
+flutter_app/.vscode/
 # Symbolication related
 app.*.symbols
 

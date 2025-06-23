@@ -76,10 +76,16 @@ class _SessionItemState extends State<SessionItem> {
     // Store session info for potential undo
     final sessionId = widget.session.id;
     final sessionName = widget.session.displayName;
+    final isCurrentSession = chatProvider.currentSession?.id == sessionId;
 
     // Delete immediately
     try {
       await chatProvider.deleteSession(sessionId);
+
+      // If we deleted the current session, redirect to chat home
+      if (isCurrentSession && mounted) {
+        context.go('/app/chat');
+      }
 
       // Show undo snackbar
       if (mounted) {

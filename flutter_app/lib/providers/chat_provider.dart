@@ -997,19 +997,22 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
+    final wasCurrentSession = _currentSession?.id == sessionId;
+
     try {
       await _sessionService.deleteSession(_userId!, sessionId);
 
       // Remove from local history immediately
       _sessionHistory.removeWhere((session) => session.id == sessionId);
 
-      // If this is the current session, clear it
-      if (_currentSession?.id == sessionId) {
+      // If this is the current session, clear it and reset to initial state
+      if (wasCurrentSession) {
         _currentSession = null;
         _currentSessionId = null;
         _sessionState = SessionState.initial;
         _messages = [];
         _finalScores = null;
+        _logger.info('Cleared current session state after deletion');
       }
 
       // Notify listeners immediately for UI update
@@ -1018,7 +1021,7 @@ class ChatProvider extends ChangeNotifier {
       // Also refresh from Firebase to ensure consistency
       await loadSessionHistory();
 
-      _logger.info('Session $sessionId deleted');
+      _logger.info('Session $sessionId deleted successfully');
     } catch (e) {
       _logger.severe('Error deleting session $sessionId: $e');
       rethrow; // Re-throw for UI error handling
