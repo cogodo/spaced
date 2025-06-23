@@ -117,7 +117,77 @@ async def skip_question(
     
     try:
         result = await session_service.skip_question(session_id)
-        return result
+        
+        # Format response for frontend compatibility (similar to chat API)
+        if result["isComplete"]:
+            # Current session completed (5 questions)
+            session_score = result.get("finalScore", 0)
+            session_questions = result.get("totalQuestions", 5)
+            topic_progress = result.get("topicProgress", 0)
+            total_topic_questions = result.get("totalTopicQuestions", 20)
+            is_topic_complete = result.get("topicComplete", False)
+            
+            # Calculate actual answered questions (excluding skipped ones) for this session
+            session = await session_service.get_session(session_id)
+            current_session_responses = session.responses[-session.currentSessionQuestionCount:]
+            questions_answered = len([r for r in current_session_responses if r.answer.strip() != ""])
+            
+            # Calculate percentage score for display
+            percentage_score = int(session_score * 20) if session_score <= 5 else int(session_score)
+            
+            if is_topic_complete:
+                # All 20 questions in topic completed
+                overall_score = result.get("overallTopicScore", session_score)
+                overall_percentage = int(overall_score * 20) if overall_score <= 5 else int(overall_score)
+                completion_message = (
+                    f"🎉 **All done!**\n\n"
+                    f"📊 **Final Session Results:**\n"
+                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"🏆 **Overall Topic Performance:**\n"
+                    f"• Topic Average: {overall_score:.1f}/5.0 ({overall_percentage}%)\n\n"
+                    f"Outstanding! You've demonstrated mastery of this topic. Your progress has been saved for optimal spaced repetition scheduling."
+                )
+            else:
+                # Session complete, but more questions remain in topic
+                completion_message = (
+                    f"🎉 **Session Complete!**\n\n"
+                    f"📊 **Your Results:**\n"
+                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"Great progress! Your learning has been saved and will help optimize your future study sessions.\n\n"
+                    f"Ready for another session? Choose a topic to continue your learning journey!"
+                )
+            
+            response_data = {
+                "isDone": True,
+                "scores": {"overall": percentage_score},
+                "message": completion_message,
+                "final_score": session_score,
+                "questions_answered": questions_answered,
+                "total_questions": session_questions,
+                "topic_progress": topic_progress,
+                "total_topic_questions": total_topic_questions,
+                "topic_complete": is_topic_complete
+            }
+        else:
+            # Continue with next question
+            current_question_index = result.get("questionIndex", 1)
+            next_question_text = result.get("nextQuestion", "Question not available")
+            
+            response_message = f"⏭️ **Question Skipped**\n\n**Question {current_question_index + 1}:**\n{next_question_text}"
+            
+            response_data = {
+                "isDone": False,
+                "next_question": next_question_text,
+                "message": response_message,
+                "feedback": result.get("feedback", ""),
+                "score": result["score"],
+                "question_index": current_question_index,
+                "total_questions": result.get("totalQuestions", 1)
+            }
+        
+        return response_data
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

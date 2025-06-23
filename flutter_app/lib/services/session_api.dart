@@ -337,7 +337,7 @@ class SessionApi {
   /// Parameters:
   /// - [topics]: List of study topics (must not be empty)
   /// - [maxTopics]: Maximum number of topics to cover (default: 3, min: 1)
-  /// - [maxQuestions]: Maximum questions per topic (default: 7, min: 1)
+  /// - [maxQuestions]: Maximum questions per topic (default: 5, min: 1)
   /// - [sessionType]: Type of session - 'custom_topics' or 'due_items' (default: 'custom_topics')
   ///
   /// Returns [StartSessionResponse] containing:
@@ -350,7 +350,7 @@ class SessionApi {
   Future<StartSessionResponse> startSession({
     required List<String> topics,
     int maxTopics = 3,
-    int maxQuestions = 7,
+    int maxQuestions = 5,
     String sessionType = 'custom_topics',
   }) async {
     // Input validation

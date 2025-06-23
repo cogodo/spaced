@@ -43,4 +43,18 @@ class SessionRepository:
             data = doc.to_dict()
             sessions.append(Session.model_validate_dict(data))
         
+        return sessions
+    
+    async def list_by_user_and_topic(self, user_uid: str, topic_id: str) -> List[Session]:
+        """Get sessions for a user and specific topic"""
+        query = self.collection.where(filter=FieldFilter('userUid', '==', user_uid)).where(filter=FieldFilter('topicId', '==', topic_id))
+        docs = query.stream()
+        
+        sessions = []
+        for doc in docs:
+            data = doc.to_dict()
+            sessions.append(Session.model_validate_dict(data))
+        
+        # Sort by most recent first
+        sessions.sort(key=lambda s: s.startedAt, reverse=True)
         return sessions 

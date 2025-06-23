@@ -33,6 +33,18 @@ class SessionService:
                 response.timestamp = response.timestamp.to_datetime()
             elif hasattr(response.timestamp, 'ToDatetime'):
                 response.timestamp = response.timestamp.ToDatetime()
+    
+    def _ensure_session_fields(self, session: Session) -> None:
+        """Ensure session has all required fields for backward compatibility"""
+        # Add new fields if they don't exist (for old sessions)
+        if not hasattr(session, 'answeredQuestionIds') or session.answeredQuestionIds is None:
+            session.answeredQuestionIds = []
+        
+        if not hasattr(session, 'currentSessionQuestionCount') or session.currentSessionQuestionCount is None:
+            session.currentSessionQuestionCount = 0
+        
+        if not hasattr(session, 'maxQuestionsPerSession') or session.maxQuestionsPerSession is None:
+            session.maxQuestionsPerSession = 5
 
     async def start_session(self, user_uid: str, topic_id: str) -> Session:
         """Start a new learning session for a topic"""
@@ -46,23 +58,51 @@ class SessionService:
         if not questions:
             raise ValueError(f"No questions found for topic {topic_id}")
         
-        # Create session
-        session = Session(
-            id=str(uuid.uuid4()),
-            userUid=user_uid,
-            topicId=topic_id,
-            questionIndex=0,
-            questionIds=[q.id for q in questions],
-            responses=[],
-            startedAt=datetime.now()
-        )
+        # Check for existing session to continue progress
+        existing_sessions = await self.repository.list_by_user_and_topic(user_uid, topic_id)
         
-        # Store in both Firebase (persistence) and Redis (fast access)
-        await self.repository.create(session)
-        # Store in Redis (the existing store_learning_session method handles serialization)
-        await self.redis_manager.store_learning_session(session)
-        
-        return session
+        if existing_sessions:
+            # Continue from existing session
+            existing_session = existing_sessions[0]  # Get most recent
+            
+            # Ensure backward compatibility
+            self._ensure_session_fields(existing_session)
+            
+            # Reset current session counter for new session
+            existing_session.currentSessionQuestionCount = 0
+            existing_session.startedAt = datetime.now()
+            
+            # Update both Firebase and Redis
+            await self.repository.update(existing_session.id, {
+                "currentSessionQuestionCount": 0,
+                "startedAt": existing_session.startedAt,
+                "answeredQuestionIds": existing_session.answeredQuestionIds,
+                "maxQuestionsPerSession": existing_session.maxQuestionsPerSession
+            })
+            await self.redis_manager.store_learning_session(existing_session)
+            
+            return existing_session
+        else:
+            # Create new session
+            session = Session(
+                id=str(uuid.uuid4()),
+                userUid=user_uid,
+                topicId=topic_id,
+                questionIndex=0,
+                questionIds=[q.id for q in questions],
+                responses=[],
+                startedAt=datetime.now(),
+                answeredQuestionIds=[],
+                currentSessionQuestionCount=0,
+                maxQuestionsPerSession=5
+            )
+            
+            # Store in both Firebase (persistence) and Redis (fast access)
+            await self.repository.create(session)
+            # Store in Redis (the existing store_learning_session method handles serialization)
+            await self.redis_manager.store_learning_session(session)
+            
+            return session
 
     async def get_session(self, session_id: str) -> Optional[Session]:
         """Get session details - try Redis first, fallback to Firebase"""
@@ -75,21 +115,35 @@ class SessionService:
             if session:
                 # Convert Firestore timestamps to native datetime before storing in Redis
                 self._normalize_firestore_timestamps(session)
+                # Ensure backward compatibility with old sessions
+                self._ensure_session_fields(session)
                 # Store in Redis (existing method handles serialization)
                 await self.redis_manager.store_learning_session(session)
+        
+        if session:
+            # Ensure all sessions have the new fields for backward compatibility
+            self._ensure_session_fields(session)
         
         return session
 
     async def get_current_question(self, session_id: str):
-        """Get the current question for a session"""
+        """Get the current question for a session (max 5 questions per session)"""
         session = await self.get_session(session_id)
         if not session:
             return None, None
         
-        if session.questionIndex >= len(session.questionIds):
-            return session, None  # Session complete
+        # Check if current session is complete (5 questions answered/skipped)
+        if session.currentSessionQuestionCount >= session.maxQuestionsPerSession:
+            return session, None  # Current session complete
         
-        current_question_id = session.questionIds[session.questionIndex]
+        # Find next unanswered question
+        unanswered_questions = [q_id for q_id in session.questionIds if q_id not in session.answeredQuestionIds]
+        
+        if not unanswered_questions:
+            return session, None  # All questions in topic bank have been answered
+        
+        # Get the next unanswered question
+        current_question_id = unanswered_questions[0]
         question = await self.question_service.get_question(current_question_id)
         
         return session, question
@@ -112,36 +166,47 @@ class SessionService:
             timestamp=datetime.now()
         )
         
-        # Update session
+        # Update session - track answered questions and current session progress
         session.responses.append(response)
-        session.questionIndex += 1
+        session.answeredQuestionIds.append(question.id)
+        session.currentSessionQuestionCount += 1
         
         # Update both Redis and Firebase
         await self._update_session_storage(session)
         
-        # Check if session is complete
-        is_complete = session.questionIndex >= len(session.questionIds)
+        # Check if current session is complete (5 questions) or all questions answered
+        current_session_complete = session.currentSessionQuestionCount >= session.maxQuestionsPerSession
+        all_questions_answered = len(session.answeredQuestionIds) >= len(session.questionIds)
         
         result = {
             "score": scoring_result["score"],
             "feedback": scoring_result["feedback"],
             "explanation": scoring_result.get("explanation", ""),
             "correct": scoring_result["correct"],
-            "isComplete": is_complete,
-            "questionIndex": session.questionIndex,
-            "totalQuestions": len(session.questionIds)
+            "isComplete": current_session_complete,
+            "questionIndex": session.currentSessionQuestionCount,
+            "totalQuestions": session.maxQuestionsPerSession,
+            "topicProgress": len(session.answeredQuestionIds),
+            "totalTopicQuestions": len(session.questionIds)
         }
         
-        if is_complete:
-            # Calculate final topic score and update FSRS
-            final_score = await self._calculate_final_score(session)
-            result["finalScore"] = final_score
+        if current_session_complete:
+            # Calculate session score (for this set of 5 questions)
+            # Ensure we don't try to slice beyond the list length
+            responses_count = min(session.currentSessionQuestionCount, len(session.responses))
+            current_session_responses = session.responses[-responses_count:] if responses_count > 0 else []
+            session_score = await self._calculate_session_score(current_session_responses)
+            result["finalScore"] = session_score
             
-            # Use real FSRS calculations
-            await self._update_topic_fsrs_advanced(session.topicId, final_score)
+            # If all topic questions are answered, update FSRS with overall performance
+            if all_questions_answered:
+                overall_score = await self._calculate_final_score(session)
+                await self._update_topic_fsrs_advanced(session.topicId, overall_score)
+                result["topicComplete"] = True
+                result["overallTopicScore"] = overall_score
             
             # Mark session as complete in Redis
-            await self.redis_manager.mark_session_complete(session_id, final_score)
+            await self.redis_manager.mark_session_complete(session_id, session_score)
         
         return result
 
@@ -160,47 +225,91 @@ class SessionService:
             timestamp=datetime.now()
         )
         
+        # Update session - track answered questions and current session progress
         session.responses.append(response)
-        session.questionIndex += 1
+        session.answeredQuestionIds.append(question.id)
+        session.currentSessionQuestionCount += 1
         
         await self._update_session_storage(session)
         
-        is_complete = session.questionIndex >= len(session.questionIds)
+        # Check if current session is complete (5 questions) or all questions answered
+        current_session_complete = session.currentSessionQuestionCount >= session.maxQuestionsPerSession
+        all_questions_answered = len(session.answeredQuestionIds) >= len(session.questionIds)
         
         result = {
             "score": 0,
             "feedback": "Question skipped",
             "explanation": "No response provided",
             "correct": False,
-            "isComplete": is_complete,
-            "questionIndex": session.questionIndex,
-            "totalQuestions": len(session.questionIds)
+            "isComplete": current_session_complete,
+            "questionIndex": session.currentSessionQuestionCount,
+            "totalQuestions": session.maxQuestionsPerSession,
+            "topicProgress": len(session.answeredQuestionIds),
+            "totalTopicQuestions": len(session.questionIds)
         }
         
-        if is_complete:
-            final_score = await self._calculate_final_score(session)
-            result["finalScore"] = final_score
-            await self._update_topic_fsrs_advanced(session.topicId, final_score)
-            await self.redis_manager.mark_session_complete(session_id, final_score)
+        if current_session_complete:
+            # Calculate session score (for this set of 5 questions)
+            # Ensure we don't try to slice beyond the list length
+            responses_count = min(session.currentSessionQuestionCount, len(session.responses))
+            current_session_responses = session.responses[-responses_count:] if responses_count > 0 else []
+            session_score = await self._calculate_session_score(current_session_responses)
+            result["finalScore"] = session_score
+            
+            # If all topic questions are answered, update FSRS with overall performance
+            if all_questions_answered:
+                overall_score = await self._calculate_final_score(session)
+                await self._update_topic_fsrs_advanced(session.topicId, overall_score)
+                result["topicComplete"] = True
+                result["overallTopicScore"] = overall_score
+            
+            await self.redis_manager.mark_session_complete(session_id, session_score)
+        else:
+            # Get the next question if session is not complete
+            _, next_question = await self.get_current_question(session_id)
+            if next_question:
+                result["nextQuestion"] = next_question.text
         
         return result
 
     async def end_session(self, session_id: str) -> dict:
-        """End session early and calculate scores"""
+        """End session early and calculate scores for current session only"""
         session = await self.get_session(session_id)
         if not session:
             raise ValueError("Session not found")
         
-        final_score = await self._calculate_final_score(session)
-        await self._update_topic_fsrs_advanced(session.topicId, final_score)
-        await self.redis_manager.mark_session_complete(session_id, final_score)
+        # Ensure backward compatibility
+        self._ensure_session_fields(session)
+        
+        # Calculate score for current session responses only
+        if session.currentSessionQuestionCount > 0:
+            responses_count = min(session.currentSessionQuestionCount, len(session.responses))
+            current_session_responses = session.responses[-responses_count:] if responses_count > 0 else []
+            session_score = await self._calculate_session_score(current_session_responses)
+        else:
+            session_score = 0.0
+        
+        # Mark session as complete in Redis
+        await self.redis_manager.mark_session_complete(session_id, session_score)
+        
+        # Calculate actual answered questions for current session (excluding skipped ones)
+        if session.currentSessionQuestionCount > 0:
+            responses_count = min(session.currentSessionQuestionCount, len(session.responses))
+            current_session_responses = session.responses[-responses_count:] if responses_count > 0 else []
+            questions_answered = len([r for r in current_session_responses if r.answer.strip() != ""])
+        else:
+            questions_answered = 0
         
         return {
-            "finalScore": final_score,
-            "questionsAnswered": len(session.responses),
-            "totalQuestions": len(session.questionIds),
-            "averageScore": final_score,
-            "sessionDuration": self._calculate_session_duration(session)
+            "finalScore": session_score,
+            "questionsAnswered": questions_answered,
+            "totalQuestions": session.currentSessionQuestionCount,
+            "averageScore": session_score,
+            "sessionDuration": self._calculate_session_duration(session),
+            "isComplete": True,
+            "questionIndex": session.currentSessionQuestionCount,
+            "topicProgress": len(session.answeredQuestionIds),
+            "totalTopicQuestions": len(session.questionIds)
         }
 
     async def _update_session_storage(self, session: Session) -> None:
@@ -230,18 +339,28 @@ class SessionService:
             # Update Firebase for persistence
             await self.repository.update(session.id, {
                 "responses": [r.dict() for r in session.responses],
-                "questionIndex": session.questionIndex
+                "questionIndex": session.questionIndex,
+                "answeredQuestionIds": session.answeredQuestionIds,
+                "currentSessionQuestionCount": session.currentSessionQuestionCount
             })
         except Exception as e:
             print(f"Error updating session storage: {e}")
 
     async def _calculate_final_score(self, session: Session) -> float:
-        """Calculate average score for the session"""
+        """Calculate average score for all responses in the session"""
         if not session.responses:
             return 0.0
         
         total_score = sum(r.score for r in session.responses)
         return total_score / len(session.responses)
+    
+    async def _calculate_session_score(self, responses: List[Response]) -> float:
+        """Calculate average score for a specific set of responses"""
+        if not responses:
+            return 0.0
+        
+        total_score = sum(r.score for r in responses)
+        return total_score / len(responses)
 
     async def _update_topic_fsrs_advanced(self, topic_id: str, score: float) -> None:
         """Update topic FSRS parameters using real FSRS calculations"""

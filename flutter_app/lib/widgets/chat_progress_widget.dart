@@ -73,7 +73,7 @@ class ChatProgressWidget extends StatelessWidget {
     final userMessages = chatProvider.messages.where((m) => m.isUser).length;
     final estimatedTotalQuestions =
         chatProvider.currentSession!.topics.length *
-        7; // Max questions per topic
+        5; // Max questions per session
     final currentQuestion = userMessages + 1;
 
     // Prevent division by zero
@@ -123,7 +123,7 @@ class ChatProgressWidget extends StatelessWidget {
   Widget _buildProgressBar(BuildContext context, ChatProvider chatProvider) {
     final userMessages = chatProvider.messages.where((m) => m.isUser).length;
     final estimatedTotalQuestions =
-        chatProvider.currentSession!.topics.length * 7;
+        chatProvider.currentSession!.topics.length * 5;
 
     // Prevent division by zero and ensure valid progress value
     final safeEstimatedTotal =
@@ -187,7 +187,7 @@ class CompactProgressWidget extends StatelessWidget {
         final userMessages =
             chatProvider.messages.where((m) => m.isUser).length;
         final topicsLength = chatProvider.currentSession?.topics.length ?? 0;
-        final estimatedTotalQuestions = topicsLength * 7;
+        final estimatedTotalQuestions = topicsLength * 5;
 
         // Prevent division by zero
         final safeEstimatedTotal =

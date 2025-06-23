@@ -29,7 +29,7 @@ class ChatProvider extends ChangeNotifier {
 
   // Session configuration
   final int _maxTopics = 3;
-  final int _maxQuestions = 7;
+  final int _maxQuestions = 5;
 
   // User ID for Firebase operations
   String? _userId;
@@ -1017,6 +1017,11 @@ class ChatProvider extends ChangeNotifier {
         _messages = [];
         _finalScores = null;
         _logger.info('Cleared current session state after deletion');
+
+        // Reset routing to the default chat screen
+        if (_router != null) {
+          _router!.go('/app/chat');
+        }
       }
 
       // Notify listeners immediately for UI update

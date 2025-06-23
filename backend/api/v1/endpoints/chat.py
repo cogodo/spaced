@@ -179,30 +179,59 @@ async def submit_chat_answer(
         
         # 3. Format response for chat
         if result["isComplete"]:
-            # Session completed
-            final_score = result.get("finalScore", 0)
-            total_questions = result.get("totalQuestions", 1)
-            questions_answered = result.get("questionIndex", 0)
+            # Current session completed (5 questions)
+            session_score = result.get("finalScore", 0)
+            session_questions = result.get("totalQuestions", 5)
+            topic_progress = result.get("topicProgress", 0)
+            total_topic_questions = result.get("totalTopicQuestions", 20)
+            is_topic_complete = result.get("topicComplete", False)
+            
+            # Calculate actual answered questions (excluding skipped ones) for this session
+            session_data = await session_service.get_session(request.session_id)
+            if session_data and session_data.currentSessionQuestionCount > 0:
+                responses_count = min(session_data.currentSessionQuestionCount, len(session_data.responses))
+                current_session_responses = session_data.responses[-responses_count:] if responses_count > 0 else []
+                questions_answered = len([r for r in current_session_responses if r.answer.strip() != ""])
+            else:
+                questions_answered = 0
             
             # Calculate percentage score for display
-            percentage_score = int(final_score * 20) if final_score <= 5 else int(final_score)
+            percentage_score = int(session_score * 20) if session_score <= 5 else int(session_score)
             
-            completion_message = (
-                f"🎉 **Session Complete!**\n\n"
-                f"📊 **Your Results:**\n"
-                f"• Questions Answered: {questions_answered}/{total_questions}\n"
-                f"• Average Score: {final_score:.1f}/5.0\n"
-                f"• Percentage: {percentage_score}%\n\n"
-                f"Great job! Your progress has been saved and will help optimize your future learning sessions."
-            )
+            if is_topic_complete:
+                # All 20 questions in topic completed
+                overall_score = result.get("overallTopicScore", session_score)
+                overall_percentage = int(overall_score * 20) if overall_score <= 5 else int(overall_score)
+                completion_message = (
+                    f"🎉 **Topic Mastery Achieved!**\n\n"
+                    f"📊 **Final Session Results:**\n"
+                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"🏆 **Overall Topic Performance:**\n"
+                    f"• Topic Average: {overall_score:.1f}/5.0 ({overall_percentage}%)\n\n"
+                    f"Outstanding! You've demonstrated mastery of this topic. Your progress has been saved for optimal spaced repetition scheduling."
+                )
+            else:
+                # Session complete, but more questions remain in topic
+                completion_message = (
+                    f"🎉 **Session Complete!**\n\n"
+                    f"📊 **Your Results:**\n"
+                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"Great progress! Your learning has been saved and will help optimize your future study sessions.\n\n"
+                    f"Ready for another session? Choose a topic to continue your learning journey!"
+                )
             
             response_data = {
                 "isDone": True,
                 "scores": {"overall": percentage_score},
                 "message": completion_message,
-                "final_score": final_score,
+                "final_score": session_score,
                 "questions_answered": questions_answered,
-                "total_questions": total_questions
+                "total_questions": session_questions,
+                "topic_progress": topic_progress,
+                "total_topic_questions": total_topic_questions,
+                "topic_complete": is_topic_complete
             }
         else:
             # Continue with next question
