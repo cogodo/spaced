@@ -17,7 +17,8 @@ class ChatProgressWidget extends StatelessWidget {
         }
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          // Adjust margins to avoid overlap with floating profile icon
+          margin: const EdgeInsets.fromLTRB(16, 8, 80, 8), // Extra right margin
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,

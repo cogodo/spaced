@@ -226,9 +226,26 @@ class _SessionItemState extends State<SessionItem> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
           if (!_isEditing) {
-            context.go(widget.session.sessionUrl);
+            // Load session immediately for faster UI response
+            final chatProvider = Provider.of<ChatProvider>(
+              context,
+              listen: false,
+            );
+            try {
+              // Load the session state first to reduce lag
+              await chatProvider.loadSessionByToken(widget.session.token);
+              // Then navigate
+              if (context.mounted) {
+                context.go(widget.session.sessionUrl);
+              }
+            } catch (e) {
+              // If loading fails, still navigate and let the screen handle the error
+              if (context.mounted) {
+                context.go(widget.session.sessionUrl);
+              }
+            }
           }
         },
         onSecondaryTapDown: (details) {

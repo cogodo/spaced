@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../providers/auth_provider.dart';
-import '../widgets/chat_history_sidebar.dart';
 import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
@@ -41,6 +39,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Prevent duplicate sends
   bool _isSending = false;
+
+  // Sidebar collapse state
+  bool _isSidebarCollapsed = false;
 
   @override
   void initState() {
@@ -233,68 +234,52 @@ class _ChatScreenState extends State<ChatScreen> {
     return SelectableRegion(
       focusNode: FocusNode(),
       selectionControls: materialTextSelectionControls,
-      child: SizedBox(
-        height: double.infinity, // Ensure full height
-        child: Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.stretch, // Make sidebar full height
-          children: [
-            // Left sidebar for session history
-            ChatHistorySidebar(selectedSessionToken: widget.sessionToken),
-
-            // Main chat area (no divider)
-            Expanded(child: _buildChatMainArea()),
-          ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
-      ),
-    );
-  }
-
-  Widget _buildChatMainArea() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-      ),
-      child: GestureDetector(
-        // Dismiss keyboard when tapping outside interactive elements
-        onTap: () {
-          final FocusScopeNode currentScope = FocusScope.of(context);
-          if (!currentScope.hasPrimaryFocus && currentScope.hasFocus) {
-            FocusManager.instance.primaryFocus?.unfocus();
-          }
-        },
-        behavior: HitTestBehavior.translucent,
-        child: Consumer<ChatProvider>(
-          builder: (context, chatProvider, child) {
-            // Show session type selection if no active session and in initial state
-            if (!chatProvider.hasActiveSession &&
-                chatProvider.sessionState == SessionState.initial) {
-              return _buildSessionTypeSelection();
+        child: GestureDetector(
+          // Dismiss keyboard when tapping outside interactive elements
+          onTap: () {
+            final FocusScopeNode currentScope = FocusScope.of(context);
+            if (!currentScope.hasPrimaryFocus && currentScope.hasFocus) {
+              FocusManager.instance.primaryFocus?.unfocus();
             }
-
-            // Show topic selection for new items
-            if (chatProvider.sessionState == SessionState.collectingTopics) {
-              return _buildTopicSelectionScreen();
-            }
-
-            // Show due topics selection
-            if (chatProvider.sessionState == SessionState.selectingDueTopics) {
-              return _buildDueTopicsSelection();
-            }
-
-            // Show normal chat interface
-            return Column(
-              children: [
-                // Chat messages area - removed session status bar
-                Expanded(child: _buildMessagesArea()),
-                // Input area - with bottom margin to move it up a bit
-                Container(
-                  margin: const EdgeInsets.only(bottom: 24),
-                  child: _buildInputArea(),
-                ),
-              ],
-            );
           },
+          behavior: HitTestBehavior.translucent,
+          child: Consumer<ChatProvider>(
+            builder: (context, chatProvider, child) {
+              // Show session type selection if no active session and in initial state
+              if (!chatProvider.hasActiveSession &&
+                  chatProvider.sessionState == SessionState.initial) {
+                return _buildSessionTypeSelection();
+              }
+
+              // Show topic selection for new items
+              if (chatProvider.sessionState == SessionState.collectingTopics) {
+                return _buildTopicSelectionScreen();
+              }
+
+              // Show due topics selection
+              if (chatProvider.sessionState ==
+                  SessionState.selectingDueTopics) {
+                return _buildDueTopicsSelection();
+              }
+
+              // Show normal chat interface
+              return Column(
+                children: [
+                  // Chat messages area - no top bar needed
+                  Expanded(child: _buildMessagesArea()),
+                  // Input area - with bottom margin to move it up a bit
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    child: _buildInputArea(),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

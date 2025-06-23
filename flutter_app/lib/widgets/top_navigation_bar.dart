@@ -64,8 +64,26 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
     final isDesktop = MediaQuery.of(context).size.width > 800;
     final isTablet = MediaQuery.of(context).size.width > 600;
 
+    // Create a slightly darker color than the scaffold background
+    final scaffoldColor = Theme.of(context).scaffoldBackgroundColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBarColor =
+        isDark
+            ? Color.fromARGB(
+              (scaffoldColor.a * 255.0).round() & 0xff,
+              (scaffoldColor.r * 255.0 * 0.85).round() & 0xff,
+              (scaffoldColor.g * 255.0 * 0.85).round() & 0xff,
+              (scaffoldColor.b * 255.0 * 0.85).round() & 0xff,
+            )
+            : Color.fromARGB(
+              (scaffoldColor.a * 255.0).round() & 0xff,
+              (scaffoldColor.r * 255.0 * 0.95).round() & 0xff,
+              (scaffoldColor.g * 255.0 * 0.95).round() & 0xff,
+              (scaffoldColor.b * 255.0 * 0.95).round() & 0xff,
+            );
+
     return AppBar(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: navBarColor,
       elevation: 1,
       shadowColor: Theme.of(context).dividerColor,
       leading: Padding(
