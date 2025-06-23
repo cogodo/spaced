@@ -72,21 +72,9 @@ jobs:
           # Create .nojekyll file to bypass Jekyll processing
           touch flutter_app/build/web/.nojekyll
           
-          # Simple 404.html for SPA routing
-          cat > flutter_app/build/web/404.html << 'EOL'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Spaced</title>
-            <script>
-              var l = window.location;
-              l.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + l.pathname.split('/').slice(0, 1).join('/') + '/' + l.pathname.slice(1).split('/').slice(0).join('/') + (l.search || '') + l.hash);
-            </script>
-          </head>
-          <body><p>Redirecting...</p></body>
-          </html>
-          EOL
+          # Copy index.html to 404.html for SPA routing on GitHub Pages
+          # This ensures that direct navigation to any route serves the Flutter app
+          cp flutter_app/build/web/index.html flutter_app/build/web/404.html
           
       - name: Setup Pages
         uses: actions/configure-pages@v4
