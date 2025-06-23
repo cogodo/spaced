@@ -223,18 +223,6 @@ class SessionApi {
 
   /// Get authorization headers with Firebase ID token
   Future<Map<String, String>> _getHeaders() async {
-    // Check if we're running locally
-    final isDevelopment = _isLocalDevelopment();
-
-    if (isDevelopment) {
-      // Use development test token for local development
-      return {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer dev-test-token',
-      };
-    }
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw SessionApiException('User not authenticated');
@@ -253,18 +241,6 @@ class SessionApi {
   Future<Map<String, String>> _getHeadersWithRefresh({
     bool forceRefresh = false,
   }) async {
-    // Check if we're running locally
-    final isDevelopment = _isLocalDevelopment();
-
-    if (isDevelopment) {
-      // Use development test token for local development
-      return {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer dev-test-token',
-      };
-    }
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw SessionApiException('User not authenticated');
@@ -277,20 +253,6 @@ class SessionApi {
       'Accept': 'application/json',
       'Authorization': 'Bearer $idToken',
     };
-  }
-
-  /// Check if we're running in local development mode
-  bool _isLocalDevelopment() {
-    // Check if backend URL indicates local development
-    final isLocal =
-        baseUrl.contains('localhost') ||
-        baseUrl.contains('127.0.0.1') ||
-        baseUrl.contains('0.0.0.0') ||
-        baseUrl.startsWith('http://localhost:') ||
-        baseUrl.startsWith('http://127.0.0.1:');
-
-    print('SessionApi: baseUrl=$baseUrl, isLocal=$isLocal'); // Debug log
-    return isLocal;
   }
 
   /// Make HTTP request with automatic token refresh retry

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from google.cloud.firestore_v1 import FieldFilter
 from core.models import Question
 from infrastructure.firebase import get_firestore_client
 
@@ -23,7 +24,7 @@ class QuestionRepository:
 
     async def list_by_topic(self, topic_id: str) -> List[Question]:
         """Get all questions for a topic"""
-        query = self.collection.where('topicId', '==', topic_id)
+        query = self.collection.where(filter=FieldFilter('topicId', '==', topic_id))
         docs = query.stream()
         
         questions = []
@@ -43,7 +44,7 @@ class QuestionRepository:
 
     async def delete_by_topic(self, topic_id: str) -> None:
         """Delete all questions for a topic"""
-        query = self.collection.where('topicId', '==', topic_id)
+        query = self.collection.where(filter=FieldFilter('topicId', '==', topic_id))
         docs = query.stream()
         
         for doc in docs:

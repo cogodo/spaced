@@ -1,4 +1,5 @@
 from typing import List, Optional
+from google.cloud.firestore_v1 import FieldFilter
 from core.models import Topic
 from infrastructure.firebase import get_firestore_client
 
@@ -23,7 +24,7 @@ class TopicRepository:
 
     async def list_by_owner(self, owner_uid: str) -> List[Topic]:
         """Get all topics for a user"""
-        query = self.collection.where('ownerUid', '==', owner_uid)
+        query = self.collection.where(filter=FieldFilter('ownerUid', '==', owner_uid))
         docs = query.stream()
         
         topics = []

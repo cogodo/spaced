@@ -1,4 +1,5 @@
 from typing import Optional, List
+from google.cloud.firestore_v1 import FieldFilter
 from core.models import Session
 from infrastructure.firebase import get_firestore_client
 
@@ -34,7 +35,7 @@ class SessionRepository:
 
     async def list_by_user(self, user_uid: str) -> List[Session]:
         """Get all sessions for a user"""
-        query = self.collection.where('userUid', '==', user_uid)
+        query = self.collection.where(filter=FieldFilter('userUid', '==', user_uid))
         docs = query.stream()
         
         sessions = []

@@ -653,7 +653,7 @@ class ChatProvider extends ChangeNotifier {
 
         // Use the formatted message from the backend
         _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores!),
+          response.message ?? _buildCompletionMessage(response.scores ?? {}),
         );
       } else {
         // Check if we have a next question or message
@@ -668,8 +668,10 @@ class ChatProvider extends ChangeNotifier {
           );
         } else {
           // Continue with next question - use the formatted message from backend
+          final nextQuestionText =
+              response.nextQuestion ?? "Question not available";
           _addAIMessage(
-            response.message ?? "**Next Question:**\n${response.nextQuestion!}",
+            response.message ?? "**Next Question:**\n$nextQuestionText",
           );
         }
       }
@@ -770,13 +772,15 @@ class ChatProvider extends ChangeNotifier {
 
             _addAIMessage(
               continueResponse.message ??
-                  _buildCompletionMessage(continueResponse.scores!),
+                  _buildCompletionMessage(continueResponse.scores ?? {}),
             );
           } else {
             // Continue with next question
+            final nextQuestionText =
+                continueResponse.nextQuestion ?? "Question not available";
             _addAIMessage(
               continueResponse.message ??
-                  "**Next Question:**\n${continueResponse.nextQuestion!}",
+                  "**Next Question:**\n$nextQuestionText",
             );
           }
         } catch (e) {
@@ -1183,12 +1187,14 @@ class ChatProvider extends ChangeNotifier {
         );
 
         _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores!),
+          response.message ?? _buildCompletionMessage(response.scores ?? {}),
         );
       } else {
         // Show the new question
+        final nextQuestionText =
+            response.nextQuestion ?? "Question not available";
         _addAIMessage(
-          response.message ?? "**New Question:**\n${response.nextQuestion!}",
+          response.message ?? "**New Question:**\n$nextQuestionText",
         );
       }
     } catch (e) {
@@ -1227,12 +1233,14 @@ class ChatProvider extends ChangeNotifier {
         );
 
         _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores!),
+          response.message ?? _buildCompletionMessage(response.scores ?? {}),
         );
       } else {
         // Continue with next question
+        final nextQuestionText =
+            response.nextQuestion ?? "Question not available";
         _addAIMessage(
-          response.message ?? "**Next Question:**\n${response.nextQuestion!}",
+          response.message ?? "**Next Question:**\n$nextQuestionText",
         );
       }
 

@@ -895,7 +895,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         !chatProvider.isLoading &&
                         !chatProvider.isTyping &&
                         !_isSending &&
-                        chatProvider.sessionState != SessionState.error,
+                        chatProvider.sessionState != SessionState.error &&
+                        chatProvider.sessionState != SessionState.completed,
                     focusNode: _textFieldFocusNode,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       height: 1.4,
@@ -944,7 +945,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     onSubmitted: (_) {
                       if (!chatProvider.isLoading &&
                           !chatProvider.isTyping &&
-                          !_isSending) {
+                          !_isSending &&
+                          chatProvider.sessionState != SessionState.error &&
+                          chatProvider.sessionState != SessionState.completed) {
                         _sendMessage();
                       }
                     },
@@ -967,7 +970,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       (chatProvider.isLoading ||
                               chatProvider.isTyping ||
                               _isSending ||
-                              chatProvider.sessionState == SessionState.error)
+                              chatProvider.sessionState == SessionState.error ||
+                              chatProvider.sessionState ==
+                                  SessionState.completed)
                           ? null
                           : _sendMessage,
                   style: IconButton.styleFrom(
