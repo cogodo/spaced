@@ -1201,4 +1201,111 @@ class ChatProvider extends ChangeNotifier {
     _updateCurrentSession();
     await _autoSaveSession();
   }
+
+  /// Skip the current question
+  Future<void> skipCurrentQuestion() async {
+    if (_currentSessionId == null) {
+      _addAIMessage("Error: No active session to skip question in.");
+      return;
+    }
+
+    _setLoadingWithTyping(true, typingMessage: "Skipping question...");
+
+    try {
+      final response = await _api.skipQuestion(sessionId: _currentSessionId!);
+
+      if (response.isDone) {
+        // Session completed
+        _sessionState = SessionState.completed;
+        _finalScores = response.scores;
+
+        _currentSession = _currentSession!.copyWith(
+          state: SessionState.completed,
+          isCompleted: true,
+          finalScores: response.scores,
+          updatedAt: DateTime.now(),
+        );
+
+        _addAIMessage(
+          response.message ?? _buildCompletionMessage(response.scores!),
+        );
+      } else {
+        // Continue with next question
+        _addAIMessage(
+          response.message ?? "**Next Question:**\n${response.nextQuestion!}",
+        );
+      }
+
+      _logger.info('Question skipped successfully');
+    } catch (e) {
+      _logger.severe('Error skipping question: $e');
+      if (e is SessionApiException) {
+        _addAIMessage('Error skipping question: ${e.message}');
+      } else {
+        _addAIMessage('Error skipping question: ${e.toString()}');
+      }
+    } finally {
+      _setLoadingWithTyping(false);
+    }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
+  }
+
+  /// End the current session early
+  Future<void> endCurrentSession() async {
+    if (_currentSessionId == null) {
+      _addAIMessage("Error: No active session to end.");
+      return;
+    }
+
+    _setLoadingWithTyping(true, typingMessage: "Ending session...");
+
+    try {
+      final result = await _api.endSession(sessionId: _currentSessionId!);
+
+      // Mark session as completed
+      _sessionState = SessionState.completed;
+
+      // Build completion scores from result
+      final finalScore = result['finalScore'] as double? ?? 0.0;
+      final questionsAnswered = result['questionsAnswered'] as int? ?? 0;
+      final totalQuestions = result['totalQuestions'] as int? ?? 1;
+      final percentageScore = (finalScore * 20).round().clamp(0, 100);
+
+      _finalScores = {'overall': percentageScore};
+
+      _currentSession = _currentSession!.copyWith(
+        state: SessionState.completed,
+        isCompleted: true,
+        finalScores: _finalScores,
+        updatedAt: DateTime.now(),
+      );
+
+      // Show completion message
+      final completionMessage =
+          ("🏁 **Session Ended Early**\n\n"
+              "📊 **Your Results:**\n"
+              "• Questions Answered: $questionsAnswered/$totalQuestions\n"
+              "• Average Score: ${finalScore.toStringAsFixed(1)}/5.0\n"
+              "• Percentage: $percentageScore%\n\n"
+              "Your progress has been saved and will help optimize your future learning sessions.");
+
+      _addAIMessage(completionMessage);
+
+      _logger.info('Session ended early successfully');
+    } catch (e) {
+      _logger.severe('Error ending session: $e');
+      if (e is SessionApiException) {
+        _addAIMessage('Error ending session: ${e.message}');
+      } else {
+        _addAIMessage('Error ending session: ${e.toString()}');
+      }
+    } finally {
+      _setLoadingWithTyping(false);
+    }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
+  }
 }

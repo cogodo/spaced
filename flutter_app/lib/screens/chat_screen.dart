@@ -271,6 +271,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   // Chat messages area - no top bar needed
                   Expanded(child: _buildMessagesArea()),
+                  // Action buttons for active sessions
+                  if (chatProvider.sessionState == SessionState.active)
+                    _buildActionButtons(),
                   // Input area - with bottom margin to move it up a bit
                   Container(
                     margin: const EdgeInsets.only(bottom: 24),
@@ -759,6 +762,117 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageBubble(ChatMessage message) {
     return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
+  }
+
+  Widget _buildActionButtons() {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: SafeArea(
+        child: Consumer<ChatProvider>(
+          builder: (context, chatProvider, child) {
+            return Row(
+              children: [
+                // Skip Question Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
+                            ? null
+                            : () async {
+                              await chatProvider.skipCurrentQuestion();
+                            },
+                    icon: const Icon(Icons.skip_next, size: 18),
+                    label: const Text('Skip Question'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      side: BorderSide(
+                        color: theme.colorScheme.outline,
+                        width: 1,
+                      ),
+                      foregroundColor: theme.colorScheme.onSurface,
+                      disabledForegroundColor: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // End Session Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
+                            ? null
+                            : () async {
+                              // Show confirmation dialog
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder:
+                                    (context) => AlertDialog(
+                                      title: const Text('End Session?'),
+                                      content: const Text(
+                                        'Are you sure you want to end this learning session early? '
+                                        'Your progress will be saved.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed:
+                                              () => Navigator.of(
+                                                context,
+                                              ).pop(false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed:
+                                              () => Navigator.of(
+                                                context,
+                                              ).pop(true),
+                                          child: const Text('End Session'),
+                                        ),
+                                      ],
+                                    ),
+                              );
+
+                              if (confirmed == true) {
+                                await chatProvider.endCurrentSession();
+                              }
+                            },
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('End Session'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      side: BorderSide(
+                        color: theme.colorScheme.error,
+                        width: 1,
+                      ),
+                      foregroundColor: theme.colorScheme.error,
+                      disabledForegroundColor: theme.colorScheme.error
+                          .withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildInputArea() {

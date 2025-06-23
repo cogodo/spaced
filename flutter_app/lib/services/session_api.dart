@@ -544,6 +544,108 @@ class SessionApi {
     }
   }
 
+  /// Skip the current question in an active session
+  Future<AnswerResponse> skipQuestion({required String sessionId}) async {
+    // Input validation
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError('sessionId cannot be empty');
+    }
+
+    final url = Uri.parse('$baseUrl/api/v1/sessions/${sessionId.trim()}/skip');
+
+    try {
+      final response = await _sessionBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http.post(url, headers: headers).timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return AnswerResponse.fromJson(data);
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else if (response.statusCode == 404) {
+        throw SessionApiException(
+          'Session not found. The session may have expired or is invalid.',
+          response.statusCode,
+        );
+      } else if (response.statusCode == 403) {
+        throw SessionApiException(
+          'Access denied. You can only access your own sessions.',
+          response.statusCode,
+        );
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to skip question: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
+
+  /// End the current session early
+  Future<Map<String, dynamic>> endSession({required String sessionId}) async {
+    // Input validation
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError('sessionId cannot be empty');
+    }
+
+    final url = Uri.parse('$baseUrl/api/v1/sessions/${sessionId.trim()}/end');
+
+    try {
+      final response = await _sessionBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http.post(url, headers: headers).timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return data;
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else if (response.statusCode == 404) {
+        throw SessionApiException(
+          'Session not found. The session may have expired or is invalid.',
+          response.statusCode,
+        );
+      } else if (response.statusCode == 403) {
+        throw SessionApiException(
+          'Access denied. You can only access your own sessions.',
+          response.statusCode,
+        );
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to end session: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
+
   /// Get session status
   Future<SessionStatus> getSessionStatus(String sessionId) async {
     // NOTE: This endpoint doesn't exist in deployed backend
