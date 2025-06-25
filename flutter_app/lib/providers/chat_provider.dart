@@ -15,7 +15,8 @@ class ChatProvider extends ChangeNotifier {
   ChatSession? _currentSession;
   SessionState _sessionState = SessionState.initial;
   List<ChatMessage> _messages = [];
-  String? _currentSessionId;
+  String?
+  _currentSessionId; // Single session ID used for both routing and backend
   bool _isLoading = false;
   Map<String, int>? _finalScores;
 
@@ -96,16 +97,28 @@ class ChatProvider extends ChangeNotifier {
 
   /// Set the current user ID for Firebase operations
   void setUserId(String? userId) {
+    print('DEBUG: setUserId called with userId: $userId'); // Debug
     if (_userId != userId) {
+      print('DEBUG: UserId changed from $_userId to $userId'); // Debug
       _userId = userId;
       if (userId != null) {
+        print(
+          'DEBUG: User authenticated, starting to load session history',
+        ); // Debug
+        // Set loading state immediately so UI knows to wait
+        _isLoadingHistory = true;
+        notifyListeners();
+
         // Load session history and popular topics when user is set
         loadSessionHistory();
         loadPopularTopics();
       } else {
+        print('DEBUG: User signed out, clearing data'); // Debug
         // Clear data when user is signed out
         clear();
       }
+    } else {
+      print('DEBUG: UserId unchanged, skipping reload'); // Debug
     }
   }
 
@@ -197,29 +210,17 @@ class ChatProvider extends ChangeNotifier {
 
   /// Initialize a new chat session
   Future<void> startNewSession({
-    List<String>? initialTopics,
     String? sessionType,
     List<String>? selectedTopics,
+    List<String>? initialTopics,
   }) async {
     _logger.info('Starting new chat session with type: $sessionType');
+    print('DEBUG: startNewSession called with type: $sessionType'); // Debug
 
     final sessionId = _uuid.v4();
     final now = DateTime.now();
 
-    // Generate unique token if user is authenticated
-    String? token;
-    if (_userId != null) {
-      try {
-        token = await _sessionService.generateUniqueToken(_userId!);
-      } catch (e) {
-        _logger.warning('Failed to generate unique token: $e');
-        // Fall back to default token generation
-        token = ChatSession.generateSessionToken();
-      }
-    } else {
-      // Generate default token when no user
-      token = ChatSession.generateSessionToken();
-    }
+    // No need to generate tokens - we'll use sessionId as token
 
     // Determine topics based on session type
     List<String> topics = [];
@@ -229,13 +230,15 @@ class ChatProvider extends ChangeNotifier {
       topics = initialTopics;
     }
 
-    // Create new session
+    // Create new session - token will be set to sessionId
     _currentSession = ChatSession.create(
       id: sessionId,
       topics: topics,
       name: 'New Session - ${_formatTimestamp(now)}',
-      token: token,
     );
+    print(
+      'DEBUG: Created session with ID: $sessionId, token: ${_currentSession!.token}',
+    ); // Debug
 
     _currentSessionId = sessionId;
     _sessionState = SessionState.initial;
@@ -262,7 +265,7 @@ class ChatProvider extends ChangeNotifier {
     _updateCurrentSession();
     notifyListeners();
 
-    // Save session to Firebase if user is authenticated
+    // Save session to Firebase immediately if user is authenticated (for all session types)
     if (_userId != null) {
       try {
         await _sessionService.saveSession(_userId!, _currentSession!);
@@ -270,18 +273,18 @@ class ChatProvider extends ChangeNotifier {
 
         // Refresh session history to show the new session immediately
         await loadSessionHistory();
-
-        // Navigate to token URL for due items sessions
-        if (sessionType == 'due_items' && _router != null) {
-          _router!.go('/app/chat/$token');
-        }
       } catch (e) {
         _logger.warning('Failed to save new session to Firebase: $e');
         // Continue without Firebase - session will be saved later
       }
     }
 
-    _logger.info('New chat session started with ID: $sessionId, token: $token');
+    // Navigate to token URL only after session is saved
+    if (sessionType == 'due_items' && _router != null) {
+      _router!.go('/app/chat/${_currentSession!.token}');
+    }
+
+    _logger.info('New chat session started with ID: $sessionId');
   }
 
   /// Start a session with popular topic
@@ -294,6 +297,13 @@ class ChatProvider extends ChangeNotifier {
 
     _isStartingSession = true;
     _logger.info('Starting session with popular topic: ${topic.name}');
+
+    // Generate session ID upfront
+    final sessionId = _uuid.v4();
+    final now = DateTime.now();
+
+    // Set session ID immediately before API call
+    _currentSessionId = sessionId;
 
     // Set loading state immediately for UI feedback
     _sessionState = SessionState.active;
@@ -317,35 +327,17 @@ class ChatProvider extends ChangeNotifier {
         maxTopics: _maxTopics,
         maxQuestions: _maxQuestions,
         sessionType: 'custom_topics',
+        sessionId: _currentSessionId, // Pass our frontend session ID (now set)
       );
 
-      // Now create the session with the backend session ID
-      final now = DateTime.now();
-
-      // Generate unique token if user is authenticated
-      String? token;
-      if (_userId != null) {
-        try {
-          token = await _sessionService.generateUniqueToken(_userId!);
-        } catch (e) {
-          _logger.warning('Failed to generate unique token: $e');
-          // Fall back to default token generation
-          token = ChatSession.generateSessionToken();
-        }
-      } else {
-        // Generate default token when no user
-        token = ChatSession.generateSessionToken();
-      }
-
-      // Create session with backend session ID and actual topics from response
+      // Create session with frontend session ID (not backend response ID)
       _currentSession = ChatSession.create(
-        id: response.sessionId, // Use backend session ID
+        id: sessionId, // Use frontend-generated session ID
         topics: response.topics.isNotEmpty ? response.topics : [topic.name],
         name: 'New Session - ${_formatTimestamp(now)}',
-        token: token,
       );
 
-      _currentSessionId = response.sessionId; // Consistent with session
+      _currentSessionId = sessionId; // Keep consistent with frontend session
       _sessionState = SessionState.active;
 
       // Show the response message which includes the first question
@@ -355,17 +347,16 @@ class ChatProvider extends ChangeNotifier {
 
       _updateCurrentSession();
 
-      // Save session to Firebase if user is authenticated
+      // Save session to Firebase with updated token if user is authenticated
       if (_userId != null) {
         try {
           await _sessionService.saveSession(_userId!, _currentSession!);
-          _logger.info('New session saved to Firebase');
+          _logger.info('Session saved to Firebase with updated token');
 
-          // Refresh session history to show the new session immediately
+          // Refresh session history to show the updated session
           await loadSessionHistory();
         } catch (e) {
-          _logger.warning('Failed to save new session to Firebase: $e');
-          // Continue without Firebase - session will be saved later
+          _logger.warning('Failed to save updated session to Firebase: $e');
         }
       }
 
@@ -408,12 +399,13 @@ class ChatProvider extends ChangeNotifier {
         maxTopics: _maxTopics,
         maxQuestions: _maxQuestions,
         sessionType: sessionType ?? 'custom_topics',
+        sessionId: _currentSessionId, // Pass our frontend session ID
       );
 
-      _currentSessionId = response.sessionId;
+      // Use our frontend session ID for consistency
       _sessionState = SessionState.active;
 
-      // Update session with actual topics
+      // Update session with actual topics but keep the original token
       _currentSession = _currentSession!.copyWith(
         topics: response.topics,
         state: SessionState.active,
@@ -424,6 +416,21 @@ class ChatProvider extends ChangeNotifier {
       _addAIMessage(response.message);
 
       _logger.info('Backend session started successfully');
+
+      _updateCurrentSession();
+
+      // Save session to Firebase with updated token if user is authenticated
+      if (_userId != null) {
+        try {
+          await _sessionService.saveSession(_userId!, _currentSession!);
+          _logger.info('Session saved to Firebase with updated token');
+
+          // Refresh session history to show the updated session
+          await loadSessionHistory();
+        } catch (e) {
+          _logger.warning('Failed to save updated session to Firebase: $e');
+        }
+      }
 
       // Navigate to token URL after session is active
       if (_router != null && _currentSession != null) {
@@ -488,14 +495,23 @@ class ChatProvider extends ChangeNotifier {
       throw Exception('User not authenticated');
     }
 
-    _logger.info('Loading session by token: $token');
+    _logger.info('Loading session by token: $token for user: $_userId');
+    print(
+      'DEBUG: loadSessionByToken called with token: $token, userId: $_userId',
+    ); // Debug
     _setLoading(true);
 
     try {
       final session = await _sessionService.loadSessionByToken(_userId!, token);
+      print(
+        'DEBUG: loadSessionByToken result: ${session?.id}, token: ${session?.token}',
+      ); // Debug
 
       if (session == null) {
         _logger.warning('Session with token $token not found');
+        print(
+          'DEBUG: Session with token $token not found in Firebase',
+        ); // Debug
         throw Exception('Session not found');
       }
 
@@ -508,8 +524,10 @@ class ChatProvider extends ChangeNotifier {
 
       notifyListeners();
       _logger.info('Successfully loaded session by token $token');
+      print('DEBUG: Successfully loaded session ${session.id}'); // Debug
     } catch (e) {
       _logger.severe('Error loading session by token $token: $e');
+      print('DEBUG: Error in loadSessionByToken: $e'); // Debug
       rethrow; // Re-throw to let the UI handle the error
     } finally {
       _setLoading(false);
@@ -747,9 +765,9 @@ class ChatProvider extends ChangeNotifier {
           topics: _currentSession!.topics,
           maxTopics: _maxTopics,
           maxQuestions: _maxQuestions,
+          sessionType: 'custom_topics',
+          sessionId: _currentSessionId,
         );
-
-        _currentSessionId = response.sessionId;
 
         // Try to process the user's answer directly instead of starting from the beginning
         try {
@@ -1117,6 +1135,20 @@ class ChatProvider extends ChangeNotifier {
       isSystem: true,
     );
     _messages.add(message);
+
+    // Persist message immediately if user and session exist
+    if (_userId != null && _currentSession != null) {
+      _sessionService
+          .addMessage(
+            userId: _userId!,
+            sessionId: _currentSession!.id,
+            message: message,
+          )
+          .catchError((error) {
+            _logger.warning('Failed to persist system message: $error');
+          });
+    }
+
     _updateCurrentSession();
     notifyListeners();
   }
@@ -1129,6 +1161,20 @@ class ChatProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     _messages.add(message);
+
+    // Persist message immediately if user and session exist
+    if (_userId != null && _currentSession != null) {
+      _sessionService
+          .addMessage(
+            userId: _userId!,
+            sessionId: _currentSession!.id,
+            message: message,
+          )
+          .catchError((error) {
+            _logger.warning('Failed to persist user message: $error');
+          });
+    }
+
     _updateCurrentSession();
     notifyListeners();
   }
@@ -1141,6 +1187,20 @@ class ChatProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     _messages.add(message);
+
+    // Persist message immediately if user and session exist
+    if (_userId != null && _currentSession != null) {
+      _sessionService
+          .addMessage(
+            userId: _userId!,
+            sessionId: _currentSession!.id,
+            message: message,
+          )
+          .catchError((error) {
+            _logger.warning('Failed to persist AI message: $error');
+          });
+    }
+
     _updateCurrentSession();
     notifyListeners();
   }
@@ -1320,5 +1380,27 @@ class ChatProvider extends ChangeNotifier {
 
     _updateCurrentSession();
     await _autoSaveSession();
+  }
+
+  /// Repair session metadata for all user sessions
+  /// This back-populates missing fields in older sessions
+  Future<void> repairAllSessionMetadata() async {
+    if (_userId == null) {
+      _logger.warning('Cannot repair sessions: No user authenticated');
+      return;
+    }
+
+    _logger.info('Starting repair of all session metadata for user $_userId');
+
+    try {
+      await _sessionService.repairAllUserSessions(_userId!);
+      _logger.info('Successfully repaired all session metadata');
+
+      // Reload session history to see the repaired data
+      await loadSessionHistory();
+    } catch (e) {
+      _logger.severe('Error repairing session metadata: $e');
+      rethrow; // Re-throw for UI error handling
+    }
   }
 }

@@ -35,9 +35,10 @@ class StartSessionResponse {
   factory StartSessionResponse.fromJson(Map<String, dynamic> json) {
     return StartSessionResponse(
       sessionId: json['session_id'] as String,
-      nextQuestion: json['message'] as String? ?? '',
+      nextQuestion:
+          json['next_question'] as String? ?? json['message'] as String? ?? '',
       message: json['message'] as String? ?? '',
-      topics: List<String>.from(json['remaining_topics'] as List? ?? []),
+      topics: List<String>.from(json['topics'] as List? ?? []),
     );
   }
 }
@@ -228,7 +229,11 @@ class SessionApi {
       throw SessionApiException('User not authenticated');
     }
 
+    print('DEBUG: Getting ID token for user: ${user.uid} (${user.email})');
     final idToken = await user.getIdToken();
+    print(
+      'DEBUG: Got ID token (first 50 chars): ${idToken != null && idToken.length >= 50 ? idToken.substring(0, 50) : idToken ?? 'null'}...',
+    );
 
     return {
       'Content-Type': 'application/json',
@@ -246,7 +251,13 @@ class SessionApi {
       throw SessionApiException('User not authenticated');
     }
 
+    print(
+      'DEBUG: Getting refreshed ID token for user: ${user.uid} (forceRefresh: $forceRefresh)',
+    );
     final idToken = await user.getIdToken(forceRefresh);
+    print(
+      'DEBUG: Got refreshed ID token (first 50 chars): ${idToken != null && idToken.length >= 50 ? idToken.substring(0, 50) : idToken ?? 'null'}...',
+    );
 
     return {
       'Content-Type': 'application/json',
@@ -339,6 +350,7 @@ class SessionApi {
   /// - [maxTopics]: Maximum number of topics to cover (default: 3, min: 1)
   /// - [maxQuestions]: Maximum questions per topic (default: 5, min: 1)
   /// - [sessionType]: Type of session - 'custom_topics' or 'due_items' (default: 'custom_topics')
+  /// - [sessionId]: Optional session ID from frontend
   ///
   /// Returns [StartSessionResponse] containing:
   /// - sessionId: Unique identifier for this study session
@@ -349,13 +361,14 @@ class SessionApi {
   /// Throws [SessionApiException] on API errors or [ArgumentError] on invalid input
   Future<StartSessionResponse> startSession({
     required List<String> topics,
-    int maxTopics = 3,
-    int maxQuestions = 5,
-    String sessionType = 'custom_topics',
+    required int maxTopics,
+    required int maxQuestions,
+    required String sessionType,
+    String? sessionId, // Optional session ID from frontend
   }) async {
     // Input validation
     if (topics.isEmpty) {
-      throw ArgumentError('Topics list cannot be empty');
+      throw ArgumentError('topics cannot be empty');
     }
     if (maxTopics < 1) {
       throw ArgumentError('maxTopics must be at least 1');
@@ -370,18 +383,34 @@ class SessionApi {
     }
 
     final url = Uri.parse('$baseUrl/api/v1/chat/start_session');
-    final payload = {
+
+    // Get current user UID for the request
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw SessionApiException('User not authenticated');
+    }
+
+    // Generate session ID if not provided
+    final effectiveSessionId =
+        sessionId ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+    final requestBody = {
+      'id': effectiveSessionId, // Session ID (required by backend)
+      'userUid': user.uid, // User UID (required by backend)
+      'topics': topics, // Send all topics as list
       'session_type': sessionType,
-      'topics': topics,
       'max_topics': maxTopics,
       'max_questions': maxQuestions,
+      'session_id': effectiveSessionId, // Include session ID
     };
+
+    print('DEBUG: Starting session with request body: $requestBody');
 
     try {
       final response = await _sessionBreaker.execute(() async {
         return await _makeRequestWithRetry((headers) async {
           return await http
-              .post(url, headers: headers, body: jsonEncode(payload))
+              .post(url, headers: headers, body: jsonEncode(requestBody))
               .timeout(timeout);
         });
       });
@@ -646,5 +675,53 @@ class SessionApi {
     return _sessionBreaker.state == CircuitBreakerState.open ||
         _topicBreaker.state == CircuitBreakerState.open ||
         _searchBreaker.state == CircuitBreakerState.open;
+  }
+
+  /// Get today's reviews for a user
+  ///
+  /// Parameters:
+  /// - [userId]: User ID to get reviews for (must not be empty)
+  ///
+  /// Returns Map containing today's review data with overdue, dueToday, and upcoming lists
+  ///
+  /// Throws [SessionApiException] on API errors or [ArgumentError] on invalid input
+  Future<Map<String, dynamic>> getTodaysReviews(String userId) async {
+    // Input validation
+    if (userId.trim().isEmpty) {
+      throw ArgumentError('userId cannot be empty');
+    }
+
+    final url = Uri.parse('$baseUrl/api/v1/topics/${userId.trim()}/due-today');
+
+    try {
+      final response = await _sessionBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http.get(url, headers: headers).timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return data;
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to get today\'s reviews: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
   }
 }

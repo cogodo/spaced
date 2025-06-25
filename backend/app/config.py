@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         """Check if we're in development mode"""
-        return os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
+        # Use DEBUG env var (which is already set) or explicit DEVELOPMENT_MODE
+        return (os.getenv("DEVELOPMENT_MODE", "false").lower() == "true" or 
+                os.getenv("DEBUG", "false").lower() == "true")
     
     @property 
     def environment(self) -> str:

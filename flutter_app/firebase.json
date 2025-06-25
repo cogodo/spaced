@@ -1,1 +1,44 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"spaced-b571d","appId":"1:605253712819:android:7258e8f36170d1ea16e9c6","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"spaced-b571d","appId":"1:605253712819:ios:53f6d0d219f56dec16e9c6","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"spaced-b571d","appId":"1:605253712819:ios:53f6d0d219f56dec16e9c6","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"spaced-b571d","configurations":{"android":"1:605253712819:android:7258e8f36170d1ea16e9c6","ios":"1:605253712819:ios:53f6d0d219f56dec16e9c6","macos":"1:605253712819:ios:53f6d0d219f56dec16e9c6","web":"1:605253712819:web:30af37d6ca11a08916e9c6","windows":"1:605253712819:web:7b0d23789b3a671916e9c6"}}}}}}
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "spaced-b571d",
+                    "appId": "1:605253712819:android:7258e8f36170d1ea16e9c6",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "ios": {
+                "default": {
+                    "projectId": "spaced-b571d",
+                    "appId": "1:605253712819:ios:53f6d0d219f56dec16e9c6",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "ios/Runner/GoogleService-Info.plist"
+                }
+            },
+            "macos": {
+                "default": {
+                    "projectId": "spaced-b571d",
+                    "appId": "1:605253712819:ios:53f6d0d219f56dec16e9c6",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "macos/Runner/GoogleService-Info.plist"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "spaced-b571d",
+                    "configurations": {
+                        "android": "1:605253712819:android:7258e8f36170d1ea16e9c6",
+                        "ios": "1:605253712819:ios:53f6d0d219f56dec16e9c6",
+                        "macos": "1:605253712819:ios:53f6d0d219f56dec16e9c6",
+                        "web": "1:605253712819:web:30af37d6ca11a08916e9c6",
+                        "windows": "1:605253712819:web:7b0d23789b3a671916e9c6"
+                    }
+                }
+            }
+        }
+    },
+    "firestore": {
+        "rules": "firestore.rules"
+    }
+}

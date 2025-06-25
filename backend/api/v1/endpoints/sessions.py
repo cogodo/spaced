@@ -5,6 +5,7 @@ from core.models import Session
 from core.services import SessionService
 from api.v1.dependencies import get_current_user
 from core.monitoring.logger import get_logger
+import uuid
 
 logger = get_logger("sessions_api")
 router = APIRouter()
@@ -12,28 +13,32 @@ router = APIRouter()
 
 class StartSessionRequest(BaseModel):
     topicId: str
+    sessionType: str = "single_topic"
+    sessionId: Optional[str] = None  # Allow frontend to specify session ID
 
 
 class ResponseRequest(BaseModel):
     answer: str
 
 
-@router.post("/start")
+@router.post("/start", response_model=dict)
 async def start_session(
     request: StartSessionRequest,
-    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     current_user: dict = Depends(get_current_user)
 ):
     """Start a new learning session"""
+    session_service = SessionService()
+    
+    # Use frontend session ID if provided, otherwise generate new one
+    session_id = request.sessionId or str(uuid.uuid4())
+    
     try:
-        session_service = SessionService()
         session = await session_service.start_session(
             user_uid=current_user.get("uid"),
-            topic_id=request.topicId
+            topic_id=request.topicId,
+            session_id=session_id  # Pass the session ID to use
         )
-        
         return {"sessionId": session.id}
-    
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -50,7 +55,7 @@ async def get_session(
     """Get session details and current question"""
     session_service = SessionService()
     
-    session, question = await session_service.get_current_question(session_id)
+    session, question = await session_service.get_current_question(session_id, current_user.get("uid"))
     
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -79,7 +84,7 @@ async def respond_to_question(
     session_service = SessionService()
     
     # Verify session exists and user owns it
-    session = await session_service.get_session(session_id)
+    session = await session_service.get_session(session_id, current_user.get("uid"))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -87,7 +92,7 @@ async def respond_to_question(
         raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        result = await session_service.submit_response(session_id, request.answer)
+        result = await session_service.submit_response(session_id, current_user.get("uid"), request.answer)
         return result
     
     except ValueError as e:
@@ -108,7 +113,7 @@ async def skip_question(
     session_service = SessionService()
     
     # Verify session exists and user owns it
-    session = await session_service.get_session(session_id)
+    session = await session_service.get_session(session_id, current_user.get("uid"))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -116,7 +121,7 @@ async def skip_question(
         raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        result = await session_service.skip_question(session_id)
+        result = await session_service.skip_question(session_id, current_user.get("uid"))
         
         # Format response for frontend compatibility (similar to chat API)
         if result["isComplete"]:
@@ -128,9 +133,10 @@ async def skip_question(
             is_topic_complete = result.get("topicComplete", False)
             
             # Calculate actual answered questions (excluding skipped ones) for this session
-            session = await session_service.get_session(session_id)
-            current_session_responses = session.responses[-session.currentSessionQuestionCount:]
-            questions_answered = len([r for r in current_session_responses if r.answer.strip() != ""])
+            session = await session_service.get_session(session_id, current_user.get("uid"))
+            messages = await session_service.get_session_messages(session_id, current_user.get("uid"))
+            current_session_messages = messages[-session.currentSessionQuestionCount:] if len(messages) >= session.currentSessionQuestionCount else messages
+            questions_answered = len([m for m in current_session_messages if m.answerText.strip() != ""])
             
             # Calculate percentage score for display
             percentage_score = int(session_score * 20) if session_score <= 5 else int(session_score)
@@ -143,7 +149,7 @@ async def skip_question(
                     f"🎉 **All done!**\n\n"
                     f"📊 **Final Session Results:**\n"
                     f"• Questions Answered: {questions_answered}/{session_questions}\n"
-                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"• Session Score: {session_score:.1f}/{questions_answered} ({int((session_score * questions_answered) / max(questions_answered, 1) * 100)}%)\n\n"
                     f"🏆 **Overall Topic Performance:**\n"
                     f"• Topic Average: {overall_score:.1f}/5.0 ({overall_percentage}%)\n\n"
                     f"Outstanding! You've demonstrated mastery of this topic. Your progress has been saved for optimal spaced repetition scheduling."
@@ -154,7 +160,7 @@ async def skip_question(
                     f"🎉 **Session Complete!**\n\n"
                     f"📊 **Your Results:**\n"
                     f"• Questions Answered: {questions_answered}/{session_questions}\n"
-                    f"• Session Score: {session_score:.1f}/5.0 ({percentage_score}%)\n\n"
+                    f"• Session Score: {session_score:.1f}/{questions_answered} ({int((session_score * questions_answered) / max(questions_answered, 1) * 100)}%)\n\n"
                     f"Great progress! Your learning has been saved and will help optimize your future study sessions.\n\n"
                     f"Ready for another session? Choose a topic to continue your learning journey!"
                 )
@@ -207,7 +213,7 @@ async def end_session(
     session_service = SessionService()
     
     # Verify session exists and user owns it
-    session = await session_service.get_session(session_id)
+    session = await session_service.get_session(session_id, current_user.get("uid"))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -215,7 +221,7 @@ async def end_session(
         raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        result = await session_service.end_session(session_id)
+        result = await session_service.end_session(session_id, current_user.get("uid"))
         return result
     
     except ValueError as e:
@@ -237,7 +243,7 @@ async def get_session_analytics(
     session_service = SessionService()
     
     # Verify session exists and user owns it
-    session = await session_service.get_session(session_id)
+    session = await session_service.get_session(session_id, current_user.get("uid"))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -245,7 +251,7 @@ async def get_session_analytics(
         raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        analytics = await session_service.get_session_analytics(session_id)
+        analytics = await session_service.get_session_analytics(session_id, current_user.get("uid"))
         return analytics
     
     except ValueError as e:

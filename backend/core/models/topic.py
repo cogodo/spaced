@@ -18,4 +18,5 @@ class Topic(BaseModel):
     fsrsParams: FSRSParams = FSRSParams()
     regenerating: bool = False
     createdAt: Optional[datetime] = None
-    nextReviewAt: Optional[datetime] = None 
+    nextReviewAt: Optional[datetime] = None
+    lastReviewedAt: Optional[datetime] = None 

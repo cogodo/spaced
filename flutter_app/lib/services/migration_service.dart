@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logging/logging.dart';
-import '../models/chat_session.dart';
 
 /// Service for handling data migrations between schema versions
+///
+/// Note: Updated to use 'sessions' collection (unified with backend)
+/// instead of legacy 'chatSessions' collection
 class MigrationService {
   static final Logger _logger = Logger('MigrationService');
   final FirebaseFirestore _firestore;
@@ -15,11 +17,11 @@ class MigrationService {
     _logger.info('Starting migration to tokens for user: $userId');
 
     try {
-      // Get all user sessions
+      // Get all user sessions from unified 'sessions' collection
       final sessionsCollection = _firestore
           .collection('users')
           .doc(userId)
-          .collection('chatSessions');
+          .collection('sessions'); // Changed from 'chatSessions' to 'sessions'
 
       final snapshot = await sessionsCollection.get();
 
@@ -61,7 +63,7 @@ class MigrationService {
         }
 
         // Generate a unique token
-        final newToken = ChatSession.generateUniqueToken(existingTokens);
+        final newToken = doc.id; // Use session ID as token
         existingTokens.add(newToken); // Add to list to avoid collisions
 
         // Update the document

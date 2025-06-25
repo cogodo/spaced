@@ -11,9 +11,9 @@ class QuestionService:
         self.repository = QuestionRepository()
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    async def get_topic_questions(self, topic_id: str) -> List[Question]:
-        """Get all questions for a topic"""
-        return await self.repository.list_by_topic(topic_id)
+    async def get_topic_questions(self, topic_id: str, user_uid: str) -> List[Question]:
+        """Get all questions for a topic from user's subcollection"""
+        return await self.repository.list_by_topic(topic_id, user_uid)
 
     async def generate_question_bank(self, topic: Topic) -> List[Question]:
         """Generate a bank of 20 high-quality questions using generator + refiner loop"""
@@ -51,8 +51,8 @@ class QuestionService:
                     }
                 )
                 
-                # Save to database
-                await self.repository.create(question)
+                # Save to database with user context
+                await self.repository.create(question, topic.ownerUid)
                 questions.append(question)
                 
             except Exception as e:
@@ -147,7 +147,7 @@ Return ONLY the improved question text. If the original is already excellent, re
                 metadata={"generated_by": "openai_basic", "topic_name": topic.name}
             )
             
-            await self.repository.create(question)
+            await self.repository.create(question, topic.ownerUid)
             return question
             
         except Exception:
@@ -171,9 +171,9 @@ Return ONLY the improved question text. If the original is already excellent, re
             safe_error = str(e).replace("{", "{{").replace("}", "}}")
             raise Exception(f"OpenAI API error: {safe_error}")
 
-    async def get_question(self, question_id: str) -> Optional[Question]:
-        """Get a specific question by ID"""
-        return await self.repository.get_by_id(question_id)
+    async def get_question(self, question_id: str, user_uid: str, topic_id: str) -> Optional[Question]:
+        """Get a specific question by ID from user's topic subcollection"""
+        return await self.repository.get_by_id(question_id, user_uid, topic_id)
 
     # New Phase 3 advanced features
 
@@ -229,9 +229,9 @@ Provide your analysis in this JSON format:
             "strengths": "Standard generated question"
         }
 
-    async def get_question_bank_analytics(self, topic_id: str) -> Dict[str, Any]:
+    async def get_question_bank_analytics(self, topic_id: str, user_uid: str) -> Dict[str, Any]:
         """Get analytics for a topic's question bank"""
-        questions = await self.get_topic_questions(topic_id)
+        questions = await self.get_topic_questions(topic_id, user_uid)
         
         if not questions:
             return {"error": "No questions found"}

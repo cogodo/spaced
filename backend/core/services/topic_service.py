@@ -47,18 +47,19 @@ class TopicService:
         
         return created_topic
 
-    async def get_topic(self, topic_id: str) -> Optional[Topic]:
-        """Get a specific topic by ID"""
-        return await self.repository.get_by_id(topic_id)
+    async def get_topic(self, topic_id: str, user_uid: str) -> Optional[Topic]:
+        """Get a specific topic by ID from user's subcollection"""
+        return await self.repository.get_by_id(topic_id, user_uid)
 
-    async def mark_regenerating(self, topic_id: str, regenerating: bool) -> None:
+    async def mark_regenerating(self, topic_id: str, user_uid: str, regenerating: bool) -> None:
         """Mark a topic as regenerating questions"""
-        await self.repository.update(topic_id, {"regenerating": regenerating})
+        await self.repository.update(topic_id, user_uid, {"regenerating": regenerating})
 
-    async def update_question_bank(self, topic_id: str, question_ids: List[str]) -> None:
+    async def update_question_bank(self, topic_id: str, user_uid: str, question_ids: List[str]) -> None:
         """Update the question bank for a topic"""
-        await self.repository.update(topic_id, {"questionBank": question_ids})
-        # Note: Could also invalidate specific user cache here if needed
+        await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
+        # Invalidate cache since we updated the topic
+        self.cache.invalidate_user(user_uid)
 
     # New methods for chat functionality
 
