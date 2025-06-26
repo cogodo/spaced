@@ -68,6 +68,51 @@ class QuestionService:
         
         return questions
 
+    async def generate_initial_questions(self, topic: Topic, user_uid: str) -> List[Question]:
+        """Generate a small initial set of questions quickly (5 questions, no refinement)"""
+        
+        question_templates = [
+            ("multiple_choice", "Create a multiple choice question about {topic} with 4 options. Focus on key concepts."),
+            ("short_answer", "Create a short answer question about {topic} that tests understanding."),
+            ("explanation", "Create a question asking to explain a concept related to {topic}."),
+        ]
+        
+        questions = []
+        
+        # Generate 5 questions quickly without refinement
+        for i in range(5):
+            question_type, template = question_templates[i % len(question_templates)]
+            difficulty = min(i // 2 + 1, 3)  # Distribute difficulties 1-3
+            
+            try:
+                # Single step generation (no refinement for speed)
+                generated_question = await self._generate_question(topic, template, difficulty)
+                
+                question = Question(
+                    id=str(uuid.uuid4()),
+                    topicId=topic.id,
+                    text=generated_question,
+                    type=question_type,
+                    difficulty=difficulty,
+                    metadata={
+                        "generated_by": "openai_initial",
+                        "topic_name": topic.name,
+                        "generation_version": "initial_1.0"
+                    }
+                )
+                
+                # Save to database with user context
+                await self.repository.create(question, user_uid)
+                questions.append(question)
+                
+            except Exception as e:
+                print(f"Failed to generate initial question {i+1}: {e}")
+                continue
+        
+        return questions
+
+
+
     async def _generate_question(self, topic: Topic, template: str, difficulty: int) -> str:
         """Generate initial question"""
         prompt = template.format(topic=topic.name)
@@ -154,18 +199,26 @@ Return ONLY the improved question text. If the original is already excellent, re
             return None
 
     async def _call_openai(self, prompt: str, max_tokens: int = 200, temperature: float = 0.7) -> str:
-        """Make OpenAI API call with error handling"""
+        """Make OpenAI API call with error handling and timeout"""
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert educator creating high-quality learning questions."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature
+            import asyncio
+            
+            # Add timeout to prevent hanging requests
+            response = await asyncio.wait_for(
+                self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are an expert educator creating high-quality learning questions."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                ),
+                timeout=15.0  # 15 second timeout for individual API calls
             )
             return response.choices[0].message.content
+        except asyncio.TimeoutError:
+            raise Exception("OpenAI API call timed out after 15 seconds")
         except Exception as e:
             # Escape curly braces in error message to prevent f-string formatting errors
             safe_error = str(e).replace("{", "{{").replace("}", "}}")

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'circuit_breaker.dart';
+import 'dart:async';
 
 /// Exception thrown when the Session API returns an error
 class SessionApiException implements Exception {
@@ -209,7 +210,7 @@ class SessionApi {
 
   SessionApi({
     required this.baseUrl,
-    this.timeout = const Duration(seconds: 30),
+    this.timeout = const Duration(seconds: 60),
   }) {
     // Ensure baseUrl doesn't end with a slash
     if (baseUrl.endsWith('/')) {
@@ -229,11 +230,7 @@ class SessionApi {
       throw SessionApiException('User not authenticated');
     }
 
-    print('DEBUG: Getting ID token for user: ${user.uid} (${user.email})');
     final idToken = await user.getIdToken();
-    print(
-      'DEBUG: Got ID token (first 50 chars): ${idToken != null && idToken.length >= 50 ? idToken.substring(0, 50) : idToken ?? 'null'}...',
-    );
 
     return {
       'Content-Type': 'application/json',
@@ -251,13 +248,7 @@ class SessionApi {
       throw SessionApiException('User not authenticated');
     }
 
-    print(
-      'DEBUG: Getting refreshed ID token for user: ${user.uid} (forceRefresh: $forceRefresh)',
-    );
     final idToken = await user.getIdToken(forceRefresh);
-    print(
-      'DEBUG: Got refreshed ID token (first 50 chars): ${idToken != null && idToken.length >= 50 ? idToken.substring(0, 50) : idToken ?? 'null'}...',
-    );
 
     return {
       'Content-Type': 'application/json',
@@ -404,7 +395,7 @@ class SessionApi {
       'session_id': effectiveSessionId, // Include session ID
     };
 
-    print('DEBUG: Starting session with request body: $requestBody');
+    // Request body prepared for backend session creation
 
     try {
       final response = await _sessionBreaker.execute(() async {
@@ -433,6 +424,10 @@ class SessionApi {
     } on CircuitBreakerException catch (e) {
       throw SessionApiException(
         'Service temporarily unavailable: ${e.message}',
+      );
+    } on TimeoutException {
+      throw SessionApiException(
+        'Session start timed out. This may happen with complex topics. Please try again or select fewer topics.',
       );
     } catch (e) {
       if (e is SessionApiException) rethrow;

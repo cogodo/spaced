@@ -126,25 +126,29 @@ async def start_chat_session(
         # 3. Ensure the topic has questions
         questions = await question_service.get_topic_questions(primary_topic.id, current_user["uid"])
         if not questions:
-            # Generate questions for the topic if none exist
-            logger.info("No questions found for topic %s, generating...", primary_topic.name)
+            # Generate a small initial set of questions quickly (5 instead of 20)
+            logger.info("No questions found for topic %s, generating initial question set...", primary_topic.name)
             try:
-                questions = await question_service.generate_question_bank(primary_topic)
+                questions = await question_service.generate_initial_questions(primary_topic, current_user["uid"])
                 if questions:
                     await topic_service.update_question_bank(
                         primary_topic.id, 
                         current_user["uid"],
                         [q.id for q in questions]
                     )
-                    logger.info("Generated %d questions for topic %s", len(questions), primary_topic.name)
+                    logger.info("Generated %d initial questions for topic %s", len(questions), primary_topic.name)
                 else:
-                    # Safe error message for topic name
                     safe_topic_name = primary_topic.name.replace("{", "{{").replace("}", "}}")
                     raise HTTPException(500, f"Failed to generate questions for topic: {safe_topic_name}")
             except Exception as e:
                 logger.error("Error generating questions for topic %s", primary_topic.name, extra={"error_detail": str(e)})
                 safe_topic_name = primary_topic.name.replace("{", "{{").replace("}", "}}")
                 raise HTTPException(500, f"Failed to generate questions for topic: {safe_topic_name}")
+        
+        # Ensure we have at least one question to start the session
+        if not questions:
+            safe_topic_name = primary_topic.name.replace("{", "{{").replace("}", "}}")
+            raise HTTPException(500, f"No questions available for topic: {safe_topic_name}")
         
         # 4. Start learning session
         session = await session_service.start_session(

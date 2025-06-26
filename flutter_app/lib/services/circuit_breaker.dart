@@ -184,7 +184,7 @@ class ServiceCircuitBreakers {
   static Duration _getBaseTimeout(String serviceName) {
     switch (serviceName) {
       case 'session_api':
-        return const Duration(seconds: 30); // Longer for session ops
+        return const Duration(seconds: 60); // Increased from 30 to 60 seconds
       case 'topic_search':
         return const Duration(seconds: 10); // Faster for search
       case 'popular_topics':
@@ -214,7 +214,9 @@ class ServiceCircuitBreakers {
   }
 
   static void resetAll() {
-    _breakers.values.forEach((breaker) => breaker.reset());
+    for (final breaker in _breakers.values) {
+      breaker.reset();
+    }
   }
 
   static void reset(String serviceName) {

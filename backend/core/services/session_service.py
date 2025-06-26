@@ -334,32 +334,60 @@ class SessionService:
         # Ensure backward compatibility
         self._ensure_session_fields(session)
         
-        # Get session messages for scoring
-        messages = await self.get_session_messages(session_id, user_uid)
+        # Get session messages for scoring with error handling
+        try:
+            messages = await self.get_session_messages(session_id, user_uid)
+        except Exception as e:
+            print(f"Warning: Could not retrieve session messages: {e}")
+            messages = []
         
         # Calculate score for current session messages only
         if session.currentSessionQuestionCount > 0 and messages:
-            current_session_messages = messages[-session.currentSessionQuestionCount:] if len(messages) >= session.currentSessionQuestionCount else messages
-            session_score = await self._calculate_session_score_from_messages(current_session_messages)
-            # Calculate actual answered questions for current session (excluding skipped ones)
-            questions_answered = len([m for m in current_session_messages if m.answerText.strip() != ""])
+            # Filter only actual answered messages (not empty or placeholder messages)
+            valid_messages = [m for m in messages if m.answerText and m.answerText.strip() and m.score > 0]
+            current_session_messages = valid_messages[-session.currentSessionQuestionCount:] if len(valid_messages) >= session.currentSessionQuestionCount else valid_messages
+            
+            if current_session_messages:
+                session_score = await self._calculate_session_score_from_messages(current_session_messages)
+                questions_answered = len(current_session_messages)
+            else:
+                session_score = 0.0
+                questions_answered = 0
             
             # Update FSRS after session end using session performance
-            fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
+            try:
+                fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
+            except Exception as e:
+                print(f"Warning: Could not update FSRS parameters: {e}")
+                fsrs_update = {}
         else:
             session_score = 0.0
             questions_answered = 0
             fsrs_update = {}
         
         # Mark session as complete in Redis
-        await self.redis_manager.mark_session_complete(session_id, session_score)
+        try:
+            await self.redis_manager.mark_session_complete(session_id, session_score)
+        except Exception as e:
+            print(f"Warning: Could not mark session complete in Redis: {e}")
+        
+        # Update session state in Firebase
+        try:
+            await self.repository.update(session_id, user_uid, {
+                "isCompleted": True,
+                "state": "completed",
+                "finalScores": {"overall": int(session_score * 20)} if session_score > 0 else {"overall": 0},
+                "updatedAt": datetime.now()
+            })
+        except Exception as e:
+            print(f"Warning: Could not update session state in Firebase: {e}")
         
         result = {
             "finalScore": session_score,
             "questionsAnswered": questions_answered,
             "totalQuestions": session.currentSessionQuestionCount,
             "averageScore": session_score,
-            "sessionDuration": self._calculate_session_duration_from_messages(messages),
+            "sessionDuration": self._calculate_session_duration_from_messages(messages) if messages else 0,
             "isComplete": True,
             "questionIndex": session.currentSessionQuestionCount,
             "topicProgress": len(session.answeredQuestionIds),

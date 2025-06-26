@@ -97,14 +97,12 @@ class ChatProvider extends ChangeNotifier {
 
   /// Set the current user ID for Firebase operations
   void setUserId(String? userId) {
-    print('DEBUG: setUserId called with userId: $userId'); // Debug
+    _logger.info('setUserId called with userId: $userId');
     if (_userId != userId) {
-      print('DEBUG: UserId changed from $_userId to $userId'); // Debug
+      _logger.info('UserId changed from $_userId to $userId');
       _userId = userId;
       if (userId != null) {
-        print(
-          'DEBUG: User authenticated, starting to load session history',
-        ); // Debug
+        _logger.info('User authenticated, starting to load session history');
         // Set loading state immediately so UI knows to wait
         _isLoadingHistory = true;
         notifyListeners();
@@ -113,12 +111,12 @@ class ChatProvider extends ChangeNotifier {
         loadSessionHistory();
         loadPopularTopics();
       } else {
-        print('DEBUG: User signed out, clearing data'); // Debug
+        _logger.info('User signed out, clearing data');
         // Clear data when user is signed out
         clear();
       }
     } else {
-      print('DEBUG: UserId unchanged, skipping reload'); // Debug
+      _logger.debug('UserId unchanged, skipping reload');
     }
   }
 
@@ -215,7 +213,33 @@ class ChatProvider extends ChangeNotifier {
     List<String>? initialTopics,
   }) async {
     _logger.info('Starting new chat session with type: $sessionType');
-    print('DEBUG: startNewSession called with type: $sessionType'); // Debug
+
+    // For due_items review, check if we can reuse the current active session
+    if (sessionType == 'due_items' &&
+        _currentSession != null &&
+        _sessionState == SessionState.active &&
+        selectedTopics != null) {
+      _logger.info('Reusing existing active session for due items review');
+
+      // Add system message about continuing with selected topics
+      _addSystemMessage(
+        "Continuing your review session with: ${selectedTopics.join(', ')} 🧠✨\n\n"
+        "Let's keep building on your progress!",
+      );
+
+      // Start backend session with existing session ID and selected topics
+      await _startBackendSession(sessionType, selectedTopics);
+
+      // Navigate to the current session URL if router is available
+      if (_router != null && _currentSession != null) {
+        _router!.go('/app/chat/${_currentSession!.token}');
+      }
+
+      // Update session and notify listeners
+      _updateCurrentSession();
+      notifyListeners();
+      return;
+    }
 
     final sessionId = _uuid.v4();
     final now = DateTime.now();
@@ -236,9 +260,9 @@ class ChatProvider extends ChangeNotifier {
       topics: topics,
       name: 'New Session - ${_formatTimestamp(now)}',
     );
-    print(
-      'DEBUG: Created session with ID: $sessionId, token: ${_currentSession!.token}',
-    ); // Debug
+    _logger.debug(
+      'Created session with ID: $sessionId, token: ${_currentSession!.token}',
+    );
 
     _currentSessionId = sessionId;
     _sessionState = SessionState.initial;
@@ -317,7 +341,7 @@ class ChatProvider extends ChangeNotifier {
     // Start the backend session first to get the proper session ID
     _setLoadingWithTyping(
       true,
-      typingMessage: "Starting your learning session...",
+      typingMessage: "Preparing your learning session...",
       generatingQuestions: true,
     );
 
@@ -368,10 +392,25 @@ class ChatProvider extends ChangeNotifier {
       _logger.severe('Error starting session with popular topic: $e');
       _sessionState = SessionState.error;
 
+      // Provide specific user-friendly error messages
       if (e is SessionApiException) {
-        _addAIMessage('Error starting session: ${e.message}');
+        if (e.message.contains('timed out') || e.message.contains('timeout')) {
+          _addAIMessage(
+            'Starting your learning session is taking longer than usual. This can happen with new topics that need question preparation.\n\n'
+            '💡 **What you can try:**\n'
+            '• Wait a moment and try again\n'
+            '• Choose a different topic\n'
+            '• Check your internet connection\n\n'
+            'The system is likely preparing questions for "${topic.name}" in the background.',
+          );
+        } else {
+          _addAIMessage('Error starting session: ${e.message}');
+        }
       } else {
-        _addAIMessage('Error starting session: ${e.toString()}');
+        _addAIMessage(
+          'Unable to start your learning session right now. Please try again in a moment.\n\n'
+          'If this continues, try selecting a different topic or check your internet connection.',
+        );
       }
     } finally {
       _setLoadingWithTyping(false);
@@ -389,7 +428,7 @@ class ChatProvider extends ChangeNotifier {
   ) async {
     _setLoadingWithTyping(
       true,
-      typingMessage: "Starting your learning session...",
+      typingMessage: "Preparing your learning session...",
       generatingQuestions: true,
     );
 
@@ -496,22 +535,17 @@ class ChatProvider extends ChangeNotifier {
     }
 
     _logger.info('Loading session by token: $token for user: $_userId');
-    print(
-      'DEBUG: loadSessionByToken called with token: $token, userId: $_userId',
-    ); // Debug
     _setLoading(true);
 
     try {
       final session = await _sessionService.loadSessionByToken(_userId!, token);
-      print(
-        'DEBUG: loadSessionByToken result: ${session?.id}, token: ${session?.token}',
-      ); // Debug
+      _logger.debug(
+        'loadSessionByToken result: ${session?.id}, token: ${session?.token}',
+      );
 
       if (session == null) {
         _logger.warning('Session with token $token not found');
-        print(
-          'DEBUG: Session with token $token not found in Firebase',
-        ); // Debug
+        _logger.debug('Session with token $token not found in Firebase');
         throw Exception('Session not found');
       }
 
@@ -524,10 +558,10 @@ class ChatProvider extends ChangeNotifier {
 
       notifyListeners();
       _logger.info('Successfully loaded session by token $token');
-      print('DEBUG: Successfully loaded session ${session.id}'); // Debug
+      _logger.debug('Successfully loaded session ${session.id}');
     } catch (e) {
       _logger.severe('Error loading session by token $token: $e');
-      print('DEBUG: Error in loadSessionByToken: $e'); // Debug
+      _logger.debug('Error in loadSessionByToken: $e');
       rethrow; // Re-throw to let the UI handle the error
     } finally {
       _setLoading(false);
@@ -1136,18 +1170,8 @@ class ChatProvider extends ChangeNotifier {
     );
     _messages.add(message);
 
-    // Persist message immediately if user and session exist
-    if (_userId != null && _currentSession != null) {
-      _sessionService
-          .addMessage(
-            userId: _userId!,
-            sessionId: _currentSession!.id,
-            message: message,
-          )
-          .catchError((error) {
-            _logger.warning('Failed to persist system message: $error');
-          });
-    }
+    // Remove immediate persistence to prevent duplicates
+    // Messages will be saved in batch during saveSession()
 
     _updateCurrentSession();
     notifyListeners();
@@ -1162,18 +1186,8 @@ class ChatProvider extends ChangeNotifier {
     );
     _messages.add(message);
 
-    // Persist message immediately if user and session exist
-    if (_userId != null && _currentSession != null) {
-      _sessionService
-          .addMessage(
-            userId: _userId!,
-            sessionId: _currentSession!.id,
-            message: message,
-          )
-          .catchError((error) {
-            _logger.warning('Failed to persist user message: $error');
-          });
-    }
+    // Remove immediate persistence to prevent duplicates
+    // Messages will be saved in batch during saveSession()
 
     _updateCurrentSession();
     notifyListeners();
@@ -1188,18 +1202,8 @@ class ChatProvider extends ChangeNotifier {
     );
     _messages.add(message);
 
-    // Persist message immediately if user and session exist
-    if (_userId != null && _currentSession != null) {
-      _sessionService
-          .addMessage(
-            userId: _userId!,
-            sessionId: _currentSession!.id,
-            message: message,
-          )
-          .catchError((error) {
-            _logger.warning('Failed to persist AI message: $error');
-          });
-    }
+    // Remove immediate persistence to prevent duplicates
+    // Messages will be saved in batch during saveSession()
 
     _updateCurrentSession();
     notifyListeners();

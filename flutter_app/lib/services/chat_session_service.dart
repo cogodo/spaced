@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/chat_session.dart';
 import '../screens/chat_screen.dart'; // For ChatMessage
 import '../services/logger_service.dart';
-import 'dart:math' as math;
 
 /// Service for managing chat sessions in Firebase
 ///
@@ -40,7 +39,6 @@ class ChatSessionService {
   /// Save a chat session to Firebase with all required fields for history display
   Future<void> saveSession(String userId, ChatSession session) async {
     _logger.info('Saving session ${session.id} for user $userId');
-    print('DEBUG: Saving session ${session.id} for user $userId'); // Debug
 
     try {
       final batch = _firestore.batch();
@@ -65,25 +63,23 @@ class ChatSessionService {
                     : null),
       };
 
-      print(
-        'DEBUG: Session data being saved with token/ID: ${sessionData['token']}',
-      ); // Debug
-      print('DEBUG: Full session data being saved: $sessionData'); // Debug
-
       // Update session metadata
       final sessionRef = _getUserSessionsCollection(userId).doc(session.id);
       batch.set(sessionRef, sessionData, SetOptions(merge: true));
 
-      // Sync messages to subcollection
+      // Clear existing messages first to prevent duplicates
       final messagesCollection = _getSessionMessagesCollection(
         userId,
         session.id,
       );
 
-      print(
-        'DEBUG: About to save ${session.messages.length} messages to collection: users/$userId/sessions/${session.id}/messages',
-      ); // Debug
+      // Get existing messages to delete them
+      final existingMessages = await messagesCollection.get();
+      for (final doc in existingMessages.docs) {
+        batch.delete(doc.reference);
+      }
 
+      // Save current messages with consistent naming
       for (int i = 0; i < session.messages.length; i++) {
         final message = session.messages[i];
         final messageData = {
@@ -95,16 +91,13 @@ class ChatSessionService {
         };
 
         final messageRef = messagesCollection.doc('msg_$i');
-        print(
-          'DEBUG: Saving message $i to doc msg_$i: ${message.text.substring(0, math.min(50, message.text.length))}...',
-        ); // Debug
-        batch.set(messageRef, messageData, SetOptions(merge: true));
+        batch.set(
+          messageRef,
+          messageData,
+        ); // Use set without merge to ensure clean save
       }
 
       await batch.commit();
-      print(
-        'DEBUG: Batch commit completed - ${session.messages.length} messages should now be in Firestore',
-      ); // Debug
       _logger.info(
         'Successfully saved session ${session.id} with ${session.messages.length} messages',
       );
@@ -164,68 +157,24 @@ class ChatSessionService {
     DocumentSnapshot? startAfter,
   }) async {
     _logger.info('Loading session history for user $userId (limit: $limit)');
-    print(
-      'DEBUG: getSessionHistory called with userId: $userId, limit: $limit',
-    ); // Debug
 
     try {
-      // Add explicit path debugging
-      final collectionPath = 'users/$userId/sessions';
-      print('DEBUG: Querying collection path: $collectionPath'); // Debug
-
       // Use updatedAt for ordering since it's more likely to exist on all sessions
       Query<Map<String, dynamic>> query = _getUserSessionsCollection(
         userId,
       ).orderBy('updatedAt', descending: true).limit(limit);
 
-      print(
-        'DEBUG: Using updatedAt ordering for more reliable session history',
-      );
-
       if (startAfter != null) {
         query = query.startAfterDocument(startAfter);
       }
 
-      print(
-        'DEBUG: About to execute Firebase query for session history',
-      ); // Debug
       var snapshot = await query.get();
-      print(
-        'DEBUG: Firebase query returned ${snapshot.docs.length} documents',
-      ); // Debug
-
-      // Log all document IDs and basic info for debugging
-      print(
-        'DBG: snapshot.docs (${snapshot.docs.length}): ${snapshot.docs.map((d) => d.id).toList()}',
-      );
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        print(
-          'DBG: ${doc.id} has createdAt: ${data.containsKey('createdAt')}, messageCount: ${data['messageCount']}, topics: ${data['topics']}',
-        );
-      }
-
-      // Temporarily disabled fallback logic since we're testing without orderBy
-      if (snapshot.docs.isEmpty) {
-        print(
-          'DEBUG: No documents found at all - check authentication or collection path',
-        );
-      }
-
-      // Log each document found
-      for (final doc in snapshot.docs) {
-        print('DEBUG: Found document ID: ${doc.id}'); // Debug
-        print('DEBUG: Document data: ${doc.data()}'); // Debug
-      }
 
       final sessions = <ChatSessionSummary>[];
       final sessionsNeedingRepair = <String>[];
 
       for (final doc in snapshot.docs) {
         try {
-          print('DEBUG: Attempting to parse session ${doc.id}'); // Debug
-          print('DEBUG: Raw document data: ${doc.data()}'); // Debug
-
           final data = doc.data();
 
           // Check if session needs repair (missing critical fields)
@@ -235,19 +184,13 @@ class ChatSessionService {
               data['messageCount'] == null;
 
           if (needsRepair) {
-            print('DEBUG: Session ${doc.id} needs metadata repair'); // Debug
             sessionsNeedingRepair.add(doc.id);
           }
 
           final session = ChatSessionSummary.fromFirestore(doc);
           sessions.add(session);
-          print('DEBUG: Successfully parsed session ${doc.id}'); // Debug
         } catch (e, stackTrace) {
           _logger.warning('Error parsing session ${doc.id}: $e');
-          print('DEBUG: PARSE ERROR for session ${doc.id}:'); // Debug
-          print('DEBUG: Error: $e'); // Debug
-          print('DEBUG: Document data: ${doc.data()}'); // Debug
-          print('DEBUG: Stack trace: $stackTrace'); // Debug
 
           // If parsing failed, definitely needs repair
           sessionsNeedingRepair.add(doc.id);
@@ -256,21 +199,13 @@ class ChatSessionService {
 
       // Repair sessions that need it (run in background)
       if (sessionsNeedingRepair.isNotEmpty) {
-        print(
-          'DEBUG: Found ${sessionsNeedingRepair.length} sessions needing repair',
-        );
         _repairSessionsInBackground(userId, sessionsNeedingRepair);
       }
 
       _logger.info('Loaded ${sessions.length} session summaries');
-      print(
-        'DEBUG: Successfully parsed ${sessions.length} session summaries',
-      ); // Debug
       return sessions;
     } catch (e, stackTrace) {
       _logger.severe('Error loading session history: $e', e, stackTrace);
-      print('DEBUG: Error in getSessionHistory: $e'); // Debug
-      print('DEBUG: Stack trace: $stackTrace'); // Debug
       throw ChatSessionException('Failed to load session history: $e');
     }
   }
@@ -575,9 +510,6 @@ class ChatSessionService {
   /// Load a specific chat session from Firestore by token
   Future<ChatSession?> loadSessionByToken(String userId, String token) async {
     _logger.info('Loading session by token: $token for user $userId');
-    print(
-      'DEBUG: ChatSessionService.loadSessionByToken called with token: $token, userId: $userId',
-    ); // Debug
 
     try {
       // Since token is now the session ID, get document directly
@@ -586,34 +518,15 @@ class ChatSessionService {
 
       if (!sessionDoc.exists) {
         _logger.warning('Session with token/ID $token not found');
-        print(
-          'DEBUG: No session found with token/ID $token in Firebase',
-        ); // Debug
         return null;
       }
-      print('DEBUG: Found session document: ${sessionDoc.id}'); // Debug
 
       // Get session messages
-      print(
-        'DEBUG: Querying messages from collection: users/$userId/sessions/${sessionDoc.id}/messages',
-      ); // Debug
       final messagesSnapshot =
           await _getSessionMessagesCollection(
             userId,
             sessionDoc.id,
           ).orderBy('messageIndex').get();
-
-      print(
-        'DEBUG: Messages query returned ${messagesSnapshot.docs.length} documents',
-      ); // Debug
-
-      // Debug each message document found
-      for (final doc in messagesSnapshot.docs) {
-        final data = doc.data();
-        print(
-          'DEBUG: Found message doc ${doc.id}: ${data['text']?.substring(0, math.min(50, data['text']?.length ?? 0)) ?? 'NO TEXT'}...',
-        ); // Debug
-      }
 
       List<ChatMessage> messages =
           messagesSnapshot.docs.map((doc) {
@@ -628,15 +541,9 @@ class ChatSessionService {
 
       // Fallback: check for legacy 'responses' array if no messages in subcollection
       if (messages.isEmpty) {
-        print(
-          'DEBUG: No messages in subcollection, checking for legacy responses array',
-        ); // Debug
         final sessionData = sessionDoc.data();
         if (sessionData?.containsKey('responses') == true) {
           final responses = sessionData!['responses'] as List?;
-          print(
-            'DEBUG: Found legacy responses array with ${responses?.length ?? 0} items',
-          ); // Debug
 
           if (responses != null && responses.isNotEmpty) {
             messages =
@@ -651,9 +558,6 @@ class ChatSessionService {
                             : DateTime.now(),
                   );
                 }).toList();
-            print(
-              'DEBUG: Converted ${messages.length} legacy messages',
-            ); // Debug
           }
         }
       }
@@ -765,9 +669,6 @@ class ChatSessionService {
         _logger.info(
           'Repaired session $sessionId with ${updateData.keys.length} missing fields',
         );
-        print(
-          'DEBUG: Repaired session $sessionId with fields: ${updateData.keys}',
-        );
       } else {
         _logger.info(
           'Session $sessionId metadata is complete, no repair needed',
@@ -816,58 +717,6 @@ class ChatSessionService {
         }
       }
     });
-  }
-
-  /// Add a single message to Firebase immediately
-  Future<void> addMessage({
-    required String userId,
-    required String sessionId,
-    required ChatMessage message,
-  }) async {
-    try {
-      // Create reference to the message document
-      final messagesCollection = _getSessionMessagesCollection(
-        userId,
-        sessionId,
-      );
-
-      // Use timestamp-based ID for natural ordering
-      final messageId = 'msg_${message.timestamp.millisecondsSinceEpoch}';
-      final messageRef = messagesCollection.doc(messageId);
-
-      // Prepare message data
-      final messageData = {
-        'text': message.text,
-        'isUser': message.isUser,
-        'isSystem': message.isSystem,
-        'timestamp': Timestamp.fromDate(message.timestamp),
-        'messageIndex': await _getNextMessageIndex(userId, sessionId),
-      };
-
-      await messageRef.set(messageData);
-
-      print('DEBUG: Immediately persisted message to Firestore: ${messageId}');
-      _logger.info('Message added to session $sessionId');
-    } catch (e, stackTrace) {
-      _logger.severe(
-        'Error adding message to session $sessionId: $e',
-        e,
-        stackTrace,
-      );
-      throw ChatSessionException('Failed to add message: $e');
-    }
-  }
-
-  /// Get the next message index for a session
-  Future<int> _getNextMessageIndex(String userId, String sessionId) async {
-    try {
-      final snapshot =
-          await _getSessionMessagesCollection(userId, sessionId).get();
-      return snapshot.docs.length;
-    } catch (e) {
-      _logger.warning('Error getting message count for session $sessionId: $e');
-      return 0; // Fallback to 0 if count fails
-    }
   }
 }
 

@@ -82,18 +82,26 @@ Return your response in this JSON format:
         return base_prompt
 
     async def _call_openai_for_scoring(self, prompt: str) -> str:
-        """Make OpenAI API call for scoring"""
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an expert educator who provides fair, constructive feedback on student responses. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=300,
-            temperature=0.3,  # Lower temperature for more consistent scoring
-            response_format={"type": "json_object"}  # Force JSON response
-        )
-        return response.choices[0].message.content
+        """Make OpenAI API call for scoring with timeout"""
+        import asyncio
+        
+        try:
+            response = await asyncio.wait_for(
+                self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are an expert educator who provides fair, constructive feedback on student responses. Always respond with valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=300,
+                    temperature=0.3,  # Lower temperature for more consistent scoring
+                    response_format={"type": "json_object"}  # Force JSON response
+                ),
+                timeout=10.0  # 10 second timeout for scoring calls
+            )
+            return response.choices[0].message.content
+        except asyncio.TimeoutError:
+            raise Exception("OpenAI scoring API call timed out after 10 seconds")
 
     def _parse_scoring_response(self, response: str) -> Dict[str, Any]:
         """Parse LLM response into structured format"""

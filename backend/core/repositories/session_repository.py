@@ -142,7 +142,27 @@ class SessionRepository:
         messages = []
         for doc in docs:
             data = doc.to_dict()
-            messages.append(Message(**data))
+            
+            # Handle both new Message format and legacy ChatMessage format
+            if 'questionId' in data and 'questionText' in data:
+                # New backend Message format
+                messages.append(Message(**data))
+            elif 'text' in data and 'isUser' in data:
+                # Legacy frontend ChatMessage format - convert to Message format
+                # Create a Message object with placeholder values for required fields
+                try:
+                    message = Message(
+                        id=doc.id,
+                        questionId='unknown',  # Placeholder for legacy messages
+                        questionText=data.get('text', '') if not data.get('isUser', False) else 'Question text not available',
+                        answerText=data.get('text', '') if data.get('isUser', False) else '',
+                        score=0,  # Default score for legacy messages
+                        timestamp=data.get('timestamp', datetime.now()) if data.get('timestamp') else datetime.now()
+                    )
+                    messages.append(message)
+                except Exception as e:
+                    print(f"Warning: Could not convert legacy message {doc.id}: {e}")
+                    # Continue processing other messages instead of failing completely
         
         return messages
 
