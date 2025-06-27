@@ -148,7 +148,7 @@ async def skip_question(
                 completion_message = (
                     f"🎉 **All done!**\n\n"
                     f"📊 **Final Session Results:**\n"
-                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Questions Answered: {questions_answered}\n"
                     f"• Session Score: {session_score:.1f}/{questions_answered} ({int((session_score * questions_answered) / max(questions_answered, 1) * 100)}%)\n\n"
                     f"🏆 **Overall Topic Performance:**\n"
                     f"• Topic Average: {overall_score:.1f}/5.0 ({overall_percentage}%)\n\n"
@@ -159,7 +159,7 @@ async def skip_question(
                 completion_message = (
                     f"🎉 **Session Complete!**\n\n"
                     f"📊 **Your Results:**\n"
-                    f"• Questions Answered: {questions_answered}/{session_questions}\n"
+                    f"• Questions Answered: {questions_answered}\n"
                     f"• Session Score: {session_score:.1f}/{questions_answered} ({int((session_score * questions_answered) / max(questions_answered, 1) * 100)}%)\n\n"
                     f"Great progress! Your learning has been saved and will help optimize your future study sessions.\n\n"
                     f"Ready for another session? Choose a topic to continue your learning journey!"

@@ -75,10 +75,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Handle token changes when navigating between sessions
     if (widget.sessionToken != oldWidget.sessionToken) {
-      if (widget.sessionToken != null) {
-        _loadSessionByToken(widget.sessionToken!);
-      }
-      // Don't auto-start new sessions when navigating to default chat
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.sessionToken != null) {
+          _loadSessionByToken(widget.sessionToken!);
+        }
+      });
     }
   }
 
@@ -269,8 +270,33 @@ class _ChatScreenState extends State<ChatScreen> {
               // Show normal chat interface
               return Column(
                 children: [
-                  // Chat messages area - no top bar needed
-                  Expanded(child: _buildMessagesArea()),
+                  // Messages list
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount:
+                          chatProvider.messages.length +
+                          (chatProvider.isTyping ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == chatProvider.messages.length &&
+                            chatProvider.isTyping) {
+                          return SmartTypingIndicator(
+                            sessionState: chatProvider.sessionState.toString(),
+                            isGeneratingQuestions:
+                                chatProvider.isGeneratingQuestions,
+                            isProcessingAnswer: chatProvider.isProcessingAnswer,
+                          );
+                        }
+                        return _buildMessageBubble(
+                          chatProvider.messages[index],
+                        );
+                      },
+                    ),
+                  ),
                   // Action buttons for active sessions
                   if (chatProvider.sessionState == SessionState.active)
                     _buildActionButtons(),
@@ -725,9 +751,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
           return Column(
             children: [
-              // Progress indicator for active sessions
-              ChatProgressWidget(),
-
               // Messages list
               Expanded(
                 child: ListView.builder(
@@ -797,7 +820,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       foregroundColor: theme.colorScheme.onSurface,
                       disabledForegroundColor: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.4),
+                          .withOpacity(0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -860,7 +883,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       foregroundColor: theme.colorScheme.error,
                       disabledForegroundColor: theme.colorScheme.error
-                          .withValues(alpha: 0.4),
+                          .withOpacity(0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),

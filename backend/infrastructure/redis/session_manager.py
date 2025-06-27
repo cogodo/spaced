@@ -4,12 +4,14 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from infrastructure.redis.client import get_redis_client
 from core.models import Session
+from core.models.conversation import ConversationState
 
 
 class RedisSessionManager:
     def __init__(self, default_ttl: int = 3600):  # 1 hour default TTL
         self.default_ttl = default_ttl
-        self.key_prefix = "session:"
+        self.session_key_prefix = "session:"
+        self.convo_state_key_prefix = "convo_state:"
 
     async def create_session(self, session_data: Dict[str, Any], ttl: Optional[int] = None) -> str:
         """Create a new session in Redis"""
@@ -20,7 +22,7 @@ class RedisSessionManager:
     async def store_session(self, session_id: str, session_data: Dict[str, Any], ttl: Optional[int] = None) -> None:
         """Store session data in Redis"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         
         # Serialize datetime objects for JSON storage
         serialized_data = self._serialize_datetime_objects(session_data)
@@ -35,7 +37,7 @@ class RedisSessionManager:
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve session data from Redis"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         
         data = await redis_client.get(key)
         if data:
@@ -46,7 +48,7 @@ class RedisSessionManager:
     async def update_session(self, session_id: str, updates: Dict[str, Any], extend_ttl: bool = True) -> bool:
         """Update specific fields in a session"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         
         # Get current session data
         current_data = await self.get_session(session_id)
@@ -68,13 +70,13 @@ class RedisSessionManager:
     async def delete_session(self, session_id: str) -> bool:
         """Delete a session from Redis"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         return bool(await redis_client.delete(key))
 
     async def extend_session_ttl(self, session_id: str, additional_seconds: int = None) -> bool:
         """Extend session TTL"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         
         new_ttl = additional_seconds or self.default_ttl
         return bool(await redis_client.expire(key, new_ttl))
@@ -82,13 +84,13 @@ class RedisSessionManager:
     async def get_session_ttl(self, session_id: str) -> Optional[int]:
         """Get remaining TTL for a session"""
         redis_client = await get_redis_client()
-        key = f"{self.key_prefix}{session_id}"
+        key = f"{self.session_key_prefix}{session_id}"
         return await redis_client.ttl(key)
 
     async def list_user_sessions(self, user_uid: str) -> list:
         """Get all active sessions for a user (expensive operation)"""
         redis_client = await get_redis_client()
-        pattern = f"{self.key_prefix}*"
+        pattern = f"{self.session_key_prefix}*"
         
         sessions = []
         async for key in redis_client.scan_iter(match=pattern):
@@ -96,7 +98,7 @@ class RedisSessionManager:
             if session_data:
                 data = json.loads(session_data)
                 if data.get('userUid') == user_uid:
-                    session_id = key.replace(self.key_prefix, '')
+                    session_id = key.replace(self.session_key_prefix, '')
                     sessions.append({
                         'sessionId': session_id,
                         'data': self._deserialize_datetime_objects(data)
@@ -107,7 +109,7 @@ class RedisSessionManager:
     async def cleanup_expired_sessions(self) -> int:
         """Clean up expired sessions (Redis handles this automatically, but useful for stats)"""
         redis_client = await get_redis_client()
-        pattern = f"{self.key_prefix}*"
+        pattern = f"{self.session_key_prefix}*"
         
         expired_count = 0
         async for key in redis_client.scan_iter(match=pattern):
@@ -183,7 +185,7 @@ class RedisSessionManager:
         data = await self.get_session(session_id)
         if data:
             try:
-                return Session.model_validate_dict(data)
+                return Session.model_validate(data)
             except Exception as e:
                 print(f"Error deserializing session {session_id}: {e}")
                 return None
@@ -202,4 +204,35 @@ class RedisSessionManager:
             'isComplete': True,
             'finalScore': final_score,
             'completedAt': datetime.now()
-        }) 
+        })
+
+    # --- Conversation State Methods ---
+
+    def _get_convo_state_key(self, user_id: str, session_id: str) -> str:
+        """Generate a consistent key for conversation state."""
+        return f"{self.convo_state_key_prefix}{user_id}:{session_id}"
+
+    async def store_conversation_state(self, user_id: str, session_id: str, state: ConversationState, ttl: int = 7200):
+        """Store conversation state in Redis."""
+        redis_client = await get_redis_client()
+        key = self._get_convo_state_key(user_id, session_id)
+        await redis_client.setex(key, ttl, state.model_dump_json())
+
+    async def get_conversation_state(self, user_id: str, session_id: str) -> Optional[ConversationState]:
+        """Retrieve conversation state from Redis."""
+        redis_client = await get_redis_client()
+        key = self._get_convo_state_key(user_id, session_id)
+        data = await redis_client.get(key)
+        if data:
+            try:
+                return ConversationState.model_validate_json(data)
+            except Exception as e:
+                print(f"Error deserializing conversation state for user {user_id}, session {session_id}: {e}")
+                return None
+        return None
+
+    async def delete_conversation_state(self, user_id: str, session_id: str):
+        """Deletes conversation state from Redis."""
+        redis_client = await get_redis_client()
+        key = self._get_convo_state_key(user_id, session_id)
+        await redis_client.delete(key) 

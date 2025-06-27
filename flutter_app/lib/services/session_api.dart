@@ -25,12 +25,14 @@ class StartSessionResponse {
   final String nextQuestion;
   final String message;
   final List<String> topics;
+  final String topicId;
 
   StartSessionResponse({
     required this.sessionId,
     required this.nextQuestion,
     required this.message,
     required this.topics,
+    required this.topicId,
   });
 
   factory StartSessionResponse.fromJson(Map<String, dynamic> json) {
@@ -40,6 +42,20 @@ class StartSessionResponse {
           json['next_question'] as String? ?? json['message'] as String? ?? '',
       message: json['message'] as String? ?? '',
       topics: List<String>.from(json['topics'] as List? ?? []),
+      topicId: json['topic_id'] as String,
+    );
+  }
+}
+
+/// Response model for a conversation turn
+class ConversationTurnResponse {
+  final String botResponse;
+
+  ConversationTurnResponse({required this.botResponse});
+
+  factory ConversationTurnResponse.fromJson(Map<String, dynamic> json) {
+    return ConversationTurnResponse(
+      botResponse: json['bot_response'] as String,
     );
   }
 }
@@ -436,33 +452,26 @@ class SessionApi {
   }
 
   /// Sends the user's answer to continue the study session.
-  ///
-  /// Parameters:
-  /// - [sessionId]: Session ID from [startSession] (must not be empty)
-  /// - [userInput]: User's answer to the current question (must not be empty)
-  ///
-  /// Returns [AnswerResponse] containing either:
-  /// - nextQuestion: Next question if session continues
-  /// - scores: Final topic scores if session is complete
-  /// - message: Formatted message for chat display
-  /// - feedback: Feedback on the answer
-  ///
-  /// Throws [SessionApiException] on API errors or [ArgumentError] on invalid input
-  Future<AnswerResponse> answer({
+  Future<ConversationTurnResponse> handleConversationTurn({
     required String sessionId,
+    required String topicId,
     required String userInput,
   }) async {
     // Input validation
     if (sessionId.trim().isEmpty) {
       throw ArgumentError('sessionId cannot be empty');
     }
+    if (topicId.trim().isEmpty) {
+      throw ArgumentError('topicId cannot be empty');
+    }
     if (userInput.trim().isEmpty) {
       throw ArgumentError('userInput cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/answer');
+    final url = Uri.parse('$baseUrl/api/v1/chat/conversation/turn');
     final payload = {
       'session_id': sessionId.trim(),
+      'topic_id': topicId.trim(),
       'user_input': userInput.trim(),
     };
 
@@ -478,7 +487,7 @@ class SessionApi {
       if (response.statusCode == 200) {
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
-          return AnswerResponse.fromJson(data);
+          return ConversationTurnResponse.fromJson(data);
         } catch (e) {
           throw SessionApiException('Invalid response format: $e');
         }
@@ -500,23 +509,52 @@ class SessionApi {
       } else {
         final errorBody =
             response.body.isNotEmpty ? response.body : 'No error details';
-
-        // Special handling for format specifier errors from backend
-        if (errorBody.contains('Invalid format specifier') ||
-            errorBody.contains('Failed to process answer') ||
-            errorBody.contains('format_spec') ||
-            errorBody.contains('ValueError') ||
-            errorBody.contains('for object of type \'str\'')) {
-          throw SessionApiException(
-            'The backend encountered a formatting error while processing your answer. '
-            'This is usually temporary - please try submitting your answer again. '
-            'If this persists, try using simpler language without special characters.',
-            response.statusCode,
-          );
-        }
-
         throw SessionApiException(
           'Failed to send answer: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
+
+  /// End the current conversation and get analytics
+  Future<Map<String, dynamic>> endConversation({
+    required String sessionId,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError('sessionId cannot be empty');
+    }
+
+    final url = Uri.parse('$baseUrl/api/v1/chat/conversation/end');
+    final payload = {'session_id': sessionId.trim()};
+
+    try {
+      final response = await _sessionBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http
+              .post(url, headers: headers, body: jsonEncode(payload))
+              .timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to end session: $errorBody',
           response.statusCode,
         );
       }

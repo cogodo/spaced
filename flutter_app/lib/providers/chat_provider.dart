@@ -15,8 +15,8 @@ class ChatProvider extends ChangeNotifier {
   ChatSession? _currentSession;
   SessionState _sessionState = SessionState.initial;
   List<ChatMessage> _messages = [];
-  String?
-  _currentSessionId; // Single session ID used for both routing and backend
+  String? _currentSessionId;
+  String? _currentTopicId; // Add topic ID for the new API
   bool _isLoading = false;
   Map<String, int>? _finalScores;
 
@@ -73,6 +73,7 @@ class ChatProvider extends ChangeNotifier {
   SessionState get sessionState => _sessionState;
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   String? get currentSessionId => _currentSessionId;
+  String? get currentTopicId => _currentTopicId; // Add getter
   bool get isLoading => _isLoading;
   Map<String, int>? get finalScores => _finalScores;
   List<ChatSessionSummary> get sessionHistory =>
@@ -198,6 +199,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionState = SessionState.initial;
     _messages = [];
     _currentSessionId = null;
+    _currentTopicId = null; // Reset topic ID
     _isLoading = false;
     _finalScores = null;
     notifyListeners();
@@ -265,7 +267,10 @@ class ChatProvider extends ChangeNotifier {
     );
 
     _currentSessionId = sessionId;
-    _sessionState = SessionState.initial;
+    _currentTopicId = null;
+
+    // Set loading state immediately for UI feedback
+    _sessionState = SessionState.active;
     _messages = [];
     _isLoading = false;
     _finalScores = null;
@@ -334,6 +339,7 @@ class ChatProvider extends ChangeNotifier {
     _messages = [];
     _isLoading = false;
     _finalScores = null;
+    _currentTopicId = null; // Reset topic ID
 
     // Notify listeners for immediate loading state
     notifyListeners();
@@ -354,11 +360,14 @@ class ChatProvider extends ChangeNotifier {
         sessionId: _currentSessionId, // Pass our frontend session ID (now set)
       );
 
+      _currentTopicId = response.topicId; // Store the topic ID
+
       // Create session with frontend session ID (not backend response ID)
       _currentSession = ChatSession.create(
         id: sessionId, // Use frontend-generated session ID
         topics: response.topics.isNotEmpty ? response.topics : [topic.name],
         name: 'New Session - ${_formatTimestamp(now)}',
+        topicId: _currentTopicId, // Pass the topicId
       );
 
       _currentSessionId = sessionId; // Keep consistent with frontend session
@@ -441,12 +450,15 @@ class ChatProvider extends ChangeNotifier {
         sessionId: _currentSessionId, // Pass our frontend session ID
       );
 
+      _currentTopicId = response.topicId; // Store the topic ID
+
       // Use our frontend session ID for consistency
       _sessionState = SessionState.active;
 
       // Update session with actual topics but keep the original token
       _currentSession = _currentSession!.copyWith(
         topics: response.topics,
+        topicId: _currentTopicId, // Store the topic ID
         state: SessionState.active,
         updatedAt: DateTime.now(),
       );
@@ -513,6 +525,7 @@ class ChatProvider extends ChangeNotifier {
       // Set loaded session as current
       _currentSession = session;
       _currentSessionId = session.id;
+      _currentTopicId = session.topicId; // Load the topic ID from the session
       _sessionState = session.state;
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
@@ -552,6 +565,7 @@ class ChatProvider extends ChangeNotifier {
       // Set loaded session as current
       _currentSession = session;
       _currentSessionId = session.id;
+      _currentTopicId = session.topicId; // Load the topic ID from the session
       _sessionState = session.state;
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
@@ -658,27 +672,14 @@ class ChatProvider extends ChangeNotifier {
 
   /// Handle answer input during active session
   Future<void> _handleAnswerInput(String answer) async {
-    if (_currentSessionId == null) {
-      _addAIMessage("Session error: No active session ID. Let's start over.");
+    if (_currentSessionId == null || _currentTopicId == null) {
+      _addAIMessage(
+        "Session error: No active session or topic ID. Let's start over.",
+      );
       _resetSession();
       return;
     }
 
-    // Handle "continue" command for expired sessions
-    final lowerAnswer = answer.toLowerCase().trim();
-    if (lowerAnswer == 'continue' || lowerAnswer == 'new question') {
-      await _handleExpiredSession(answer);
-      return;
-    }
-
-    await _submitAnswerWithRetry(answer);
-  }
-
-  /// Submit answer with automatic retry for format errors
-  Future<void> _submitAnswerWithRetry(
-    String answer, {
-    int retryCount = 0,
-  }) async {
     _setLoadingWithTyping(
       true,
       typingMessage: "Analyzing your response...",
@@ -686,171 +687,18 @@ class ChatProvider extends ChangeNotifier {
     );
 
     try {
-      final response = await _api.answer(
+      final response = await _api.handleConversationTurn(
         sessionId: _currentSessionId!,
+        topicId: _currentTopicId!,
         userInput: answer,
       );
 
-      if (response.isDone) {
-        // Session completed
-        _sessionState = SessionState.completed;
-        _finalScores = response.scores;
-
-        _currentSession = _currentSession!.copyWith(
-          state: SessionState.completed,
-          isCompleted: true,
-          finalScores: response.scores,
-          updatedAt: DateTime.now(),
-        );
-
-        // Use the formatted message from the backend
-        _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores ?? {}),
-        );
-      } else {
-        // Check if we have a next question or message
-        if (response.nextQuestion?.trim().isEmpty == true &&
-            response.message?.trim().isEmpty == true) {
-          // Empty response - show informative message
-          _addAIMessage(
-            "No more questions available for this topic. "
-            "This might happen if:\n\n"
-            "• The topic doesn't have enough questions generated yet\n"
-            "• You've completed all available questions",
-          );
-        } else {
-          // Continue with next question - use the formatted message from backend
-          final nextQuestionText =
-              response.nextQuestion ?? "Question not available";
-          _addAIMessage(
-            response.message ?? "**Next Question:**\n$nextQuestionText",
-          );
-        }
-      }
+      _addAIMessage(response.botResponse);
     } on SessionApiException catch (e) {
-      if (e.statusCode == 404) {
-        // Backend session expired - handle gracefully
-        await _handleExpiredSession(answer);
-      } else if (e.statusCode == 401) {
-        // Authentication issue - user needs to re-authenticate
-        _sessionState = SessionState.error;
-        _addAIMessage(
-          "Authentication expired. Please sign out and sign back in to continue.",
-        );
-      } else if ((e.message.contains('formatting error') ||
-              e.message.contains('Invalid format specifier') ||
-              e.message.contains('for object of type \'str\'')) &&
-          retryCount < 2) {
-        // Auto-retry with basic sanitization only
-        _logger.warning(
-          'Format error detected, retrying with sanitized input (attempt ${retryCount + 1})',
-        );
-
-        final sanitizedAnswer = _basicSanitizeInput(answer);
-        await _submitAnswerWithRetry(
-          sanitizedAnswer,
-          retryCount: retryCount + 1,
-        );
-        return; // Don't execute the rest of the method
-      } else if (e.message.contains('formatting error') ||
-          e.message.contains('Invalid format specifier')) {
-        // Handle backend formatting errors with user-friendly message after retries failed
-        _addAIMessage(
-          "I'm having trouble processing your answer due to a technical issue. "
-          "Please try rephrasing your answer using simpler language.\n\n"
-          "Tips:\n"
-          "• Use basic words and sentences\n"
-          "• Avoid mathematical symbols or special characters\n"
-          "• Keep your response concise\n\n"
-          "You can also type 'new question' to skip to the next question.",
-        );
-      } else {
-        _sessionState = SessionState.error;
-        _addAIMessage("Error: ${e.message}");
-      }
+      _sessionState = SessionState.error;
+      _addAIMessage("Error: ${e.message}");
     } finally {
       _setLoadingWithTyping(false);
-    }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
-  }
-
-  /// Basic sanitization for retry attempts - less aggressive than before
-  String _basicSanitizeInput(String input) {
-    return input
-        .replaceAll(
-          RegExp(r'[{}%]'),
-          '',
-        ) // Remove only problematic format characters
-        .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
-        .trim();
-  }
-
-  /// Handle expired backend sessions gracefully
-  Future<void> _handleExpiredSession(String answer) async {
-    _logger.info('Backend session expired, attempting to continue gracefully');
-
-    try {
-      // If we have topics from the current session, restart the backend session
-      if (_currentSession != null && _currentSession!.topics.isNotEmpty) {
-        // Restart the backend session with existing topics
-        final response = await _api.startSession(
-          topics: _currentSession!.topics,
-          maxTopics: _maxTopics,
-          maxQuestions: _maxQuestions,
-          sessionType: 'custom_topics',
-          sessionId: _currentSessionId,
-        );
-
-        // Try to process the user's answer directly instead of starting from the beginning
-        try {
-          final continueResponse = await _api.answer(
-            sessionId: _currentSessionId!,
-            userInput: answer,
-          );
-
-          if (continueResponse.isDone) {
-            // Session completed
-            _sessionState = SessionState.completed;
-            _finalScores = continueResponse.scores;
-
-            _currentSession = _currentSession!.copyWith(
-              state: SessionState.completed,
-              isCompleted: true,
-              finalScores: continueResponse.scores,
-              updatedAt: DateTime.now(),
-            );
-
-            _addAIMessage(
-              continueResponse.message ??
-                  _buildCompletionMessage(continueResponse.scores ?? {}),
-            );
-          } else {
-            // Continue with next question
-            final nextQuestionText =
-                continueResponse.nextQuestion ?? "Question not available";
-            _addAIMessage(
-              continueResponse.message ??
-                  "**Next Question:**\n$nextQuestionText",
-            );
-          }
-        } catch (e) {
-          // If answer processing fails, show the first question from the restarted session
-          _logger.warning(
-            'Failed to process answer after restart, showing first question: $e',
-          );
-          _addAIMessage(response.message);
-        }
-      } else {
-        // No topics available, session expired
-        _addAIMessage("Session expired. No topic information available.");
-        _sessionState = SessionState.error;
-      }
-    } catch (e) {
-      _logger.severe('Failed to handle expired session: $e');
-      _addAIMessage("Error reconnecting session: ${e.toString()}");
-      _sessionState = SessionState.error;
     }
 
     _updateCurrentSession();
@@ -996,6 +844,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionState = SessionState.initial;
     _messages = [];
     _currentSessionId = null;
+    _currentTopicId = null; // Reset topic ID
     _isLoading = false;
     _finalScores = null;
     _sessionHistory = [];
@@ -1065,6 +914,7 @@ class ChatProvider extends ChangeNotifier {
       if (wasCurrentSession) {
         _currentSession = null;
         _currentSessionId = null;
+        _currentTopicId = null; // Reset topic ID
         _sessionState = SessionState.initial;
         _messages = [];
         _finalScores = null;
@@ -1155,6 +1005,7 @@ class ChatProvider extends ChangeNotifier {
   void _resetSession() {
     _sessionState = SessionState.initial;
     _currentSessionId = null;
+    _currentTopicId = null; // Reset topic ID
     _finalScores = null;
     // Note: We keep _currentSession and _messages for persistence
     notifyListeners();
@@ -1222,61 +1073,6 @@ class ChatProvider extends ChangeNotifier {
     await handleTopicsInput(topics);
   }
 
-  /// Request a new question when encountering errors
-  Future<void> requestNewQuestion() async {
-    if (_currentSessionId == null) {
-      _addAIMessage("Session error: No active session ID. Let's start over.");
-      _resetSession();
-      return;
-    }
-
-    _setLoadingWithTyping(
-      true,
-      typingMessage: "Getting a new question...",
-      generatingQuestions: true,
-    );
-
-    try {
-      // Try to get a new question by sending a simple "new question" request
-      final response = await _api.answer(
-        sessionId: _currentSessionId!,
-        userInput: "new question",
-      );
-
-      if (response.isDone) {
-        // Session completed
-        _sessionState = SessionState.completed;
-        _finalScores = response.scores;
-
-        _currentSession = _currentSession!.copyWith(
-          state: SessionState.completed,
-          isCompleted: true,
-          finalScores: response.scores,
-          updatedAt: DateTime.now(),
-        );
-
-        _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores ?? {}),
-        );
-      } else {
-        // Show the new question
-        final nextQuestionText =
-            response.nextQuestion ?? "Question not available";
-        _addAIMessage(
-          response.message ?? "**New Question:**\n$nextQuestionText",
-        );
-      }
-    } catch (e) {
-      // If getting a new question fails, restart the session
-      await _handleExpiredSession("continue");
-    } finally {
-      _setLoadingWithTyping(false);
-    }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
-  }
-
   /// Skip the current question
   Future<void> skipCurrentQuestion() async {
     if (_currentSessionId == null) {
@@ -1289,31 +1085,24 @@ class ChatProvider extends ChangeNotifier {
     try {
       final response = await _api.skipQuestion(sessionId: _currentSessionId!);
 
+      // Process the response similarly to how answers are handled
       if (response.isDone) {
-        // Session completed
         _sessionState = SessionState.completed;
         _finalScores = response.scores;
-
         _currentSession = _currentSession!.copyWith(
           state: SessionState.completed,
           isCompleted: true,
-          finalScores: response.scores,
+          finalScores: _finalScores,
           updatedAt: DateTime.now(),
         );
-
-        _addAIMessage(
-          response.message ?? _buildCompletionMessage(response.scores ?? {}),
-        );
+        if (response.message != null) {
+          _addAIMessage(response.message!);
+        }
       } else {
-        // Continue with next question
-        final nextQuestionText =
-            response.nextQuestion ?? "Question not available";
-        _addAIMessage(
-          response.message ?? "**Next Question:**\n$nextQuestionText",
-        );
+        if (response.message != null) {
+          _addAIMessage(response.message!);
+        }
       }
-
-      _logger.info('Question skipped successfully');
     } catch (e) {
       _logger.severe('Error skipping question: $e');
       if (e is SessionApiException) {
@@ -1339,16 +1128,16 @@ class ChatProvider extends ChangeNotifier {
     _setLoadingWithTyping(true, typingMessage: "Ending session...");
 
     try {
-      final result = await _api.endSession(sessionId: _currentSessionId!);
+      final result = await _api.endConversation(sessionId: _currentSessionId!);
 
       // Mark session as completed
       _sessionState = SessionState.completed;
 
       // Build completion scores from result
-      final finalScore = result['finalScore'] as double? ?? 0.0;
-      final questionsAnswered = result['questionsAnswered'] as int? ?? 0;
-      final totalQuestions = result['totalQuestions'] as int? ?? 1;
-      final percentageScore = (finalScore * 20).round().clamp(0, 100);
+      final finalScore = (result['final_score'] as num?)?.toDouble() ?? 0.0;
+      final questionsAnswered = result['questions_answered'] as int? ?? 0;
+      final totalQuestions = result['total_questions'] as int? ?? 1;
+      final percentageScore = result['percentage_score'] as int? ?? 0;
 
       _finalScores = {'overall': percentageScore};
 
@@ -1363,7 +1152,7 @@ class ChatProvider extends ChangeNotifier {
       final completionMessage =
           ("🏁 **Session Ended Early**\n\n"
               "📊 **Your Results:**\n"
-              "• Questions Answered: $questionsAnswered/$totalQuestions\n"
+              "• Questions Answered: $questionsAnswered\n"
               "• Average Score: ${finalScore.toStringAsFixed(1)}/5.0\n"
               "• Percentage: $percentageScore%\n\n"
               "Your progress has been saved and will help optimize your future learning sessions.");
