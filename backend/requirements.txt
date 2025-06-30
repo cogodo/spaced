@@ -59,3 +59,5 @@ uvicorn==0.34.3
 redis==6.2.0
 psutil==7.0.0
 tenacity==8.5.0
+ruff==0.5.5
+pre-commit==3.7.1

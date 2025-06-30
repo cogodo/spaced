@@ -1,5 +1,6 @@
 import time
 from typing import Dict, List, Optional
+
 from core.models import Topic
 
 
@@ -30,4 +31,4 @@ class TopicCache:
     def clear(self) -> None:
         """Clear entire cache"""
         self._cache.clear()
-        self._expires.clear() 
+        self._expires.clear()

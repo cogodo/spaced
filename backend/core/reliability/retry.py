@@ -1,15 +1,14 @@
 import time
-import asyncio
-from typing import Callable, Any, Optional, Type, Tuple
 from dataclasses import dataclass
 from functools import wraps
+from typing import Callable, Optional, Tuple, Type
+
 from tenacity import (
+    RetryError,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    RetryError,
-    before_sleep_log,
 )
 
 from core.monitoring.logger import get_logger
@@ -21,6 +20,7 @@ logger = get_logger("retry")
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior"""
+
     max_attempts: int = 3
     base_delay: float = 1.0  # Corresponds to 'multiplier' in tenacity
     max_delay: float = 60.0
@@ -31,6 +31,7 @@ class RetryConfig:
 
 class RetryExhaustedError(Exception):
     """Raised when all retry attempts have been exhausted"""
+
     def __init__(self, attempts: int, last_exception: Exception):
         self.attempts = attempts
         self.last_exception = last_exception
@@ -42,6 +43,7 @@ class RetryExhaustedError(Exception):
 
 def _create_before_sleep_callback(func_name: str, max_attempts: int):
     """Factory to create a before_sleep callback for logging."""
+
     def log_before_sleep(retry_state):
         """Callback to log before sleeping."""
         attempt = retry_state.attempt_number
@@ -50,8 +52,7 @@ def _create_before_sleep_callback(func_name: str, max_attempts: int):
         error_message = str(retry_state.outcome.exception())
 
         logger.warning(
-            f"Function '{func_name}' failed on attempt {attempt}, "
-            f"retrying in {delay:.2f}s",
+            f"Function '{func_name}' failed on attempt {attempt}, " f"retrying in {delay:.2f}s",
             function=func_name,
             attempt=attempt,
             max_attempts=max_attempts,
@@ -59,6 +60,7 @@ def _create_before_sleep_callback(func_name: str, max_attempts: int):
             error_type=error_type,
             error_message=error_message,
         )
+
     return log_before_sleep
 
 
@@ -86,17 +88,17 @@ def retry_with_backoff(config: Optional[RetryConfig] = None):
                 ),
                 retry=retry_if_exception_type(config.retryable_exceptions),
                 before_sleep=_create_before_sleep_callback(func_name, config.max_attempts),
-                reraise=True, # Reraise the last exception
+                reraise=True,  # Reraise the last exception
             )
 
             try:
                 # Apply the decorator
                 decorated_func = tenacity_decorator(func)
                 result = decorated_func(*args, **kwargs)
-                
+
                 # Success metrics
                 duration = time.time() - start_time
-                attempt = decorated_func.retry.statistics.get('attempt_number', 1)
+                attempt = decorated_func.retry.statistics.get("attempt_number", 1)
                 observe_histogram(
                     "retry_function_duration_seconds",
                     duration,
@@ -112,16 +114,20 @@ def retry_with_backoff(config: Optional[RetryConfig] = None):
             except RetryError as e:
                 increment_counter("retry_exhausted", {"function": func_name})
                 raise RetryExhaustedError(config.max_attempts, e.last_attempt.exception()) from e
-            
+
             except Exception as e:
                 # Non-retryable exception
                 increment_counter("retry_non_retryable_error", {"function": func_name})
-                logger.error(f"Function '{func_name}' failed with non-retryable exception",
-                             function=func_name,
-                             error_type=type(e).__name__,
-                             error_message=str(e))
+                logger.error(
+                    f"Function '{func_name}' failed with non-retryable exception",
+                    function=func_name,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
                 raise
+
         return wrapper
+
     return decorator
 
 
@@ -156,10 +162,10 @@ def async_retry_with_backoff(config: Optional[RetryConfig] = None):
                 # Apply the decorator
                 decorated_func = tenacity_decorator(func)
                 result = await decorated_func(*args, **kwargs)
-                
+
                 # Success metrics
                 duration = time.time() - start_time
-                attempt = decorated_func.retry.statistics.get('attempt_number', 1)
+                attempt = decorated_func.retry.statistics.get("attempt_number", 1)
                 observe_histogram(
                     "async_retry_function_duration_seconds",
                     duration,
@@ -179,14 +185,19 @@ def async_retry_with_backoff(config: Optional[RetryConfig] = None):
             except Exception as e:
                 # Non-retryable exception
                 increment_counter("async_retry_non_retryable_error", {"function": func_name})
-                logger.error(f"Async function '{func_name}' failed with non-retryable exception",
-                             function=func_name,
-                             error_type=type(e).__name__,
-                             error_message=str(e))
+                logger.error(
+                    f"Async function '{func_name}' failed with non-retryable exception",
+                    function=func_name,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
                 raise
+
         return wrapper
+
     return decorator
+
 
 # The custom context manager is removed as 'tenacity' provides a more robust way
 # of handling retries via decorators. If manual retry logic is strictly needed,
-# tenacity's 'Retrying' object can be used in a loop. 
+# tenacity's 'Retrying' object can be used in a loop.

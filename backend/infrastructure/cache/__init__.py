@@ -1,3 +1,3 @@
 from .topic_cache import TopicCache
 
-__all__ = ["TopicCache"] 
+__all__ = ["TopicCache"]

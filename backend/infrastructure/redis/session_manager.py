@@ -1,10 +1,11 @@
 import json
 import uuid
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
-from infrastructure.redis.client import get_redis_client
+from datetime import datetime
+from typing import Any, Dict, Optional
+
 from core.models import Session
 from core.models.conversation import ConversationState
+from infrastructure.redis.client import get_redis_client
 
 
 class RedisSessionManager:
@@ -23,22 +24,18 @@ class RedisSessionManager:
         """Store session data in Redis"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
-        
+
         # Serialize datetime objects for JSON storage
         serialized_data = self._serialize_datetime_objects(session_data)
-        
+
         # Store in Redis with TTL
-        await redis_client.setex(
-            key, 
-            ttl or self.default_ttl, 
-            json.dumps(serialized_data)
-        )
+        await redis_client.setex(key, ttl or self.default_ttl, json.dumps(serialized_data))
 
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve session data from Redis"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
-        
+
         data = await redis_client.get(key)
         if data:
             parsed_data = json.loads(data)
@@ -49,22 +46,22 @@ class RedisSessionManager:
         """Update specific fields in a session"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
-        
+
         # Get current session data
         current_data = await self.get_session(session_id)
         if not current_data:
             return False
-        
+
         # Apply updates
         current_data.update(updates)
-        
+
         # Store updated data
         ttl = await redis_client.ttl(key) if extend_ttl else None
         if ttl and ttl > 0:
             await self.store_session(session_id, current_data, ttl)
         else:
             await self.store_session(session_id, current_data)
-        
+
         return True
 
     async def delete_session(self, session_id: str) -> bool:
@@ -77,7 +74,7 @@ class RedisSessionManager:
         """Extend session TTL"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
-        
+
         new_ttl = additional_seconds or self.default_ttl
         return bool(await redis_client.expire(key, new_ttl))
 
@@ -91,32 +88,37 @@ class RedisSessionManager:
         """Get all active sessions for a user (expensive operation)"""
         redis_client = await get_redis_client()
         pattern = f"{self.session_key_prefix}*"
-        
+
         sessions = []
         async for key in redis_client.scan_iter(match=pattern):
             session_data = await redis_client.get(key)
             if session_data:
                 data = json.loads(session_data)
-                if data.get('userUid') == user_uid:
-                    session_id = key.replace(self.session_key_prefix, '')
-                    sessions.append({
-                        'sessionId': session_id,
-                        'data': self._deserialize_datetime_objects(data)
-                    })
-        
+                if data.get("userUid") == user_uid:
+                    session_id = key.replace(self.session_key_prefix, "")
+                    sessions.append(
+                        {
+                            "sessionId": session_id,
+                            "data": self._deserialize_datetime_objects(data),
+                        }
+                    )
+
         return sessions
 
     async def cleanup_expired_sessions(self) -> int:
-        """Clean up expired sessions (Redis handles this automatically, but useful for stats)"""
+        """
+        Clean up expired sessions (Redis handles this automatically, but useful
+        for stats)
+        """
         redis_client = await get_redis_client()
         pattern = f"{self.session_key_prefix}*"
-        
+
         expired_count = 0
         async for key in redis_client.scan_iter(match=pattern):
             ttl = await redis_client.ttl(key)
             if ttl == -2:  # Key doesn't exist (expired)
                 expired_count += 1
-        
+
         return expired_count
 
     def _serialize_datetime_objects(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,15 +132,15 @@ class RedisSessionManager:
         """Recursively serialize datetime values, including Firestore timestamps"""
         if isinstance(value, datetime):
             return value.isoformat()
-        elif hasattr(value, 'to_datetime'):  # Firestore DatetimeWithNanoseconds
+        elif hasattr(value, "to_datetime"):  # Firestore DatetimeWithNanoseconds
             return value.to_datetime().isoformat()
-        elif hasattr(value, 'ToDatetime'):  # Alternative Firestore timestamp method
+        elif hasattr(value, "ToDatetime"):  # Alternative Firestore timestamp method
             return value.ToDatetime().isoformat()
         elif isinstance(value, list):
             return [self._serialize_value(item) for item in value]
         elif isinstance(value, dict):
             return {k: self._serialize_value(v) for k, v in value.items()}
-        elif hasattr(value, 'dict'):  # Pydantic models
+        elif hasattr(value, "dict"):  # Pydantic models
             # Recursively serialize the dict to handle nested timestamps
             return self._serialize_value(value.dict())
         else:
@@ -174,7 +176,7 @@ class RedisSessionManager:
             return False
 
     # Session-specific helper methods for learning chatbot
-    
+
     async def store_learning_session(self, session: Session) -> str:
         """Store a learning session specifically"""
         session_data = session.dict()
@@ -193,18 +195,24 @@ class RedisSessionManager:
 
     async def update_session_progress(self, session_id: str, question_index: int, responses: list) -> bool:
         """Update session progress"""
-        return await self.update_session(session_id, {
-            'questionIndex': question_index,
-            'responses': [r.dict() if hasattr(r, 'dict') else r for r in responses]
-        })
+        return await self.update_session(
+            session_id,
+            {
+                "questionIndex": question_index,
+                "responses": [r.dict() if hasattr(r, "dict") else r for r in responses],
+            },
+        )
 
     async def mark_session_complete(self, session_id: str, final_score: float) -> bool:
         """Mark session as complete"""
-        return await self.update_session(session_id, {
-            'isComplete': True,
-            'finalScore': final_score,
-            'completedAt': datetime.now()
-        })
+        return await self.update_session(
+            session_id,
+            {
+                "isComplete": True,
+                "finalScore": final_score,
+                "completedAt": datetime.now(),
+            },
+        )
 
     # --- Conversation State Methods ---
 
@@ -222,17 +230,21 @@ class RedisSessionManager:
         """Retrieve conversation state from Redis."""
         redis_client = await get_redis_client()
         key = self._get_convo_state_key(user_id, session_id)
-        data = await redis_client.get(key)
-        if data:
-            try:
-                return ConversationState.model_validate_json(data)
-            except Exception as e:
-                print(f"Error deserializing conversation state for user {user_id}, session {session_id}: {e}")
-                return None
-        return None
+        try:
+            state_json = await redis_client.get(key)
+            if state_json:
+                state_dict = json.loads(state_json)
+                return ConversationState(**state_dict)
+            return None
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
+            return None
+        except Exception as e:
+            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
+            return None
 
     async def delete_conversation_state(self, user_id: str, session_id: str):
         """Deletes conversation state from Redis."""
         redis_client = await get_redis_client()
         key = self._get_convo_state_key(user_id, session_id)
-        await redis_client.delete(key) 
+        await redis_client.delete(key)
