@@ -14,24 +14,12 @@ class Settings(BaseSettings):
     host: str = Field("0.0.0.0", env="HOST")
     port: int = Field(8000, env="PORT")
 
-    # Firebase Configuration
-    firebase_service_account_path: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_PATH")
+    # API prefix
+    api_prefix: str = ""
+
+    # Firebase
     firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
     firebase_project_id: str = Field(..., env="FIREBASE_PROJECT_ID")
-    firebase_private_key_id: str = Field(..., env="FIREBASE_PRIVATE_KEY_ID")
-    # Replace newlines with actual newline characters for the private key
-    firebase_private_key: str = Field(..., env="FIREBASE_PRIVATE_KEY")
-    firebase_client_email: str = Field(..., env="FIREBASE_CLIENT_EMAIL")
-    firebase_client_id: str = Field(..., env="FIREBASE_CLIENT_ID")
-    firebase_auth_uri: str = Field("https://accounts.google.com/o/oauth2/auth", env="FIREBASE_AUTH_URI")
-    firebase_token_uri: str = Field("https://oauth2.googleapis.com/token", env="FIREBASE_TOKEN_URI")
-    firebase_auth_provider_cert_url: str = Field(
-        "https://www.googleapis.com/oauth2/v1/certs", env="FIREBASE_AUTH_PROVIDER_CERT_URL"
-    )
-    firebase_client_cert_url: str = Field(..., env="FIREBASE_CLIENT_CERT_URL")
-
-    # OpenAI Configuration
-    openai_api_key: str = Field(env="OPENAI_API_KEY")
 
     # Redis Configuration (using REDIS_URL from Render)
     redis_url: str = Field(env="REDIS_URL")
@@ -51,8 +39,6 @@ class Settings(BaseSettings):
         ],
         env="CORS_ORIGINS",
     )
-
-    api_prefix: str = ""
 
     @property
     def is_development(self) -> bool:
