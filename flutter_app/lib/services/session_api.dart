@@ -389,7 +389,7 @@ class SessionApi {
       );
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/start_session');
+    final url = Uri.parse('$baseUrl/chat/start_session');
 
     // Get current user UID for the request
     final user = FirebaseAuth.instance.currentUser;
@@ -468,7 +468,7 @@ class SessionApi {
       throw ArgumentError('userInput cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/conversation/turn');
+    final url = Uri.parse('$baseUrl/chat/conversation/turn');
     final payload = {
       'session_id': sessionId.trim(),
       'topic_id': topicId.trim(),
@@ -532,7 +532,7 @@ class SessionApi {
       throw ArgumentError('sessionId cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/chat/conversation/end');
+    final url = Uri.parse('$baseUrl/chat/conversation/end');
     final payload = {'session_id': sessionId.trim()};
 
     try {
@@ -575,7 +575,7 @@ class SessionApi {
       throw ArgumentError('sessionId cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/sessions/${sessionId.trim()}/skip');
+    final url = Uri.parse('$baseUrl/sessions/${sessionId.trim()}/skip');
 
     try {
       final response = await _sessionBreaker.execute(() async {
@@ -626,7 +626,7 @@ class SessionApi {
       throw ArgumentError('sessionId cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/sessions/${sessionId.trim()}/end');
+    final url = Uri.parse('$baseUrl/sessions/${sessionId.trim()}/end');
 
     try {
       final response = await _sessionBreaker.execute(() async {
@@ -724,7 +724,7 @@ class SessionApi {
       throw ArgumentError('userId cannot be empty');
     }
 
-    final url = Uri.parse('$baseUrl/api/v1/topics/${userId.trim()}/due-today');
+    final url = Uri.parse('$baseUrl/topics/${userId.trim()}/due-today');
 
     try {
       final response = await _sessionBreaker.execute(() async {

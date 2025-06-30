@@ -17,7 +17,16 @@ class Settings(BaseSettings):
     # Firebase Configuration
     firebase_service_account_path: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_PATH")
     firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
-    firebase_project_id: str = Field(env="FIREBASE_PROJECT_ID")
+    firebase_project_id: str = Field(..., env="FIREBASE_PROJECT_ID")
+    firebase_private_key_id: str = Field(..., env="FIREBASE_PRIVATE_KEY_ID")
+    # Replace newlines with actual newline characters for the private key
+    firebase_private_key: str = Field(..., env="FIREBASE_PRIVATE_KEY")
+    firebase_client_email: str = Field(..., env="FIREBASE_CLIENT_EMAIL")
+    firebase_client_id: str = Field(..., env="FIREBASE_CLIENT_ID")
+    firebase_auth_uri: str = Field("https://accounts.google.com/o/oauth2/auth", env="FIREBASE_AUTH_URI")
+    firebase_token_uri: str = Field("https://oauth2.googleapis.com/token", env="FIREBASE_TOKEN_URI")
+    firebase_auth_provider_cert_url: str = Field("https://www.googleapis.com/oauth2/v1/certs", env="FIREBASE_AUTH_PROVIDER_CERT_URL")
+    firebase_client_cert_url: str = Field(..., env="FIREBASE_CLIENT_CERT_URL")
     
     # OpenAI Configuration
     openai_api_key: str = Field(env="OPENAI_API_KEY")
@@ -29,20 +38,26 @@ class Settings(BaseSettings):
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
     
     # API Configuration
-    cors_origins: List[str] = Field(
-        [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
-            "http://10.0.2.2:3000",
-            "http://10.0.2.2:8080",
-            "https://getspaced.app",
-            "https://api.getspaced.app"
-        ],
-        env="CORS_ORIGINS"
-    )
-    api_prefix: str = "/v1/api"
+    @property
+    def cors_origins(self) -> List[str]:
+        if self.is_production:
+            return [
+                "https://getspaced.app",
+                "https://api.getspaced.app"
+            ]
+        else:
+            return [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                "http://10.0.2.2:3000",
+                "http://10.0.2.2:8080",
+                "https://getspaced.app",
+                "https://api.getspaced.app"
+            ]
+            
+    api_prefix: str = ""
     
     @property
     def is_development(self) -> bool:
