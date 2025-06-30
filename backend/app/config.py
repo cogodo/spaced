@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     firebase_auth_uri: str = Field("https://accounts.google.com/o/oauth2/auth", env="FIREBASE_AUTH_URI")
     firebase_token_uri: str = Field("https://oauth2.googleapis.com/token", env="FIREBASE_TOKEN_URI")
     firebase_auth_provider_cert_url: str = Field(
-        "https://www.googleapis.com/oauth2/v1/certs",
-        env="FIREBASE_AUTH_PROVIDER_CERT_URL",
+        "https://www.googleapis.com/oauth2/v1/certs", env="FIREBASE_AUTH_PROVIDER_CERT_URL"
     )
     firebase_client_cert_url: str = Field(..., env="FIREBASE_CLIENT_CERT_URL")
 
@@ -42,26 +41,18 @@ class Settings(BaseSettings):
 
     # CORS settings
     cors_origins: List[str] = Field(
-        default=["https://getspaced.app", "https://api.getspaced.app"],
+        default=[
+            "https://getspaced.app",
+            "https://api.getspaced.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+        ],
         env="CORS_ORIGINS",
     )
 
     api_prefix: str = ""
-
-    @model_validator(mode="after")
-    def set_production_cors(self) -> "Settings":
-        """Set production CORS origins if in production and not otherwise set."""
-        if self.is_production and not self.cors_origins:
-            self.cors_origins = ["https://getspaced.app", "https://api.getspaced.app"]
-        elif not self.cors_origins:
-            # Default for development if not set
-            self.cors_origins = [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:8080",
-                "http://127.0.0.1:8080",
-            ]
-        return self
 
     @property
     def is_development(self) -> bool:
