@@ -30,17 +30,19 @@ class Settings(BaseSettings):
     
     # API Configuration
     cors_origins: List[str] = Field(
-        default=[
+        [
             "http://localhost:3000",
-            "http://127.0.0.1:3000", 
+            "http://127.0.0.1:3000",
             "http://localhost:8080",
             "http://127.0.0.1:8080",
             "http://10.0.2.2:3000",
-            "http://10.0.2.2:8080"
-        ], 
+            "http://10.0.2.2:8080",
+            "https://getspaced.app",
+            "https://api.getspaced.app"
+        ],
         env="CORS_ORIGINS"
     )
-    api_prefix: str = Field("/api/v1", env="API_PREFIX")
+    api_prefix: str = "/v1/api"
     
     @property
     def is_development(self) -> bool:
@@ -68,6 +70,11 @@ class Settings(BaseSettings):
     
     # External Service URLs (example)
     # external_service_url: str = Field("https://api.example.com", env="EXTERNAL_SERVICE_URL")
+    
+    @property
+    def is_production(self) -> bool:
+        """Check if we're in production mode"""
+        return not self.is_development
     
     model_config = {
         "env_file": ".env",

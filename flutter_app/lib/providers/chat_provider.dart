@@ -58,7 +58,7 @@ class ChatProvider extends ChangeNotifier {
     backendUrl = const String.fromEnvironment(
       'BACKEND_URL',
       defaultValue:
-          'http://localhost:8000', // Default to localhost for development
+          'https://api.getspaced.app/v1', // Default to production for safety
     );
 
     // Log the backend URL for debugging

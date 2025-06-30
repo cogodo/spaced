@@ -55,7 +55,7 @@ jobs:
         run: |
           cd flutter_app
           # Build with basic performance optimizations and production backend
-          flutter build web --release --tree-shake-icons --dart-define=BACKEND_URL=https://spaced-x2o1.onrender.com
+          flutter build web --release --tree-shake-icons --dart-define=BACKEND_URL=https://api.getspaced.app/v1
           
       - name: Verify build output
         run: |

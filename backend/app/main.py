@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from api.v1.router import api_router
+from api.health import router as health_router
 from infrastructure.firebase import initialize_firebase
 from infrastructure.redis import initialize_redis, close_redis
 
@@ -52,11 +53,7 @@ def create_app() -> FastAPI:
     
     # Include API routes
     app.include_router(api_router, prefix=settings.api_prefix)
-    
-    # Health check endpoint
-    @app.get("/healthz")
-    async def health_check():
-        return {"status": "healthy", "version": "1.0.0"}
+    app.include_router(health_router, tags=["health"])
     
     return app
 
