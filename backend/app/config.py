@@ -2,7 +2,7 @@ import os
 import json
 from typing import Optional, List
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -38,22 +38,27 @@ class Settings(BaseSettings):
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
     
     # CORS settings
-    cors_origins: List[str] = Field(default_factory=list, env="CORS_ORIGINS")
+    cors_origins: List[str] = Field(default_factory=list, description="List of allowed CORS origins")
     
-    @field_validator('cors_origins', mode='before')
-    @classmethod
-    def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',')]
-        if not v:
-            # Default to production origins if not set
-            return [
+    api_prefix: str = ""
+    
+    @model_validator(mode='after')
+    def set_production_cors(self) -> 'Settings':
+        """Set production CORS origins if in production and not otherwise set."""
+        if self.is_production and not self.cors_origins:
+            self.cors_origins = [
                 "https://getspaced.app",
                 "https://api.getspaced.app"
             ]
-        return v
-    
-    api_prefix: str = ""
+        elif not self.cors_origins:
+            # Default for development if not set
+            self.cors_origins = [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+            ]
+        return self
     
     @property
     def is_development(self) -> bool:
