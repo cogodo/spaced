@@ -37,26 +37,22 @@ class Settings(BaseSettings):
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
     
-    # API Configuration
-    @property
-    def cors_origins(self) -> List[str]:
-        if self.is_production:
+    # CORS settings
+    cors_origins: List[str] = Field(default_factory=list, env="CORS_ORIGINS")
+    
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(',')]
+        if not v:
+            # Default to production origins if not set
             return [
                 "https://getspaced.app",
                 "https://api.getspaced.app"
             ]
-        else:
-            return [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:8080",
-                "http://127.0.0.1:8080",
-                "http://10.0.2.2:3000",
-                "http://10.0.2.2:8080",
-                "https://getspaced.app",
-                "https://api.getspaced.app"
-            ]
-            
+        return v
+    
     api_prefix: str = ""
     
     @property
@@ -70,21 +66,6 @@ class Settings(BaseSettings):
     def environment(self) -> str:
         """Get environment name based on DEVELOPMENT_MODE"""
         return "development" if self.is_development else "production"
-    
-    @field_validator('cors_origins', mode='before')
-    @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from JSON string or return as-is if already a list"""
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                # If not valid JSON, treat as single origin
-                return [v]
-        return v
-    
-    # External Service URLs (example)
-    # external_service_url: str = Field("https://api.example.com", env="EXTERNAL_SERVICE_URL")
     
     @property
     def is_production(self) -> bool:
@@ -102,4 +83,5 @@ settings = Settings()
 
 def get_settings() -> Settings:
     """Get the application settings"""
+    return settings 
     return settings 
