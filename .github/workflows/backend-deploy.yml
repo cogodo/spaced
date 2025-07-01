@@ -1,0 +1,60 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            # Navigate to your app directory
+            # cd /path/to/your/app
+            
+            # Pull the latest changes from the staging branch
+            # git pull origin staging
+            
+            # Run your bootstrap/restart script
+            # For example:
+            # bash ~/bootstrap.sh
+            
+            echo "Deployment to staging complete!"
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            # Navigate to your app directory
+            # cd /path/to/your/app
+            
+            # Pull the latest changes from the main branch
+            # git pull origin main
+            
+            # Run your bootstrap/restart script
+            # For example:
+            # bash ~/bootstrap.sh
+
+            echo "Deployment to production complete!" 
