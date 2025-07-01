@@ -3,8 +3,12 @@ from typing import Any, Dict, Optional
 from openai import AsyncOpenAI
 
 from app.config import settings
-from core.models.conversation import ConversationState, LLMStateUpdate
-from core.models.convo_state import LLMResponse, Turn
+from core.models.conversation import (
+    ConversationState,
+    LLMResponse,
+    LLMStateUpdate,
+    Turn,
+)
 from core.repositories.question_repository import QuestionRepository
 from core.repositories.topic_repository import TopicRepository
 from core.services.question_service import QuestionService
