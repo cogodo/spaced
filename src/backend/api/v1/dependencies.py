@@ -1,3 +1,4 @@
+import firebase_admin
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -17,6 +18,14 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """Validate Firebase JWT token and return user info"""
+
+    # First, check if Firebase was initialized correctly.
+    # If not, the server is misconfigured and cannot serve any authenticated requests.
+    if firebase_admin._DEFAULT_APP_NAME not in firebase_admin._apps:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase is not initialized on the server. Please check server configuration.",
+        )
 
     # Debug: Log development mode detection
     logger.info(f"AUTH DEBUG: settings.is_development = {settings.is_development}")

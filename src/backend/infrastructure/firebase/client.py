@@ -44,7 +44,8 @@ def initialize_firebase():
             cred = credentials.Certificate(service_account_info)
             _app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
         except json.JSONDecodeError:
-            print("FIREBASE ERROR: Failed to parse service account JSON")
+            json_snippet = (settings.firebase_service_account_json or "")[:100]
+            print(f"FIREBASE ERROR: Failed to parse service account JSON. Snippet: {json_snippet}...")
         except Exception as e:
             print(f"FIREBASE ERROR: Failed to initialize Firebase: {e}")
     else:
