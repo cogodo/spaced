@@ -19,13 +19,13 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: 'backend/requirements.txt'
+          cache-dependency-path: 'src/backend/pyproject.toml'
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install ./src/backend
 
       - name: Run Ruff linter
-        run: ruff check backend/
+        run: ruff check src/backend/
 
       - name: Run Ruff formatter check
-        run: ruff format backend/ --check 
+        run: ruff format src/backend/ --check 
