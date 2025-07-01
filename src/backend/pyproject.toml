@@ -16,6 +16,7 @@ dependencies = [
     "tenacity",
     "ruff",
     "pre-commit",
+    "psutil",
 ]
 
 [project.scripts]

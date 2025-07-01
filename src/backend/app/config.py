@@ -18,9 +18,7 @@ class Settings(BaseSettings):
     api_prefix: str = ""
 
     # Firebase
-    firebase_service_account_json: Optional[str] = Field(
-        None, env="FIREBASE_SERVICE_ACCOUNT_JSON"
-    )
+    firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
     firebase_project_id: str = Field(..., env="FIREBASE_PROJECT_ID")
 
     # Redis Configuration (using REDIS_URL from Render)
@@ -46,10 +44,7 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if we're in development mode"""
         # Use DEBUG env var (which is already set) or explicit DEVELOPMENT_MODE
-        return (
-            os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
-            or os.getenv("DEBUG", "false").lower() == "true"
-        )
+        return os.getenv("DEVELOPMENT_MODE", "false").lower() == "true" or os.getenv("DEBUG", "false").lower() == "true"
 
     @property
     def environment(self) -> str:
