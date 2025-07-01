@@ -92,3 +92,39 @@ coverage/
 
 # Dependency directories
 node_modules/
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.dart_tool/
+build/
+
+# IDE files
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+.egg-info/
+dist/
+build/
+*.egg
+*.so
+
+# uv
+.uv_cache/
+
+# OS-specific
+.DS_Store
+Thumbs.db

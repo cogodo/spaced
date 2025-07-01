@@ -7,7 +7,7 @@ name = "backend"
 version = "0.1.0"
 dependencies = [
     "fastapi",
-    "uvicorn",
+    "uvicorn[standard]",
     "pydantic",
     "pydantic-settings",
     "firebase-admin",
@@ -17,9 +17,6 @@ dependencies = [
     "ruff",
     "pre-commit",
 ]
-
-[tool.setuptools.packages.find]
-where = ["."]
 
 [tool.ruff]
 line-length = 120
