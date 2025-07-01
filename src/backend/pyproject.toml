@@ -18,6 +18,9 @@ dependencies = [
     "pre-commit",
 ]
 
+[project.scripts]
+start-backend = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
 [tool.ruff]
 line-length = 120
 
@@ -26,4 +29,4 @@ select = ["E", "F", "I", "W"]
 ignore = ["E501"]
 
 [tool.ruff.format]
-quote-style = "double" 
+quote-style = "double"
