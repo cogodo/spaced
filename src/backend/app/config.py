@@ -1,4 +1,3 @@
-import os
 from typing import List, Optional
 
 from pydantic import Field
@@ -19,10 +18,13 @@ class Settings(BaseSettings):
 
     # Firebase
     firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
-    firebase_project_id: str = Field(..., env="FIREBASE_PROJECT_ID")
+    firebase_project_id: str = Field("spaced-b571d", env="FIREBASE_PROJECT_ID")
 
     # Redis Configuration (using REDIS_URL from Render)
-    redis_url: str = Field(env="REDIS_URL")
+    redis_url: str = Field("redis://localhost:6379", env="REDIS_URL")
+
+    # OpenAI API Key
+    openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
 
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
@@ -43,8 +45,7 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         """Check if we're in development mode"""
-        # Use DEBUG env var (which is already set) or explicit DEVELOPMENT_MODE
-        return os.getenv("DEVELOPMENT_MODE", "false").lower() == "true" or os.getenv("DEBUG", "false").lower() == "true"
+        return self.debug
 
     @property
     def environment(self) -> str:

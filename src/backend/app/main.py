@@ -22,9 +22,23 @@ def create_app() -> FastAPI:
     )
 
     # CORS middleware
+    # Use a more permissive policy for local development
+    if settings.is_development:
+        # Allow common local origins for development
+        allow_origins = [
+            "http://localhost",
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
+        ]
+    else:
+        # Use a strict policy for production
+        allow_origins = settings.cors_origins
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=allow_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
