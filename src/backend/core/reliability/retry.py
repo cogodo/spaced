@@ -36,8 +36,7 @@ class RetryExhaustedError(Exception):
         self.attempts = attempts
         self.last_exception = last_exception
         super().__init__(
-            f"Retry exhausted after {attempts} attempts. "
-            f"Last error: {type(last_exception).__name__}: {last_exception}"
+            f"Retry exhausted after {attempts} attempts. Last error: {type(last_exception).__name__}: {last_exception}"
         )
 
 
@@ -52,7 +51,7 @@ def _create_before_sleep_callback(func_name: str, max_attempts: int):
         error_message = str(retry_state.outcome.exception())
 
         logger.warning(
-            f"Function '{func_name}' failed on attempt {attempt}, " f"retrying in {delay:.2f}s",
+            f"Function '{func_name}' failed on attempt {attempt}, retrying in {delay:.2f}s",
             function=func_name,
             attempt=attempt,
             max_attempts=max_attempts,

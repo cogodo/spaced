@@ -197,7 +197,7 @@ class RequestSizeLimitMiddleware:
                         status_code=413,
                         content={
                             "error": "Request too large",
-                            "message": (f"Request size {size} bytes exceeds limit of " f"{self.max_size_bytes} bytes"),
+                            "message": (f"Request size {size} bytes exceeds limit of {self.max_size_bytes} bytes"),
                         },
                     )
             except ValueError:

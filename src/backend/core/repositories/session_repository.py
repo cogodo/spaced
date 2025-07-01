@@ -52,7 +52,7 @@ class SessionRepository:
                 # isCompleted, messageCount, etc.
             }
             doc_ref.update(backend_updates)
-            print(f"DEBUG: Updated existing session {session.id} with backend data, " f"set token to session ID")
+            print(f"DEBUG: Updated existing session {session.id} with backend data, set token to session ID")
         else:
             # Session does not exist, create it with all fields
             doc_ref.set(session.dict(exclude_none=True))

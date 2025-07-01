@@ -92,9 +92,7 @@ class CircuitBreaker:
                     failure_count=self.failure_count,
                 )
 
-                raise CircuitBreakerError(
-                    f"Circuit breaker '{self.name}' is OPEN. " f"Service temporarily unavailable."
-                )
+                raise CircuitBreakerError(f"Circuit breaker '{self.name}' is OPEN. Service temporarily unavailable.")
 
             # Allow call through
             start_time = time.time()

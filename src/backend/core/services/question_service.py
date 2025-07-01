@@ -25,11 +25,11 @@ class QuestionService:
         question_templates = [
             (
                 "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. " "Focus on key concepts.",
+                "Create a multiple choice question about {topic} with 4 options. Focus on key concepts.",
             ),
             (
                 "short_answer",
-                "Create a short answer question about {topic} that tests " "understanding.",
+                "Create a short answer question about {topic} that tests understanding.",
             ),
             (
                 "explanation",
@@ -69,7 +69,7 @@ class QuestionService:
                 questions.append(question)
 
             except Exception as e:
-                print(f"Failed to generate refined question {i+1}: {e}")
+                print(f"Failed to generate refined question {i + 1}: {e}")
                 # Fallback to basic generation
                 try:
                     basic_question = await self._generate_basic_question(topic, template, difficulty, question_type)
@@ -89,11 +89,11 @@ class QuestionService:
         question_templates = [
             (
                 "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. " "Focus on key concepts.",
+                "Create a multiple choice question about {topic} with 4 options. Focus on key concepts.",
             ),
             (
                 "short_answer",
-                "Create a short answer question about {topic} that tests " "understanding.",
+                "Create a short answer question about {topic} that tests understanding.",
             ),
             (
                 "explanation",
@@ -130,7 +130,7 @@ class QuestionService:
                 questions.append(question)
 
             except Exception as e:
-                print(f"Failed to generate initial question {i+1}: {e}")
+                print(f"Failed to generate initial question {i + 1}: {e}")
                 continue
 
         return questions
@@ -205,7 +205,7 @@ return it unchanged.
                     messages=[
                         {
                             "role": "system",
-                            "content": ("You are an expert educator creating high-quality " "learning questions."),
+                            "content": ("You are an expert educator creating high-quality learning questions."),
                         },
                         {"role": "user", "content": prompt},
                     ],

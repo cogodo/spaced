@@ -343,7 +343,7 @@ async def get_recent_logs(
         "info": "This is not a real log query endpoint.",
         "requested_lines": lines,
         "requested_level": level,
-        "suggestion": ("Use your log aggregation system (ELK, Splunk, CloudWatch, etc.) " "for log queries"),
+        "suggestion": ("Use your log aggregation system (ELK, Splunk, CloudWatch, etc.) for log queries"),
     }
 
 

@@ -51,7 +51,7 @@ class ConversationService:
                 if state.question_index >= len(state.question_ids):
                     response_text = response_text.replace(
                         "[NEXT_QUESTION]",
-                        ("\\n\\nCongratulations, you've completed all questions for " "this topic!"),
+                        ("\\n\\nCongratulations, you've completed all questions for this topic!"),
                     )
                 else:
                     next_question = await self.question_repo.get_by_id(
@@ -136,7 +136,7 @@ class ConversationService:
             topic_id = await self.topic_repo.get_default_topic_id()
         questions = await self.question_service.get_topic_questions(topic_id, user_id)
         if not questions:
-            raise ValueError(f"No questions found for topic ID '{topic_id}'. Cannot start " "conversation.")
+            raise ValueError(f"No questions found for topic ID '{topic_id}'. Cannot start conversation.")
         question_ids = [q.id for q in questions]
         return ConversationState(
             user_id=user_id,
@@ -205,9 +205,7 @@ Return your entire response as a single JSON object with two keys:
 
         correct_answers = sum(1 for score in state.score_history if score >= 3)
 
-        summary = (
-            f"You're tutoring a student who's answered {total_questions} " f"questions ({correct_answers} correct)."
-        )
+        summary = f"You're tutoring a student who's answered {total_questions} questions ({correct_answers} correct)."
 
         if state.hints_given > 0:
             summary += f" You've provided hints on {state.hints_given} of those questions."

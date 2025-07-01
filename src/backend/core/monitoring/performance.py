@@ -187,7 +187,7 @@ class PerformanceTracker:
                 value=snapshot.cpu_percent,
                 threshold=self.cpu_threshold,
                 timestamp=snapshot.timestamp,
-                message=(f"High CPU usage: {snapshot.cpu_percent:.1f}% > " f"{self.cpu_threshold}%"),
+                message=(f"High CPU usage: {snapshot.cpu_percent:.1f}% > {self.cpu_threshold}%"),
             )
             self.alerts.append(alert)
             logger.warning(
@@ -203,7 +203,7 @@ class PerformanceTracker:
                 value=snapshot.memory_percent,
                 threshold=self.memory_threshold,
                 timestamp=snapshot.timestamp,
-                message=(f"High memory usage: {snapshot.memory_percent:.1f}% > " f"{self.memory_threshold}%"),
+                message=(f"High memory usage: {snapshot.memory_percent:.1f}% > {self.memory_threshold}%"),
             )
             self.alerts.append(alert)
             logger.warning(

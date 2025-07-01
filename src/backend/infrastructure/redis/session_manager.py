@@ -237,10 +237,10 @@ class RedisSessionManager:
                 return ConversationState(**state_dict)
             return None
         except (json.JSONDecodeError, TypeError) as e:
-            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
+            print(f"Error deserializing conversation state for user {user_id}, session {session_id}: {e}")
             return None
         except Exception as e:
-            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
+            print(f"Error deserializing conversation state for user {user_id}, session {session_id}: {e}")
             return None
 
     async def delete_conversation_state(self, user_id: str, session_id: str):

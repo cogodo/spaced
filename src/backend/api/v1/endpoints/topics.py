@@ -344,7 +344,7 @@ async def get_review_statistics(user_uid: str, current_user: dict = Depends(get_
             overdue_topics = 0
 
         if len(topics_with_reviews) < total_topics * 0.5:
-            insights.append("Many topics haven't been reviewed yet - consider starting some study " "sessions")
+            insights.append("Many topics haven't been reviewed yet - consider starting some study sessions")
 
         return {
             "totalTopics": total_topics,

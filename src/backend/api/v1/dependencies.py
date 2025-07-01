@@ -57,7 +57,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        logger.error(f"AUTH DEBUG: Token verification failed with error: " f"{type(e).__name__}: {str(e)}")
+        logger.error(f"AUTH DEBUG: Token verification failed with error: {type(e).__name__}: {str(e)}")
         logger.error("Authentication failed", extra={"error_detail": str(e)})
 
         # Sanitize error message for production

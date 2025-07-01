@@ -198,7 +198,7 @@ async def start_chat_session(
         # 6. Format response for chat
         response = StartSessionResponse(
             session_id=session.id,
-            message=(f"Let's learn about {primary_topic.name}!\n\n" f"**Question 1:**\n{question.text}"),
+            message=(f"Let's learn about {primary_topic.name}!\n\n**Question 1:**\n{question.text}"),
             next_question=question.text,
             topics=[t.name for t in topics],
             topic_id=primary_topic.id,

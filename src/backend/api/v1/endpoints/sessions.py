@@ -192,7 +192,7 @@ async def skip_question(
             next_question_text = result.get("nextQuestion", "Question not available")
 
             response_message = (
-                f"⏭️ **Question Skipped**\n\n" f"**Question {current_question_index + 1}:**\n{next_question_text}"
+                f"⏭️ **Question Skipped**\n\n**Question {current_question_index + 1}:**\n{next_question_text}"
             )
 
             response_data = {

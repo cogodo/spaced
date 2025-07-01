@@ -464,7 +464,7 @@ class SessionService:
         review info
         """
         try:
-            print(f"FSRS UPDATE: Starting update for topic {topic_id}, score {score}, " f"user {user_uid}")
+            print(f"FSRS UPDATE: Starting update for topic {topic_id}, score {score}, user {user_uid}")
             # Get the topic from the database
             topic = await self.topic_service.get_topic(topic_id, user_uid)
             if not topic:
@@ -483,7 +483,7 @@ class SessionService:
 
             # Calculate new FSRS parameters based on score
             fsrs_result = self.fsrs_service.calculate_next_review(topic.fsrsParams, score)
-            print(f"FSRS UPDATE: New params calculated - interval: " f"{fsrs_result['intervalDays']} days")
+            print(f"FSRS UPDATE: New params calculated - interval: {fsrs_result['intervalDays']} days")
 
             # Update topic's FSRS parameters in database
             await self.topic_service.update_fsrs_params(
@@ -502,10 +502,10 @@ class SessionService:
                 "nextReviewDays": days_until_review,
                 "newEase": fsrs_result["newEase"],
             }
-            print(f"FSRS UPDATE: Successfully updated topic {topic_id}, next review " f"in {days_until_review} days")
+            print(f"FSRS UPDATE: Successfully updated topic {topic_id}, next review in {days_until_review} days")
             return result
         except Exception as e:
-            print(f"FSRS UPDATE ERROR: Failed to update FSRS parameters for topic " f"{topic_id}: {e}")
+            print(f"FSRS UPDATE ERROR: Failed to update FSRS parameters for topic {topic_id}: {e}")
             return {}
 
     def _calculate_session_duration(self, session: Session) -> int:
