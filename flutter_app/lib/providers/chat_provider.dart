@@ -51,15 +51,31 @@ class ChatProvider extends ChangeNotifier {
       false; // Add flag to prevent multiple simultaneous sessions
 
   ChatProvider() {
-    // Use environment-based backend URL with local development support
     String backendUrl;
 
-    // Force localhost for local development (more explicit)
-    backendUrl = const String.fromEnvironment(
-      'BACKEND_URL',
-      defaultValue:
-          'https://api.getspaced.app', // Default to production for safety
-    );
+    // For web, we can determine the backend from the hostname.
+    // This makes it easier to deploy to different environments (dev, staging, prod)
+    // without having to set environment variables for each build.
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host.contains('staging')) {
+        // You should replace this with your actual staging API URL
+        backendUrl = 'https://api.staging.getspaced.app';
+      } else if (host == 'localhost' || host == '127.0.0.1') {
+        backendUrl = 'http://localhost:8000';
+      } else {
+        // Default to production for any other hostname
+        backendUrl = 'https://api.getspaced.app';
+      }
+    } else {
+      // For mobile builds, we continue to use the environment variable.
+      // This provides flexibility for custom builds or configurations.
+      backendUrl = const String.fromEnvironment(
+        'BACKEND_URL',
+        defaultValue:
+            'https://api.getspaced.app', // Default to production for safety
+      );
+    }
 
     // Log the backend URL for debugging
     _logger.info('ChatProvider initialized with backend URL: $backendUrl');
