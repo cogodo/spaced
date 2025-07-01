@@ -22,9 +22,7 @@ async def get_current_user(
     logger.info(f"AUTH DEBUG: settings.is_development = {settings.is_development}")
     logger.info(f"AUTH DEBUG: credentials.credentials = '{credentials.credentials}'")
     logger.info(f"AUTH DEBUG: DEV_TEST_TOKEN = '{DEV_TEST_TOKEN}'")
-    logger.info(
-        f"AUTH DEBUG: Token match = {credentials.credentials == DEV_TEST_TOKEN}"
-    )
+    logger.info(f"AUTH DEBUG: Token match = {credentials.credentials == DEV_TEST_TOKEN}")
 
     # Development mode bypass
     if settings.is_development and credentials.credentials == DEV_TEST_TOKEN:
@@ -59,16 +57,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        logger.error(
-            f"AUTH DEBUG: Token verification failed with error: "
-            f"{type(e).__name__}: {str(e)}"
-        )
+        logger.error(f"AUTH DEBUG: Token verification failed with error: " f"{type(e).__name__}: {str(e)}")
         logger.error("Authentication failed", extra={"error_detail": str(e)})
 
         # Sanitize error message for production
-        safe_error_message = (
-            str(e) if settings.environment == "development" else "Internal server error"
-        )
+        safe_error_message = str(e) if settings.environment == "development" else "Internal server error"
         if settings.environment == "development":
             detail_message = (
                 f"Authentication failed. Use token '{DEV_TEST_TOKEN}' for local "

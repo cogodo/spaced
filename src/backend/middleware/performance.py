@@ -125,42 +125,28 @@ class PerformanceMiddleware:
 
         return "unknown"
 
-    def _record_metrics(
-        self, method: str, path: str, status_code: int, duration: float, success: bool
-    ):
+    def _record_metrics(self, method: str, path: str, status_code: int, duration: float, success: bool):
         """Record performance metrics"""
 
         # Increment request counters
         status_category = f"{status_code // 100}xx"
-        self.metrics.increment_counter(
-            "api_requests_total", {"status": status_category}
-        )
+        self.metrics.increment_counter("api_requests_total", {"status": status_category})
         self.metrics.increment_counter("api_requests_total", {"method": method})
         self.metrics.increment_counter("api_requests_total", {"endpoint": path})
 
         # Record response time
         self.metrics.observe_histogram("api_request_duration_seconds", duration)
-        self.metrics.observe_histogram(
-            "api_request_duration_seconds", duration, {"method": method}
-        )
-        self.metrics.observe_histogram(
-            "api_request_duration_seconds", duration, {"endpoint": path}
-        )
+        self.metrics.observe_histogram("api_request_duration_seconds", duration, {"method": method})
+        self.metrics.observe_histogram("api_request_duration_seconds", duration, {"endpoint": path})
 
         # Record endpoint-specific metrics
         endpoint_clean = self._clean_endpoint_path(path)
-        self.metrics.observe_histogram(
-            "endpoint_response_time_seconds", duration, {"endpoint": endpoint_clean}
-        )
+        self.metrics.observe_histogram("endpoint_response_time_seconds", duration, {"endpoint": endpoint_clean})
 
         # Record error metrics
         if not success:
-            self.metrics.increment_counter(
-                "api_errors_total", {"endpoint": endpoint_clean}
-            )
-            self.metrics.increment_counter(
-                "api_errors_total", {"status_code": str(status_code)}
-            )
+            self.metrics.increment_counter("api_errors_total", {"endpoint": endpoint_clean})
+            self.metrics.increment_counter("api_errors_total", {"status_code": str(status_code)})
 
     def _clean_endpoint_path(self, path: str) -> str:
         """Clean endpoint path for metrics (remove dynamic parts)"""
@@ -211,10 +197,7 @@ class RequestSizeLimitMiddleware:
                         status_code=413,
                         content={
                             "error": "Request too large",
-                            "message": (
-                                f"Request size {size} bytes exceeds limit of "
-                                f"{self.max_size_bytes} bytes"
-                            ),
+                            "message": (f"Request size {size} bytes exceeds limit of " f"{self.max_size_bytes} bytes"),
                         },
                     )
             except ValueError:

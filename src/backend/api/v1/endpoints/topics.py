@@ -20,9 +20,7 @@ class CreateTopicRequest(BaseModel):
 
 
 @router.post("/")
-async def create_topic(
-    request: CreateTopicRequest, current_user: dict = Depends(get_current_user)
-) -> Topic:
+async def create_topic(request: CreateTopicRequest, current_user: dict = Depends(get_current_user)) -> Topic:
     """Create a new topic"""
     topic_service = TopicService()
 
@@ -40,9 +38,7 @@ async def create_topic(
 
 
 @router.get("/{user_uid}")
-async def get_topics(
-    user_uid: str, current_user: dict = Depends(get_current_user)
-) -> List[Topic]:
+async def get_topics(user_uid: str, current_user: dict = Depends(get_current_user)) -> List[Topic]:
     """Get all topics for a user"""
     # Verify user can access these topics
     if current_user.get("uid") != user_uid:
@@ -83,9 +79,7 @@ async def generate_questions(
 
         # Update topic with new question IDs
         question_ids = [q.id for q in questions]
-        await topic_service.update_question_bank(
-            topic_id, current_user.get("uid"), question_ids
-        )
+        await topic_service.update_question_bank(topic_id, current_user.get("uid"), question_ids)
 
         # Mark as complete and return success
         await topic_service.mark_regenerating(topic_id, current_user.get("uid"), False)
@@ -100,9 +94,7 @@ async def generate_questions(
     except Exception as e:
         # Always mark as not regenerating on error
         try:
-            await topic_service.mark_regenerating(
-                topic_id, current_user.get("uid"), False
-            )
+            await topic_service.mark_regenerating(topic_id, current_user.get("uid"), False)
         except Exception:
             pass  # Don't fail if cleanup fails
 
@@ -196,19 +188,13 @@ async def get_topics_with_review_status(
         return topics_with_status
 
     except Exception as e:
-        logger.error(
-            "Error getting topics with review status", extra={"error_detail": str(e)}
-        )
+        logger.error("Error getting topics with review status", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            500, f"Failed to get topics with review status: {safe_error_message}"
-        )
+        raise HTTPException(500, f"Failed to get topics with review status: {safe_error_message}")
 
 
 @router.get("/{user_uid}/due-today")
-async def get_todays_reviews(
-    user_uid: str, current_user: dict = Depends(get_current_user)
-) -> Dict[str, Any]:
+async def get_todays_reviews(user_uid: str, current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """Get topics due for review today"""
     # Verify user can access these topics
     if current_user.get("uid") != user_uid:
@@ -272,9 +258,7 @@ async def get_todays_reviews(
                 upcoming_topics.append(topic_data)
 
         # Sort by urgency
-        overdue_topics.sort(
-            key=lambda x: x["daysOverdue"], reverse=True
-        )  # Most overdue first
+        overdue_topics.sort(key=lambda x: x["daysOverdue"], reverse=True)  # Most overdue first
         due_topics.sort(key=lambda x: x["nextReviewAt"])  # Earliest first
         upcoming_topics.sort(key=lambda x: x["nextReviewAt"])  # Earliest first
 
@@ -294,9 +278,7 @@ async def get_todays_reviews(
 
 
 @router.get("/{user_uid}/review-statistics")
-async def get_review_statistics(
-    user_uid: str, current_user: dict = Depends(get_current_user)
-) -> Dict[str, Any]:
+async def get_review_statistics(user_uid: str, current_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """Get review statistics and insights for a user"""
     # Verify user can access this data
     if current_user.get("uid") != user_uid:
@@ -336,9 +318,7 @@ async def get_review_statistics(
             # Retention calculation
             if topic.lastReviewedAt:
                 days_since = (current_time - topic.lastReviewedAt).days
-                retention = fsrs_service.calculate_retention_probability(
-                    topic.fsrsParams, days_since
-                )
+                retention = fsrs_service.calculate_retention_probability(topic.fsrsParams, days_since)
                 total_retention += retention
                 retention_count += 1
 
@@ -346,9 +326,7 @@ async def get_review_statistics(
             if topic.nextReviewAt and current_time <= topic.nextReviewAt <= next_week:
                 weekly_reviews += 1
 
-        average_retention = (
-            (total_retention / retention_count) if retention_count > 0 else 0
-        )
+        average_retention = (total_retention / retention_count) if retention_count > 0 else 0
 
         # Calculate study streak (consecutive days with reviews)
         study_streak = await calculate_study_streak(topics_with_reviews)
@@ -366,10 +344,7 @@ async def get_review_statistics(
             overdue_topics = 0
 
         if len(topics_with_reviews) < total_topics * 0.5:
-            insights.append(
-                "Many topics haven't been reviewed yet - consider starting some study "
-                "sessions"
-            )
+            insights.append("Many topics haven't been reviewed yet - consider starting some study " "sessions")
 
         return {
             "totalTopics": total_topics,
@@ -385,9 +360,7 @@ async def get_review_statistics(
     except Exception as e:
         logger.error("Error getting review statistics", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            500, f"Failed to get review statistics: {safe_error_message}"
-        )
+        raise HTTPException(500, f"Failed to get review statistics: {safe_error_message}")
 
 
 async def calculate_study_streak(topics_with_reviews: List[Topic]) -> int:

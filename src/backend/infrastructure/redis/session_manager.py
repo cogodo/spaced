@@ -14,17 +14,13 @@ class RedisSessionManager:
         self.session_key_prefix = "session:"
         self.convo_state_key_prefix = "convo_state:"
 
-    async def create_session(
-        self, session_data: Dict[str, Any], ttl: Optional[int] = None
-    ) -> str:
+    async def create_session(self, session_data: Dict[str, Any], ttl: Optional[int] = None) -> str:
         """Create a new session in Redis"""
         session_id = str(uuid.uuid4())
         await self.store_session(session_id, session_data, ttl)
         return session_id
 
-    async def store_session(
-        self, session_id: str, session_data: Dict[str, Any], ttl: Optional[int] = None
-    ) -> None:
+    async def store_session(self, session_id: str, session_data: Dict[str, Any], ttl: Optional[int] = None) -> None:
         """Store session data in Redis"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
@@ -33,9 +29,7 @@ class RedisSessionManager:
         serialized_data = self._serialize_datetime_objects(session_data)
 
         # Store in Redis with TTL
-        await redis_client.setex(
-            key, ttl or self.default_ttl, json.dumps(serialized_data)
-        )
+        await redis_client.setex(key, ttl or self.default_ttl, json.dumps(serialized_data))
 
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve session data from Redis"""
@@ -48,9 +42,7 @@ class RedisSessionManager:
             return self._deserialize_datetime_objects(parsed_data)
         return None
 
-    async def update_session(
-        self, session_id: str, updates: Dict[str, Any], extend_ttl: bool = True
-    ) -> bool:
+    async def update_session(self, session_id: str, updates: Dict[str, Any], extend_ttl: bool = True) -> bool:
         """Update specific fields in a session"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
@@ -78,9 +70,7 @@ class RedisSessionManager:
         key = f"{self.session_key_prefix}{session_id}"
         return bool(await redis_client.delete(key))
 
-    async def extend_session_ttl(
-        self, session_id: str, additional_seconds: int = None
-    ) -> bool:
+    async def extend_session_ttl(self, session_id: str, additional_seconds: int = None) -> bool:
         """Extend session TTL"""
         redis_client = await get_redis_client()
         key = f"{self.session_key_prefix}{session_id}"
@@ -190,9 +180,7 @@ class RedisSessionManager:
     async def store_learning_session(self, session: Session) -> str:
         """Store a learning session specifically"""
         session_data = session.dict()
-        return await self.create_session(
-            session_data, ttl=7200
-        )  # 2 hours for learning sessions
+        return await self.create_session(session_data, ttl=7200)  # 2 hours for learning sessions
 
     async def get_learning_session(self, session_id: str) -> Optional[Session]:
         """Retrieve a learning session as a Session object"""
@@ -205,9 +193,7 @@ class RedisSessionManager:
                 return None
         return None
 
-    async def update_session_progress(
-        self, session_id: str, question_index: int, responses: list
-    ) -> bool:
+    async def update_session_progress(self, session_id: str, question_index: int, responses: list) -> bool:
         """Update session progress"""
         return await self.update_session(
             session_id,
@@ -234,17 +220,13 @@ class RedisSessionManager:
         """Generate a consistent key for conversation state."""
         return f"{self.convo_state_key_prefix}{user_id}:{session_id}"
 
-    async def store_conversation_state(
-        self, user_id: str, session_id: str, state: ConversationState, ttl: int = 7200
-    ):
+    async def store_conversation_state(self, user_id: str, session_id: str, state: ConversationState, ttl: int = 7200):
         """Store conversation state in Redis."""
         redis_client = await get_redis_client()
         key = self._get_convo_state_key(user_id, session_id)
         await redis_client.setex(key, ttl, state.model_dump_json())
 
-    async def get_conversation_state(
-        self, user_id: str, session_id: str
-    ) -> Optional[ConversationState]:
+    async def get_conversation_state(self, user_id: str, session_id: str) -> Optional[ConversationState]:
         """Retrieve conversation state from Redis."""
         redis_client = await get_redis_client()
         key = self._get_convo_state_key(user_id, session_id)
@@ -255,16 +237,10 @@ class RedisSessionManager:
                 return ConversationState(**state_dict)
             return None
         except (json.JSONDecodeError, TypeError) as e:
-            print(
-                f"Error deserializing conversation state for user {user_id}, "
-                f"session {session_id}: {e}"
-            )
+            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
             return None
         except Exception as e:
-            print(
-                f"Error deserializing conversation state for user {user_id}, "
-                f"session {session_id}: {e}"
-            )
+            print(f"Error deserializing conversation state for user {user_id}, " f"session {session_id}: {e}")
             return None
 
     async def delete_conversation_state(self, user_id: str, session_id: str):

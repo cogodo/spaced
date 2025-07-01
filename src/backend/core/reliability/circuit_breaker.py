@@ -84,9 +84,7 @@ class CircuitBreaker:
 
             if self.state == CircuitBreakerState.OPEN:
                 self._record_call("rejected", 0)
-                increment_counter(
-                    "circuit_breaker_calls_rejected", {"circuit_breaker": self.name}
-                )
+                increment_counter("circuit_breaker_calls_rejected", {"circuit_breaker": self.name})
 
                 logger.warning(
                     f"Circuit breaker '{self.name}' is OPEN, rejecting call",
@@ -95,8 +93,7 @@ class CircuitBreaker:
                 )
 
                 raise CircuitBreakerError(
-                    f"Circuit breaker '{self.name}' is OPEN. "
-                    f"Service temporarily unavailable."
+                    f"Circuit breaker '{self.name}' is OPEN. " f"Service temporarily unavailable."
                 )
 
             # Allow call through
@@ -133,10 +130,7 @@ class CircuitBreaker:
 
         if self.state == CircuitBreakerState.OPEN:
             # Check if we should transition to half-open
-            if (
-                self.last_failure_time
-                and now - self.last_failure_time > self.config.recovery_timeout
-            ):
+            if self.last_failure_time and now - self.last_failure_time > self.config.recovery_timeout:
                 self._transition_to_half_open()
 
         elif self.state == CircuitBreakerState.HALF_OPEN:
@@ -154,9 +148,7 @@ class CircuitBreaker:
             # Reset failure count on success
             self.failure_count = 0
 
-        increment_counter(
-            "circuit_breaker_calls_success", {"circuit_breaker": self.name}
-        )
+        increment_counter("circuit_breaker_calls_success", {"circuit_breaker": self.name})
 
         logger.debug(
             f"Circuit breaker '{self.name}' recorded success",
@@ -174,15 +166,10 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.HALF_OPEN:
             self.success_count = 0
             self._transition_to_open()
-        elif (
-            self.state == CircuitBreakerState.CLOSED
-            and self.failure_count >= self.config.failure_threshold
-        ):
+        elif self.state == CircuitBreakerState.CLOSED and self.failure_count >= self.config.failure_threshold:
             self._transition_to_open()
 
-        increment_counter(
-            "circuit_breaker_calls_failure", {"circuit_breaker": self.name}
-        )
+        increment_counter("circuit_breaker_calls_failure", {"circuit_breaker": self.name})
 
     def _record_call(self, result: str, duration: float):
         """Record call in history for metrics"""
@@ -251,9 +238,7 @@ class CircuitBreaker:
         """Get circuit breaker statistics"""
         with self._lock:
             # Calculate metrics from call history
-            recent_calls = [
-                c for c in self.call_history if time.time() - c["timestamp"] <= 60
-            ]
+            recent_calls = [c for c in self.call_history if time.time() - c["timestamp"] <= 60]
             failure_rate = self._calculate_failure_rate(recent_calls)
 
             return {
@@ -304,9 +289,7 @@ _circuit_breakers: Dict[str, CircuitBreaker] = {}
 _circuit_breakers_lock = threading.RLock()
 
 
-def get_circuit_breaker(
-    name: str, config: Optional[CircuitBreakerConfig] = None
-) -> CircuitBreaker:
+def get_circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
     """Get or create a circuit breaker by name"""
     with _circuit_breakers_lock:
         if name not in _circuit_breakers:

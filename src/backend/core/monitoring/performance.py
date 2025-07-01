@@ -139,12 +139,8 @@ class PerformanceTracker:
                 disk_read_mb = 0
                 disk_write_mb = 0
             else:
-                disk_read_mb = (
-                    disk_io.read_bytes - self._initial_disk_io.read_bytes
-                ) / (1024 * 1024)
-                disk_write_mb = (
-                    disk_io.write_bytes - self._initial_disk_io.write_bytes
-                ) / (1024 * 1024)
+                disk_read_mb = (disk_io.read_bytes - self._initial_disk_io.read_bytes) / (1024 * 1024)
+                disk_write_mb = (disk_io.write_bytes - self._initial_disk_io.write_bytes) / (1024 * 1024)
 
             # Network I/O
             network_io = psutil.net_io_counters()
@@ -153,12 +149,8 @@ class PerformanceTracker:
                 network_sent_mb = 0
                 network_recv_mb = 0
             else:
-                network_sent_mb = (
-                    network_io.bytes_sent - self._initial_network_io.bytes_sent
-                ) / (1024 * 1024)
-                network_recv_mb = (
-                    network_io.bytes_recv - self._initial_network_io.bytes_recv
-                ) / (1024 * 1024)
+                network_sent_mb = (network_io.bytes_sent - self._initial_network_io.bytes_sent) / (1024 * 1024)
+                network_recv_mb = (network_io.bytes_recv - self._initial_network_io.bytes_recv) / (1024 * 1024)
 
             return ResourceSnapshot(
                 timestamp=datetime.utcnow(),
@@ -195,10 +187,7 @@ class PerformanceTracker:
                 value=snapshot.cpu_percent,
                 threshold=self.cpu_threshold,
                 timestamp=snapshot.timestamp,
-                message=(
-                    f"High CPU usage: {snapshot.cpu_percent:.1f}% > "
-                    f"{self.cpu_threshold}%"
-                ),
+                message=(f"High CPU usage: {snapshot.cpu_percent:.1f}% > " f"{self.cpu_threshold}%"),
             )
             self.alerts.append(alert)
             logger.warning(
@@ -214,10 +203,7 @@ class PerformanceTracker:
                 value=snapshot.memory_percent,
                 threshold=self.memory_threshold,
                 timestamp=snapshot.timestamp,
-                message=(
-                    f"High memory usage: {snapshot.memory_percent:.1f}% > "
-                    f"{self.memory_threshold}%"
-                ),
+                message=(f"High memory usage: {snapshot.memory_percent:.1f}% > " f"{self.memory_threshold}%"),
             )
             self.alerts.append(alert)
             logger.warning(
@@ -260,15 +246,11 @@ class PerformanceTracker:
         recent_snapshots = list(self.resource_history)[-10:]
 
         avg_cpu = sum(s.cpu_percent for s in recent_snapshots) / len(recent_snapshots)
-        avg_memory = sum(s.memory_percent for s in recent_snapshots) / len(
-            recent_snapshots
-        )
+        avg_memory = sum(s.memory_percent for s in recent_snapshots) / len(recent_snapshots)
 
         # Request performance
         recent_requests = list(self.request_times)[-100:]
-        avg_request_time = (
-            sum(recent_requests) / len(recent_requests) if recent_requests else 0
-        )
+        avg_request_time = sum(recent_requests) / len(recent_requests) if recent_requests else 0
         slow_request_count = len([t for t in recent_requests if t > 2.0])
 
         return {
@@ -286,13 +268,7 @@ class PerformanceTracker:
                 "total_slow_requests": len(self.slow_requests),
             },
             "alerts": {
-                "recent_count": len(
-                    [
-                        a
-                        for a in self.alerts
-                        if a.timestamp > datetime.utcnow() - timedelta(hours=1)
-                    ]
-                ),
+                "recent_count": len([a for a in self.alerts if a.timestamp > datetime.utcnow() - timedelta(hours=1)]),
                 "total_count": len(self.alerts),
             },
         }

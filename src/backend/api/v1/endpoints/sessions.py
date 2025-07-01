@@ -23,9 +23,7 @@ class ResponseRequest(BaseModel):
 
 
 @router.post("/start", response_model=dict)
-async def start_session(
-    request: StartSessionRequest, current_user: dict = Depends(get_current_user)
-):
+async def start_session(request: StartSessionRequest, current_user: dict = Depends(get_current_user)):
     """Start a new learning session"""
     session_service = SessionService()
 
@@ -44,21 +42,15 @@ async def start_session(
     except Exception as e:
         logger.error("Error starting session", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start session: {safe_error_message}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to start session: {safe_error_message}")
 
 
 @router.get("/{session_id}")
-async def get_session(
-    session_id: str, current_user: dict = Depends(get_current_user)
-) -> dict:
+async def get_session(session_id: str, current_user: dict = Depends(get_current_user)) -> dict:
     """Get session details and current question"""
     session_service = SessionService()
 
-    session, question = await session_service.get_current_question(
-        session_id, current_user.get("uid")
-    )
+    session, question = await session_service.get_current_question(session_id, current_user.get("uid"))
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -95,9 +87,7 @@ async def respond_to_question(
         raise HTTPException(status_code=403, detail="Access denied")
 
     try:
-        result = await session_service.submit_response(
-            session_id, current_user.get("uid"), request.answer
-        )
+        result = await session_service.submit_response(session_id, current_user.get("uid"), request.answer)
         return result
 
     except ValueError as e:
@@ -105,9 +95,7 @@ async def respond_to_question(
     except Exception as e:
         logger.error("Error submitting response", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to submit response: {safe_error_message}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to submit response: {safe_error_message}")
 
 
 @router.post("/{session_id}/skip")
@@ -128,9 +116,7 @@ async def skip_question(
         raise HTTPException(status_code=403, detail="Access denied")
 
     try:
-        result = await session_service.skip_question(
-            session_id, current_user.get("uid")
-        )
+        result = await session_service.skip_question(session_id, current_user.get("uid"))
 
         # Format response for frontend compatibility (similar to chat API)
         if result["isComplete"]:
@@ -143,34 +129,22 @@ async def skip_question(
 
             # Calculate actual answered questions (excluding skipped ones) for this
             # session
-            session = await session_service.get_session(
-                session_id, current_user.get("uid")
-            )
-            messages = await session_service.get_session_messages(
-                session_id, current_user.get("uid")
-            )
+            session = await session_service.get_session(session_id, current_user.get("uid"))
+            messages = await session_service.get_session_messages(session_id, current_user.get("uid"))
             current_session_messages = (
                 messages[-session.currentSessionQuestionCount :]
                 if len(messages) >= session.currentSessionQuestionCount
                 else messages
             )
-            questions_answered = len(
-                [m for m in current_session_messages if m.answerText.strip() != ""]
-            )
+            questions_answered = len([m for m in current_session_messages if m.answerText.strip() != ""])
 
             # Calculate percentage score for display
-            score_percentage = int(
-                (session_score * questions_answered) / max(questions_answered, 1) * 100
-            )
+            score_percentage = int((session_score * questions_answered) / max(questions_answered, 1) * 100)
 
             if is_topic_complete:
                 # All 20 questions in topic completed
                 overall_score = result.get("overallTopicScore", session_score)
-                overall_percentage = (
-                    int(overall_score * 20)
-                    if overall_score <= 5
-                    else int(overall_score)
-                )
+                overall_percentage = int(overall_score * 20) if overall_score <= 5 else int(overall_score)
                 completion_message = (
                     f"🎉 **All done!**\n\n"
                     f"📊 **Final Session Results:**\n"
@@ -218,8 +192,7 @@ async def skip_question(
             next_question_text = result.get("nextQuestion", "Question not available")
 
             response_message = (
-                f"⏭️ **Question Skipped**\n\n"
-                f"**Question {current_question_index + 1}:**\n{next_question_text}"
+                f"⏭️ **Question Skipped**\n\n" f"**Question {current_question_index + 1}:**\n{next_question_text}"
             )
 
             response_data = {
@@ -239,9 +212,7 @@ async def skip_question(
     except Exception as e:
         logger.error("Error skipping question", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to skip question: {safe_error_message}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to skip question: {safe_error_message}")
 
 
 @router.post("/{session_id}/end")
@@ -270,18 +241,14 @@ async def end_session(
     except Exception as e:
         logger.error("Error ending session", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to end session: {safe_error_message}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to end session: {safe_error_message}")
 
 
 # New Phase 3 Analytics Endpoints
 
 
 @router.get("/{session_id}/analytics")
-async def get_session_analytics(
-    session_id: str, current_user: dict = Depends(get_current_user)
-):
+async def get_session_analytics(session_id: str, current_user: dict = Depends(get_current_user)):
     """Get detailed analytics for a session"""
     session_service = SessionService()
 
@@ -294,9 +261,7 @@ async def get_session_analytics(
         raise HTTPException(status_code=403, detail="Access denied")
 
     try:
-        analytics = await session_service.get_session_analytics(
-            session_id, current_user.get("uid")
-        )
+        analytics = await session_service.get_session_analytics(session_id, current_user.get("uid"))
         return analytics
 
     except ValueError as e:
@@ -304,15 +269,11 @@ async def get_session_analytics(
     except Exception as e:
         logger.error("Error getting analytics", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get analytics: {safe_error_message}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {safe_error_message}")
 
 
 @router.get("/user/{user_uid}/history")
-async def get_user_session_history(
-    user_uid: str, current_user: dict = Depends(get_current_user)
-):
+async def get_user_session_history(user_uid: str, current_user: dict = Depends(get_current_user)):
     """Get session history for a user"""
     # Verify user can access these sessions
     if current_user.get("uid") != user_uid:

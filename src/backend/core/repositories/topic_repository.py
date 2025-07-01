@@ -43,11 +43,7 @@ class TopicRepository:
     async def delete(self, topic_id: str, user_uid: str) -> None:
         """Delete a topic and all its questions"""
         # Delete all questions first
-        questions_ref = (
-            self._get_user_topics_collection(user_uid)
-            .document(topic_id)
-            .collection("questions")
-        )
+        questions_ref = self._get_user_topics_collection(user_uid).document(topic_id).collection("questions")
         questions = questions_ref.stream()
         for question_doc in questions:
             question_doc.reference.delete()

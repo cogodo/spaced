@@ -97,22 +97,16 @@ class LoggingMiddleware:
                     try:
                         request_info["body"] = json.loads(body.decode("utf-8"))
                     except (json.JSONDecodeError, UnicodeDecodeError):
-                        request_info["body"] = body.decode("utf-8", errors="ignore")[
-                            : self.max_body_size
-                        ]
+                        request_info["body"] = body.decode("utf-8", errors="ignore")[: self.max_body_size]
                 else:
-                    request_info["body_truncated"] = (
-                        f"Body too large ({len(body)} bytes)"
-                    )
+                    request_info["body_truncated"] = f"Body too large ({len(body)} bytes)"
 
             except Exception as e:
                 request_info["body_error"] = f"Failed to read body: {e}"
 
         logger.info("Incoming request", **request_info)
 
-    async def _log_response(
-        self, request: Request, response: Response, duration: float, success: bool
-    ):
+    async def _log_response(self, request: Request, response: Response, duration: float, success: bool):
         """Log outgoing response details"""
 
         response_info = {
@@ -133,30 +127,20 @@ class LoggingMiddleware:
                     body_size = len(response.body)
                     if body_size <= self.max_body_size:
                         try:
-                            response_info["response_body"] = json.loads(
-                                response.body.decode("utf-8")
-                            )
+                            response_info["response_body"] = json.loads(response.body.decode("utf-8"))
                         except (json.JSONDecodeError, UnicodeDecodeError):
-                            response_info["response_body"] = response.body.decode(
-                                "utf-8", errors="ignore"
-                            )
+                            response_info["response_body"] = response.body.decode("utf-8", errors="ignore")
                     else:
-                        response_info["response_body_truncated"] = (
-                            f"Body too large ({body_size} bytes)"
-                        )
+                        response_info["response_body_truncated"] = f"Body too large ({body_size} bytes)"
             except Exception as e:
-                response_info["response_body_error"] = (
-                    f"Failed to read response body: {e}"
-                )
+                response_info["response_body_error"] = f"Failed to read response body: {e}"
 
         if success:
             logger.info("Request completed successfully", **response_info)
         else:
             logger.warning("Request completed with error", **response_info)
 
-    async def _log_error_response(
-        self, request: Request, exception: Exception, duration: float
-    ):
+    async def _log_error_response(self, request: Request, exception: Exception, duration: float):
         """Log error response details"""
 
         error_info = {
@@ -314,10 +298,7 @@ class SecurityLoggingMiddleware:
 
         # Check for SQL injection patterns
         query_string = str(request.url.query)
-        if any(
-            pattern in query_string.lower()
-            for pattern in ["union select", "drop table", "1=1", "or 1=1"]
-        ):
+        if any(pattern in query_string.lower() for pattern in ["union select", "drop table", "1=1", "or 1=1"]):
             self.security_logger.warning(
                 "Suspicious SQL injection pattern detected",
                 path=request.url.path,
@@ -326,10 +307,7 @@ class SecurityLoggingMiddleware:
             )
 
         # Check for XSS patterns
-        if any(
-            pattern in query_string.lower()
-            for pattern in ["<script>", "javascript:", "onerror=", "onload="]
-        ):
+        if any(pattern in query_string.lower() for pattern in ["<script>", "javascript:", "onerror=", "onload="]):
             self.security_logger.warning(
                 "Suspicious XSS pattern detected",
                 path=request.url.path,

@@ -31,9 +31,7 @@ def initialize_firebase():
 
     if cred:
         try:
-            _app = firebase_admin.initialize_app(
-                cred, {"projectId": settings.firebase_project_id}
-            )
+            _app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
         except Exception as e:
             print(f"FIREBASE ERROR: Failed to initialize Firebase: {e}")
 

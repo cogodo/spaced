@@ -39,27 +39,16 @@ class SessionService:
     def _ensure_session_fields(self, session: Session) -> None:
         """Ensure session has all required fields for backward compatibility"""
         # Add new fields if they don't exist (for old sessions)
-        if (
-            not hasattr(session, "answeredQuestionIds")
-            or session.answeredQuestionIds is None
-        ):
+        if not hasattr(session, "answeredQuestionIds") or session.answeredQuestionIds is None:
             session.answeredQuestionIds = []
 
-        if (
-            not hasattr(session, "currentSessionQuestionCount")
-            or session.currentSessionQuestionCount is None
-        ):
+        if not hasattr(session, "currentSessionQuestionCount") or session.currentSessionQuestionCount is None:
             session.currentSessionQuestionCount = 0
 
-        if (
-            not hasattr(session, "maxQuestionsPerSession")
-            or session.maxQuestionsPerSession is None
-        ):
+        if not hasattr(session, "maxQuestionsPerSession") or session.maxQuestionsPerSession is None:
             session.maxQuestionsPerSession = 5
 
-    async def start_session(
-        self, user_uid: str, topic_id: str, session_id: str = None
-    ) -> Session:
+    async def start_session(self, user_uid: str, topic_id: str, session_id: str = None) -> Session:
         """Start a new learning session for a topic"""
 
         # Use provided session_id or generate new one
@@ -76,9 +65,7 @@ class SessionService:
             raise ValueError(f"No questions found for topic {topic_id}")
 
         # Check for existing session to continue progress
-        existing_sessions = await self.repository.list_by_user_and_topic(
-            user_uid, topic_id
-        )
+        existing_sessions = await self.repository.list_by_user_and_topic(user_uid, topic_id)
 
         if existing_sessions:
             # Continue from existing session but use the provided session_id
@@ -160,9 +147,7 @@ class SessionService:
 
         return session
 
-    async def get_session_messages(
-        self, session_id: str, user_uid: str
-    ) -> List[Message]:
+    async def get_session_messages(self, session_id: str, user_uid: str) -> List[Message]:
         """Get messages for a session from subcollection"""
         return await self.repository.get_session_messages(user_uid, session_id)
 
@@ -177,26 +162,18 @@ class SessionService:
             return session, None  # Current session complete
 
         # Find next unanswered question
-        unanswered_questions = [
-            q_id
-            for q_id in session.questionIds
-            if q_id not in session.answeredQuestionIds
-        ]
+        unanswered_questions = [q_id for q_id in session.questionIds if q_id not in session.answeredQuestionIds]
 
         if not unanswered_questions:
             return session, None  # All questions in topic bank have been answered
 
         # Get the next unanswered question
         current_question_id = unanswered_questions[0]
-        question = await self.question_service.get_question(
-            current_question_id, user_uid, session.topicId
-        )
+        question = await self.question_service.get_question(current_question_id, user_uid, session.topicId)
 
         return session, question
 
-    async def submit_response(
-        self, session_id: str, user_uid: str, answer: str
-    ) -> dict:
+    async def submit_response(self, session_id: str, user_uid: str, answer: str) -> dict:
         """Submit response and get feedback with LLM scoring"""
         session, question = await self.get_current_question(session_id, user_uid)
 
@@ -227,9 +204,7 @@ class SessionService:
             {
                 "answeredQuestionIds": session.answeredQuestionIds,
                 "currentSessionQuestionCount": session.currentSessionQuestionCount,
-                "messageCount": len(
-                    session.answeredQuestionIds
-                ),  # Update message count
+                "messageCount": len(session.answeredQuestionIds),  # Update message count
                 "updatedAt": datetime.now(),
                 "lastMessageAt": datetime.now(),
             },
@@ -239,12 +214,8 @@ class SessionService:
         await self.redis_manager.store_learning_session(session)
 
         # Check if current session is complete (5 questions) or all questions answered
-        current_session_complete = (
-            session.currentSessionQuestionCount >= session.maxQuestionsPerSession
-        )
-        all_questions_answered = len(session.answeredQuestionIds) >= len(
-            session.questionIds
-        )
+        current_session_complete = session.currentSessionQuestionCount >= session.maxQuestionsPerSession
+        all_questions_answered = len(session.answeredQuestionIds) >= len(session.questionIds)
 
         result = {
             "score": scoring_result["score"],
@@ -266,22 +237,16 @@ class SessionService:
                 if len(messages) >= session.currentSessionQuestionCount
                 else messages
             )
-            session_score = await self._calculate_session_score_from_messages(
-                current_session_messages
-            )
+            session_score = await self._calculate_session_score_from_messages(current_session_messages)
             result["finalScore"] = session_score
 
             # Update FSRS after each session completion using session performance
-            fsrs_update = await self._update_topic_fsrs_advanced(
-                session.topicId, session_score, user_uid
-            )
+            fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
             result["fsrs"] = fsrs_update
 
             # Check if all topic questions are answered for completion status
             if all_questions_answered:
-                overall_score = await self._calculate_final_score_from_messages(
-                    messages
-                )
+                overall_score = await self._calculate_final_score_from_messages(messages)
                 result["topicComplete"] = True
                 result["overallTopicScore"] = overall_score
 
@@ -329,9 +294,7 @@ class SessionService:
             {
                 "answeredQuestionIds": session.answeredQuestionIds,
                 "currentSessionQuestionCount": session.currentSessionQuestionCount,
-                "messageCount": len(
-                    session.answeredQuestionIds
-                ),  # Update message count
+                "messageCount": len(session.answeredQuestionIds),  # Update message count
                 "updatedAt": datetime.now(),
                 "lastMessageAt": datetime.now(),
             },
@@ -341,12 +304,8 @@ class SessionService:
         await self.redis_manager.store_learning_session(session)
 
         # Check if current session is complete (5 questions) or all questions answered
-        current_session_complete = (
-            session.currentSessionQuestionCount >= session.maxQuestionsPerSession
-        )
-        all_questions_answered = len(session.answeredQuestionIds) >= len(
-            session.questionIds
-        )
+        current_session_complete = session.currentSessionQuestionCount >= session.maxQuestionsPerSession
+        all_questions_answered = len(session.answeredQuestionIds) >= len(session.questionIds)
 
         result = {
             "score": 0,
@@ -368,22 +327,16 @@ class SessionService:
                 if len(messages) >= session.currentSessionQuestionCount
                 else messages
             )
-            session_score = await self._calculate_session_score_from_messages(
-                current_session_messages
-            )
+            session_score = await self._calculate_session_score_from_messages(current_session_messages)
             result["finalScore"] = session_score
 
             # Update FSRS after each session completion using session performance
-            fsrs_update = await self._update_topic_fsrs_advanced(
-                session.topicId, session_score, user_uid
-            )
+            fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
             result["fsrs"] = fsrs_update
 
             # Check if all topic questions are answered for completion status
             if all_questions_answered:
-                overall_score = await self._calculate_final_score_from_messages(
-                    messages
-                )
+                overall_score = await self._calculate_final_score_from_messages(messages)
                 result["topicComplete"] = True
                 result["overallTopicScore"] = overall_score
 
@@ -425,11 +378,7 @@ class SessionService:
         # Calculate score for current session messages only
         if session.currentSessionQuestionCount > 0 and messages:
             # Filter only actual answered messages (not empty or placeholder messages)
-            valid_messages = [
-                m
-                for m in messages
-                if m.answerText and m.answerText.strip() and m.score > 0
-            ]
+            valid_messages = [m for m in messages if m.answerText and m.answerText.strip() and m.score > 0]
             current_session_messages = (
                 valid_messages[-session.currentSessionQuestionCount :]
                 if len(valid_messages) >= session.currentSessionQuestionCount
@@ -437,9 +386,7 @@ class SessionService:
             )
 
             if current_session_messages:
-                session_score = await self._calculate_session_score_from_messages(
-                    current_session_messages
-                )
+                session_score = await self._calculate_session_score_from_messages(current_session_messages)
                 questions_answered = len(current_session_messages)
             else:
                 session_score = 0.0
@@ -447,9 +394,7 @@ class SessionService:
 
             # Update FSRS after session end using session performance
             try:
-                fsrs_update = await self._update_topic_fsrs_advanced(
-                    session.topicId, session_score, user_uid
-                )
+                fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
             except Exception as e:
                 print(f"Warning: Could not update FSRS parameters: {e}")
                 fsrs_update = {}
@@ -472,9 +417,7 @@ class SessionService:
                 {
                     "isCompleted": True,
                     "state": "completed",
-                    "finalScores": {"overall": int(session_score * 20)}
-                    if session_score > 0
-                    else {"overall": 0},
+                    "finalScores": {"overall": int(session_score * 20)} if session_score > 0 else {"overall": 0},
                     "updatedAt": datetime.now(),
                 },
             )
@@ -486,9 +429,7 @@ class SessionService:
             "questionsAnswered": questions_answered,
             "totalQuestions": session.currentSessionQuestionCount,
             "averageScore": session_score,
-            "sessionDuration": self._calculate_session_duration_from_messages(messages)
-            if messages
-            else 0,
+            "sessionDuration": self._calculate_session_duration_from_messages(messages) if messages else 0,
             "isComplete": True,
             "questionIndex": session.currentSessionQuestionCount,
             "topicProgress": len(session.answeredQuestionIds),
@@ -501,9 +442,7 @@ class SessionService:
 
         return result
 
-    async def _calculate_session_score_from_messages(
-        self, messages: List[Message]
-    ) -> float:
+    async def _calculate_session_score_from_messages(self, messages: List[Message]) -> float:
         """Calculate average score for a specific set of messages"""
         if not messages:
             return 0.0
@@ -511,9 +450,7 @@ class SessionService:
         total_score = sum(m.score for m in messages)
         return total_score / len(messages)
 
-    async def _calculate_final_score_from_messages(
-        self, messages: List[Message]
-    ) -> float:
+    async def _calculate_final_score_from_messages(self, messages: List[Message]) -> float:
         """Calculate average score for all messages in the session"""
         if not messages:
             return 0.0
@@ -521,18 +458,13 @@ class SessionService:
         total_score = sum(m.score for m in messages)
         return total_score / len(messages)
 
-    async def _update_topic_fsrs_advanced(
-        self, topic_id: str, score: float, user_uid: str
-    ) -> Dict[str, Any]:
+    async def _update_topic_fsrs_advanced(self, topic_id: str, score: float, user_uid: str) -> Dict[str, Any]:
         """
         Update topic FSRS parameters using real FSRS calculations and return
         review info
         """
         try:
-            print(
-                f"FSRS UPDATE: Starting update for topic {topic_id}, score {score}, "
-                f"user {user_uid}"
-            )
+            print(f"FSRS UPDATE: Starting update for topic {topic_id}, score {score}, " f"user {user_uid}")
             # Get the topic from the database
             topic = await self.topic_service.get_topic(topic_id, user_uid)
             if not topic:
@@ -550,13 +482,8 @@ class SessionService:
             )
 
             # Calculate new FSRS parameters based on score
-            fsrs_result = self.fsrs_service.calculate_next_review(
-                topic.fsrsParams, score
-            )
-            print(
-                f"FSRS UPDATE: New params calculated - interval: "
-                f"{fsrs_result['intervalDays']} days"
-            )
+            fsrs_result = self.fsrs_service.calculate_next_review(topic.fsrsParams, score)
+            print(f"FSRS UPDATE: New params calculated - interval: " f"{fsrs_result['intervalDays']} days")
 
             # Update topic's FSRS parameters in database
             await self.topic_service.update_fsrs_params(
@@ -569,26 +496,16 @@ class SessionService:
 
             # Get the updated topic to calculate next review date
             updated_topic = await self.topic_service.get_topic(topic_id, user_uid)
-            days_until_review = (
-                (updated_topic.nextReviewAt - datetime.now()).days
-                if updated_topic.nextReviewAt
-                else 0
-            )
+            days_until_review = (updated_topic.nextReviewAt - datetime.now()).days if updated_topic.nextReviewAt else 0
 
             result = {
                 "nextReviewDays": days_until_review,
                 "newEase": fsrs_result["newEase"],
             }
-            print(
-                f"FSRS UPDATE: Successfully updated topic {topic_id}, next review "
-                f"in {days_until_review} days"
-            )
+            print(f"FSRS UPDATE: Successfully updated topic {topic_id}, next review " f"in {days_until_review} days")
             return result
         except Exception as e:
-            print(
-                f"FSRS UPDATE ERROR: Failed to update FSRS parameters for topic "
-                f"{topic_id}: {e}"
-            )
+            print(f"FSRS UPDATE ERROR: Failed to update FSRS parameters for topic " f"{topic_id}: {e}")
             return {}
 
     def _calculate_session_duration(self, session: Session) -> int:

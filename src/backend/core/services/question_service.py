@@ -25,13 +25,11 @@ class QuestionService:
         question_templates = [
             (
                 "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. "
-                "Focus on key concepts.",
+                "Create a multiple choice question about {topic} with 4 options. " "Focus on key concepts.",
             ),
             (
                 "short_answer",
-                "Create a short answer question about {topic} that tests "
-                "understanding.",
+                "Create a short answer question about {topic} that tests " "understanding.",
             ),
             (
                 "explanation",
@@ -48,14 +46,10 @@ class QuestionService:
 
             try:
                 # Step 1: Generate initial question
-                generated_question = await self._generate_question(
-                    topic, template, difficulty
-                )
+                generated_question = await self._generate_question(topic, template, difficulty)
 
                 # Step 2: Refine the question for quality
-                refined_question = await self._refine_question(
-                    generated_question, question_type, difficulty
-                )
+                refined_question = await self._refine_question(generated_question, question_type, difficulty)
 
                 question = Question(
                     id=str(uuid.uuid4()),
@@ -78,9 +72,7 @@ class QuestionService:
                 print(f"Failed to generate refined question {i+1}: {e}")
                 # Fallback to basic generation
                 try:
-                    basic_question = await self._generate_basic_question(
-                        topic, template, difficulty, question_type
-                    )
+                    basic_question = await self._generate_basic_question(topic, template, difficulty, question_type)
                     if basic_question:
                         questions.append(basic_question)
                 except Exception as e2:
@@ -89,9 +81,7 @@ class QuestionService:
 
         return questions
 
-    async def generate_initial_questions(
-        self, topic: Topic, user_uid: str
-    ) -> List[Question]:
+    async def generate_initial_questions(self, topic: Topic, user_uid: str) -> List[Question]:
         """
         Generate a small initial set of questions quickly (5 questions, no refinement)
         """
@@ -99,13 +89,11 @@ class QuestionService:
         question_templates = [
             (
                 "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. "
-                "Focus on key concepts.",
+                "Create a multiple choice question about {topic} with 4 options. " "Focus on key concepts.",
             ),
             (
                 "short_answer",
-                "Create a short answer question about {topic} that tests "
-                "understanding.",
+                "Create a short answer question about {topic} that tests " "understanding.",
             ),
             (
                 "explanation",
@@ -122,9 +110,7 @@ class QuestionService:
 
             try:
                 # Single step generation (no refinement for speed)
-                generated_question = await self._generate_question(
-                    topic, template, difficulty
-                )
+                generated_question = await self._generate_question(topic, template, difficulty)
 
                 question = Question(
                     id=str(uuid.uuid4()),
@@ -149,9 +135,7 @@ class QuestionService:
 
         return questions
 
-    async def _generate_question(
-        self, topic: Topic, template: str, difficulty: int
-    ) -> str:
+    async def _generate_question(self, topic: Topic, template: str, difficulty: int) -> str:
         """Generate initial question"""
         prompt = template.format(topic=topic.name)
         prompt += f"\n\nTopic description: {topic.description}"
@@ -165,9 +149,7 @@ Requirements:
 
         return await self._call_openai(prompt, max_tokens=250, temperature=0.8)
 
-    async def _refine_question(
-        self, initial_question: str, question_type: str, difficulty: int
-    ) -> str:
+    async def _refine_question(self, initial_question: str, question_type: str, difficulty: int) -> str:
         """Refine a generated question for quality and clarity"""
         prompt = f"""
 Original question about {question_type}:
@@ -211,9 +193,7 @@ return it unchanged.
         except Exception:
             return None
 
-    async def _call_openai(
-        self, prompt: str, max_tokens: int = 200, temperature: float = 0.7
-    ) -> str:
+    async def _call_openai(self, prompt: str, max_tokens: int = 200, temperature: float = 0.7) -> str:
         """Make OpenAI API call with error handling and timeout"""
         try:
             import asyncio
@@ -225,10 +205,7 @@ return it unchanged.
                     messages=[
                         {
                             "role": "system",
-                            "content": (
-                                "You are an expert educator creating high-quality "
-                                "learning questions."
-                            ),
+                            "content": ("You are an expert educator creating high-quality " "learning questions."),
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -245,9 +222,7 @@ return it unchanged.
             safe_error = str(e).replace("{", "{{").replace("}", "}}")
             raise Exception(f"OpenAI API error: {safe_error}")
 
-    async def get_question(
-        self, question_id: str, user_uid: str, topic_id: str
-    ) -> Optional[Question]:
+    async def get_question(self, question_id: str, user_uid: str, topic_id: str) -> Optional[Question]:
         """Get a specific question by ID from user's topic subcollection"""
         return await self.repository.get_by_id(question_id, user_uid, topic_id)
 
@@ -281,9 +256,7 @@ Provide your analysis in this JSON format:
 """
 
         try:
-            response = await self._call_openai(
-                analysis_prompt, max_tokens=400, temperature=0.2
-            )
+            response = await self._call_openai(analysis_prompt, max_tokens=400, temperature=0.2)
 
             # Try to parse JSON response
             import json
@@ -308,9 +281,7 @@ Provide your analysis in this JSON format:
             "strengths": "Standard generated question",
         }
 
-    async def get_question_bank_analytics(
-        self, topic_id: str, user_uid: str
-    ) -> Dict[str, Any]:
+    async def get_question_bank_analytics(self, topic_id: str, user_uid: str) -> Dict[str, Any]:
         """Get analytics for a topic's question bank"""
         questions = await self.get_topic_questions(topic_id, user_uid)
 
@@ -322,19 +293,13 @@ Provide your analysis in this JSON format:
         difficulty_distribution = {}
 
         for question in questions:
-            type_distribution[question.type] = (
-                type_distribution.get(question.type, 0) + 1
-            )
-            difficulty_distribution[question.difficulty] = (
-                difficulty_distribution.get(question.difficulty, 0) + 1
-            )
+            type_distribution[question.type] = type_distribution.get(question.type, 0) + 1
+            difficulty_distribution[question.difficulty] = difficulty_distribution.get(question.difficulty, 0) + 1
 
         return {
             "total_questions": len(questions),
             "type_distribution": type_distribution,
             "difficulty_distribution": difficulty_distribution,
             "average_difficulty": sum(q.difficulty for q in questions) / len(questions),
-            "generation_methods": [
-                q.metadata.get("generated_by", "unknown") for q in questions
-            ],
+            "generation_methods": [q.metadata.get("generated_by", "unknown") for q in questions],
         }

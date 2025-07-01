@@ -51,20 +51,11 @@ class ScoringService:
 
         # Add question-type specific guidance
         if question.type == "multiple_choice":
-            base_prompt += (
-                "\nFor multiple choice: Score 5 if correct choice with good "
-                "reasoning, 0 if wrong choice."
-            )
+            base_prompt += "\nFor multiple choice: Score 5 if correct choice with good " "reasoning, 0 if wrong choice."
         elif question.type == "short_answer":
-            base_prompt += (
-                "\nFor short answer: Focus on accuracy and completeness of key "
-                "concepts."
-            )
+            base_prompt += "\nFor short answer: Focus on accuracy and completeness of key " "concepts."
         elif question.type == "explanation":
-            base_prompt += (
-                "\nFor explanation: Evaluate depth of understanding, clarity, and "
-                "examples used."
-            )
+            base_prompt += "\nFor explanation: Evaluate depth of understanding, clarity, and " "examples used."
 
         return base_prompt
 

@@ -114,9 +114,7 @@ def timeout_decorator(timeout_seconds: float, operation: Optional[str] = None):
                         timeout=timeout_seconds,
                     )
 
-                    increment_counter(
-                        "function_timeout_exceeded", {"function": func.__name__}
-                    )
+                    increment_counter("function_timeout_exceeded", {"function": func.__name__})
 
                 return result
 
@@ -132,9 +130,7 @@ def timeout_decorator(timeout_seconds: float, operation: Optional[str] = None):
                         error_type=type(e).__name__,
                     )
 
-                    increment_counter(
-                        "function_timeout_with_error", {"function": func.__name__}
-                    )
+                    increment_counter("function_timeout_with_error", {"function": func.__name__})
 
                     # Convert to timeout error if it took too long
                     raise TimeoutError(timeout_seconds, op_name) from e
@@ -147,9 +143,7 @@ def timeout_decorator(timeout_seconds: float, operation: Optional[str] = None):
 
 
 # Async timeout functionality
-async def async_with_timeout(
-    coro, timeout_seconds: float, operation: str = "async_operation"
-):
+async def async_with_timeout(coro, timeout_seconds: float, operation: str = "async_operation"):
     """
     Run async operation with timeout
 
@@ -257,9 +251,7 @@ def signal_timeout(timeout_seconds: float, operation: str = "operation"):
 
 
 # Utility functions for timeout management
-def calculate_timeout_with_buffer(
-    base_timeout: float, buffer_percent: float = 10.0
-) -> float:
+def calculate_timeout_with_buffer(base_timeout: float, buffer_percent: float = 10.0) -> float:
     """
     Calculate timeout with buffer
 

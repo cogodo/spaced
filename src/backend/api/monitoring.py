@@ -70,9 +70,7 @@ async def detailed_health_check():
     # Check circuit breakers
     try:
         circuit_breakers = list_circuit_breakers()
-        open_breakers = [
-            name for name, stats in circuit_breakers.items() if stats["state"] == "open"
-        ]
+        open_breakers = [name for name, stats in circuit_breakers.items() if stats["state"] == "open"]
 
         health_status["components"]["circuit_breakers"] = {
             "status": "healthy" if not open_breakers else "degraded",
@@ -134,9 +132,7 @@ async def get_metrics_summary():
         return metrics.get_summary()
     except Exception as e:
         logger.error("Failed to get metrics summary", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve metrics summary: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics summary: {e}")
 
 
 @router.get("/performance")
@@ -147,9 +143,7 @@ async def get_performance_data():
         return perf_tracker.get_performance_summary()
     except Exception as e:
         logger.error("Failed to get performance data", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve performance data: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve performance data: {e}")
 
 
 @router.get("/performance/history")
@@ -166,9 +160,7 @@ async def get_performance_history(
         }
     except Exception as e:
         logger.error("Failed to get performance history", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve performance history: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve performance history: {e}")
 
 
 @router.get("/circuit-breakers")
@@ -178,9 +170,7 @@ async def get_circuit_breakers():
         return list_circuit_breakers()
     except Exception as e:
         logger.error("Failed to get circuit breakers", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve circuit breakers: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve circuit breakers: {e}")
 
 
 @router.get("/circuit-breakers/{breaker_name}")
@@ -195,9 +185,7 @@ async def get_circuit_breaker_details(breaker_name: str):
             breaker_name=breaker_name,
             error=str(e),
         )
-        raise HTTPException(
-            status_code=404, detail=f"Circuit breaker '{breaker_name}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Circuit breaker '{breaker_name}' not found")
 
 
 @router.post("/circuit-breakers/{breaker_name}/reset")
@@ -222,12 +210,8 @@ async def reset_circuit_breaker(
             "new_state": "closed",
         }
     except Exception as e:
-        logger.error(
-            "Failed to reset circuit breaker", breaker_name=breaker_name, error=str(e)
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reset circuit breaker: {e}"
-        )
+        logger.error("Failed to reset circuit breaker", breaker_name=breaker_name, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to reset circuit breaker: {e}")
 
 
 @router.post("/circuit-breakers/{breaker_name}/force-open")
@@ -257,9 +241,7 @@ async def force_open_circuit_breaker(
             breaker_name=breaker_name,
             error=str(e),
         )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to force open circuit breaker: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to force open circuit breaker: {e}")
 
 
 @router.get("/rate-limiting")
@@ -270,18 +252,14 @@ async def get_rate_limiting_stats():
         return rate_limiter.get_stats()
     except Exception as e:
         logger.error("Failed to get rate limiting stats", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve rate limiting stats: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve rate limiting stats: {e}")
 
 
 @router.get("/rate-limiting/buckets/{bucket_type}/{identifier}")
 async def get_rate_limit_bucket(bucket_type: str, identifier: str):
     """Get information about a specific rate limit bucket"""
     if bucket_type not in ["ip", "user", "endpoint"]:
-        raise HTTPException(
-            status_code=400, detail="bucket_type must be 'ip', 'user', or 'endpoint'"
-        )
+        raise HTTPException(status_code=400, detail="bucket_type must be 'ip', 'user', or 'endpoint'")
 
     try:
         rate_limiter = get_rate_limiter()
@@ -307,9 +285,7 @@ async def get_rate_limit_bucket(bucket_type: str, identifier: str):
             identifier=identifier,
             error=str(e),
         )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve rate limit bucket: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve rate limit bucket: {e}")
 
 
 @router.get("/system/info")
@@ -341,25 +317,20 @@ async def get_system_info():
                 },
             },
             "application": {
-                "start_time": datetime.utcnow().isoformat()
-                + "Z",  # Would be better to track actual start time
+                "start_time": datetime.utcnow().isoformat() + "Z",  # Would be better to track actual start time
                 "version": "1.0.0",  # Should come from config or package
                 "environment": settings.environment,
             },
         }
     except Exception as e:
         logger.error("Failed to get system info", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve system info: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve system info: {e}")
 
 
 @router.get("/logs/recent")
 async def get_recent_logs(
     lines: int = Query(100, ge=1, le=1000, description="Number of recent log lines"),
-    level: Optional[str] = Query(
-        None, description="Filter by log level (INFO, WARNING, ERROR)"
-    ),
+    level: Optional[str] = Query(None, description="Filter by log level (INFO, WARNING, ERROR)"),
 ):
     """
     Get recent log entries (simplified - in production would query log
@@ -372,10 +343,7 @@ async def get_recent_logs(
         "info": "This is not a real log query endpoint.",
         "requested_lines": lines,
         "requested_level": level,
-        "suggestion": (
-            "Use your log aggregation system (ELK, Splunk, CloudWatch, etc.) "
-            "for log queries"
-        ),
+        "suggestion": ("Use your log aggregation system (ELK, Splunk, CloudWatch, etc.) " "for log queries"),
     }
 
 
@@ -412,9 +380,7 @@ async def get_status():
         metrics_summary = metrics.get_summary()
         perf_summary = perf_tracker.get_performance_summary()
 
-        open_breakers = [
-            name for name, stats in circuit_breakers.items() if stats["state"] == "open"
-        ]
+        open_breakers = [name for name, stats in circuit_breakers.items() if stats["state"] == "open"]
 
         # Determine overall health
         status = "healthy"
@@ -468,6 +434,4 @@ async def get_status():
         }
     except Exception as e:
         logger.error("Failed to get system status", error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve system status: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve system status: {e}")

@@ -247,9 +247,7 @@ class RateLimiter:
             )
         return self.endpoint_buckets[endpoint]
 
-    def _record_request(
-        self, ip_address: str, user_id: Optional[str], endpoint: Optional[str]
-    ):
+    def _record_request(self, ip_address: str, user_id: Optional[str], endpoint: Optional[str]):
         """Record request for analytics"""
         now = time.time()
 
@@ -278,29 +276,19 @@ class RateLimiter:
         cutoff_time = now - 3600  # 1 hour
 
         # Clean IP buckets
-        inactive_ips = [
-            ip
-            for ip, bucket in self.ip_buckets.items()
-            if bucket.last_refill < cutoff_time
-        ]
+        inactive_ips = [ip for ip, bucket in self.ip_buckets.items() if bucket.last_refill < cutoff_time]
         for ip in inactive_ips:
             del self.ip_buckets[ip]
 
         # Clean user buckets
-        inactive_users = [
-            user
-            for user, bucket in self.user_buckets.items()
-            if bucket.last_refill < cutoff_time
-        ]
+        inactive_users = [user for user, bucket in self.user_buckets.items() if bucket.last_refill < cutoff_time]
         for user in inactive_users:
             del self.user_buckets[user]
 
         # Clean endpoint buckets (keep these longer)
         endpoint_cutoff = now - 7200  # 2 hours
         inactive_endpoints = [
-            endpoint
-            for endpoint, bucket in self.endpoint_buckets.items()
-            if bucket.last_refill < endpoint_cutoff
+            endpoint for endpoint, bucket in self.endpoint_buckets.items() if bucket.last_refill < endpoint_cutoff
         ]
         for endpoint in inactive_endpoints:
             del self.endpoint_buckets[endpoint]
@@ -326,9 +314,7 @@ class RateLimiter:
                 },
             }
 
-    def get_bucket_info(
-        self, bucket_type: str, identifier: str
-    ) -> Optional[Dict[str, any]]:
+    def get_bucket_info(self, bucket_type: str, identifier: str) -> Optional[Dict[str, any]]:
         """Get information about a specific bucket"""
         with self._lock:
             bucket = None
@@ -393,16 +379,12 @@ class RateLimitMiddleware:
 
         # Add rate limit headers to response
         if hasattr(response, "headers"):
-            response.headers["X-RateLimit-Limit"] = str(
-                self.rate_limiter.config.requests_per_minute
-            )
+            response.headers["X-RateLimit-Limit"] = str(self.rate_limiter.config.requests_per_minute)
 
             # Calculate remaining tokens (approximation)
             bucket_info = self.rate_limiter.get_bucket_info("ip", client_ip)
             if bucket_info:
-                response.headers["X-RateLimit-Remaining"] = str(
-                    int(bucket_info["tokens"])
-                )
+                response.headers["X-RateLimit-Remaining"] = str(int(bucket_info["tokens"]))
 
         return response
 

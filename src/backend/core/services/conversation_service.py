@@ -29,9 +29,7 @@ class ConversationService:
         self.topic_repo = TopicRepository()
         self.question_repo = QuestionRepository()
 
-    async def process_turn(
-        self, user_id: str, session_id: str, user_input: str
-    ) -> Turn:
+    async def process_turn(self, user_id: str, session_id: str, user_input: str) -> Turn:
         try:
             state = await self.get_or_create_state(user_id, session_id)
             prompt = self._build_prompt(state, user_input)
@@ -53,10 +51,7 @@ class ConversationService:
                 if state.question_index >= len(state.question_ids):
                     response_text = response_text.replace(
                         "[NEXT_QUESTION]",
-                        (
-                            "\\n\\nCongratulations, you've completed all questions for "
-                            "this topic!"
-                        ),
+                        ("\\n\\nCongratulations, you've completed all questions for " "this topic!"),
                     )
                 else:
                     next_question = await self.question_repo.get_by_id(
@@ -93,9 +88,7 @@ class ConversationService:
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return Turn(
-                bot_response=(
-                    "I'm sorry, an unexpected error occurred. Please try again later."
-                ),
+                bot_response=("I'm sorry, an unexpected error occurred. Please try again later."),
                 state=None,
             )
 
@@ -143,10 +136,7 @@ class ConversationService:
             topic_id = await self.topic_repo.get_default_topic_id()
         questions = await self.question_service.get_topic_questions(topic_id, user_id)
         if not questions:
-            raise ValueError(
-                f"No questions found for topic ID '{topic_id}'. Cannot start "
-                "conversation."
-            )
+            raise ValueError(f"No questions found for topic ID '{topic_id}'. Cannot start " "conversation.")
         question_ids = [q.id for q in questions]
         return ConversationState(
             user_id=user_id,
@@ -154,9 +144,7 @@ class ConversationService:
             question_ids=question_ids,
         )
 
-    def _update_state(
-        self, state: ConversationState, update: LLMStateUpdate, question_id: str
-    ) -> ConversationState:
+    def _update_state(self, state: ConversationState, update: LLMStateUpdate, question_id: str) -> ConversationState:
         """Updates the conversation state based on the LLM response."""
         state.score_history.append(update.score)
         if update.hint_given:
@@ -168,9 +156,7 @@ class ConversationService:
         state.turn_count += 1
         return state
 
-    def _build_prompt(
-        self, state: ConversationState, user_input: str, is_json_mode: bool = True
-    ) -> str:
+    def _build_prompt(self, state: ConversationState, user_input: str, is_json_mode: bool = True) -> str:
         """Constructs the full prompt for the LLM."""
         context = self._get_context(state)
         history = self._format_history(state)
@@ -220,14 +206,11 @@ Return your entire response as a single JSON object with two keys:
         correct_answers = sum(1 for score in state.score_history if score >= 3)
 
         summary = (
-            f"You're tutoring a student who's answered {total_questions} "
-            f"questions ({correct_answers} correct)."
+            f"You're tutoring a student who's answered {total_questions} " f"questions ({correct_answers} correct)."
         )
 
         if state.hints_given > 0:
-            summary += (
-                f" You've provided hints on {state.hints_given} of those questions."
-            )
+            summary += f" You've provided hints on {state.hints_given} of those questions."
 
         if any(state.misconceptions):
             summary += " Be mindful of the student's previous misconceptions."
@@ -252,7 +235,5 @@ Return your entire response as a single JSON object with two keys:
         )
         return response.choices[0].message.content
 
-    async def _save_state(
-        self, user_id: str, session_id: str, state: ConversationState
-    ):
+    async def _save_state(self, user_id: str, session_id: str, state: ConversationState):
         await self.redis_manager.store_conversation_state(user_id, session_id, state)

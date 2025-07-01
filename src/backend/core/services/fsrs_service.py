@@ -41,9 +41,7 @@ class FSRSService:
 
         if not self.fsrs or not Card:
             # Fallback to simple calculation if FSRS not available
-            return self._fallback_calculation(
-                current_params, performance_score, last_review
-            )
+            return self._fallback_calculation(current_params, performance_score, last_review)
 
         try:
             # Convert our performance score (0-5) to FSRS Rating
@@ -53,9 +51,7 @@ class FSRSService:
             card = Card(
                 due=last_review or datetime.now(),
                 stability=current_params.ease,
-                difficulty=max(
-                    1, min(10, 11 - current_params.ease)
-                ),  # Invert ease to difficulty
+                difficulty=max(1, min(10, 11 - current_params.ease)),  # Invert ease to difficulty
                 elapsed_days=current_params.interval,
                 scheduled_days=current_params.interval,
                 reps=current_params.repetition,
@@ -85,9 +81,7 @@ class FSRSService:
             # Convert back to our FSRSParams format
             updated_params = FSRSParams(
                 ease=getattr(next_card, "stability", current_params.ease),
-                interval=getattr(
-                    next_card, "scheduled_days", current_params.interval + 1
-                ),
+                interval=getattr(next_card, "scheduled_days", current_params.interval + 1),
                 repetition=getattr(next_card, "reps", current_params.repetition + 1),
             )
 
@@ -105,9 +99,7 @@ class FSRSService:
 
         except Exception as e:
             print(f"FSRS calculation failed, using fallback: {e}")
-            return self._fallback_calculation(
-                current_params, performance_score, last_review
-            )
+            return self._fallback_calculation(current_params, performance_score, last_review)
 
     def _fallback_calculation(
         self,
@@ -177,9 +169,7 @@ class FSRSService:
         """Get the optimal time for next review based on current parameters"""
         return datetime.now() + timedelta(days=params.interval)
 
-    def calculate_retention_probability(
-        self, params: FSRSParams, days_since_review: int
-    ) -> float:
+    def calculate_retention_probability(self, params: FSRSParams, days_since_review: int) -> float:
         """Calculate probability that user remembers the topic"""
 
         # Simple retention calculation based on FSRS principles

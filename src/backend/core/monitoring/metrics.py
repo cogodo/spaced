@@ -122,9 +122,7 @@ class MetricsCollector:
         self.gauge("active_users")
         self.gauge("cache_hit_ratio")
 
-    def counter(
-        self, name: str, tags: Optional[Dict[str, str]] = None
-    ) -> CounterMetric:
+    def counter(self, name: str, tags: Optional[Dict[str, str]] = None) -> CounterMetric:
         """Get or create a counter metric"""
         tags = tags or {}
         key = f"{name}:{':'.join(f'{k}={v}' for k, v in sorted(tags.items()))}"
@@ -144,9 +142,7 @@ class MetricsCollector:
                 self._gauges[key] = GaugeMetric(name=name, tags=tags)
             return self._gauges[key]
 
-    def histogram(
-        self, name: str, tags: Optional[Dict[str, str]] = None
-    ) -> HistogramMetric:
+    def histogram(self, name: str, tags: Optional[Dict[str, str]] = None) -> HistogramMetric:
         """Get or create a histogram metric"""
         tags = tags or {}
         key = f"{name}:{':'.join(f'{k}={v}' for k, v in sorted(tags.items()))}"
@@ -156,9 +152,7 @@ class MetricsCollector:
                 self._histograms[key] = HistogramMetric(name=name, tags=tags)
             return self._histograms[key]
 
-    def increment_counter(
-        self, name: str, tags: Optional[Dict[str, str]] = None, amount: int = 1
-    ):
+    def increment_counter(self, name: str, tags: Optional[Dict[str, str]] = None, amount: int = 1):
         """Increment a counter metric"""
         self.counter(name, tags).increment(amount)
 
@@ -166,9 +160,7 @@ class MetricsCollector:
         """Set a gauge metric value"""
         self.gauge(name, tags).set(value)
 
-    def observe_histogram(
-        self, name: str, value: float, tags: Optional[Dict[str, str]] = None
-    ):
+    def observe_histogram(self, name: str, value: float, tags: Optional[Dict[str, str]] = None):
         """Add an observation to a histogram metric"""
         self.histogram(name, tags).observe(value)
 
@@ -223,22 +215,17 @@ class MetricsCollector:
         with self._lock:
             # API request metrics
             total_requests = sum(
-                counter.value
-                for key, counter in self._counters.items()
-                if counter.name == "api_requests_total"
+                counter.value for key, counter in self._counters.items() if counter.name == "api_requests_total"
             )
 
             # Error rate calculation
             error_requests = sum(
                 counter.value
                 for key, counter in self._counters.items()
-                if counter.name == "api_requests_total"
-                and counter.tags.get("status", "").startswith(("4", "5"))
+                if counter.name == "api_requests_total" and counter.tags.get("status", "").startswith(("4", "5"))
             )
 
-            error_rate = (
-                (error_requests / total_requests * 100) if total_requests > 0 else 0
-            )
+            error_rate = (error_requests / total_requests * 100) if total_requests > 0 else 0
 
             # Performance metrics
             api_duration_hist = None
@@ -253,14 +240,10 @@ class MetricsCollector:
                 "avg_response_time_ms": round(api_duration_hist.average() * 1000, 2)
                 if api_duration_hist and api_duration_hist.values
                 else 0,
-                "p95_response_time_ms": round(
-                    api_duration_hist.percentile(0.95) * 1000, 2
-                )
+                "p95_response_time_ms": round(api_duration_hist.percentile(0.95) * 1000, 2)
                 if api_duration_hist and api_duration_hist.values
                 else 0,
-                "active_sessions": self._gauges.get(
-                    "active_sessions", GaugeMetric("active_sessions")
-                ).value,
+                "active_sessions": self._gauges.get("active_sessions", GaugeMetric("active_sessions")).value,
                 "total_sessions_started": self._counters.get(
                     "sessions_started_total", CounterMetric("sessions_started_total")
                 ).value,
@@ -305,9 +288,7 @@ def get_metrics() -> MetricsCollector:
 
 
 # Convenience functions for common operations
-def increment_counter(
-    name: str, tags: Optional[Dict[str, str]] = None, amount: int = 1
-):
+def increment_counter(name: str, tags: Optional[Dict[str, str]] = None, amount: int = 1):
     """Increment a counter metric"""
     _global_metrics.increment_counter(name, tags, amount)
 

@@ -188,9 +188,7 @@ class LearningChatbotLogger:
             **kwargs,
         )
 
-    def log_api_response(
-        self, method: str, path: str, status_code: int, duration_ms: float, **kwargs
-    ):
+    def log_api_response(self, method: str, path: str, status_code: int, duration_ms: float, **kwargs):
         """Log API response with standardized format"""
         self.info(
             "API Response: %s %s - %s (%.2fms)",
@@ -205,9 +203,7 @@ class LearningChatbotLogger:
             **kwargs,
         )
 
-    def log_service_call(
-        self, service: str, operation: str, duration_ms: float, success: bool, **kwargs
-    ):
+    def log_service_call(self, service: str, operation: str, duration_ms: float, success: bool, **kwargs):
         """Log external service calls"""
         level = logging.INFO if success else logging.WARNING
         status = "SUCCESS" if success else "FAILURE"
@@ -268,9 +264,7 @@ def setup_logging(log_level: str = "INFO", use_json: bool = True) -> None:
     if use_json:
         formatter = StructuredFormatter()
     else:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Setup root logger
     root_logger = logging.getLogger()

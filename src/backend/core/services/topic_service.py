@@ -52,15 +52,11 @@ class TopicService:
         """Get a specific topic by ID from user's subcollection"""
         return await self.repository.get_by_id(topic_id, user_uid)
 
-    async def mark_regenerating(
-        self, topic_id: str, user_uid: str, regenerating: bool
-    ) -> None:
+    async def mark_regenerating(self, topic_id: str, user_uid: str, regenerating: bool) -> None:
         """Mark a topic as regenerating questions"""
         await self.repository.update(topic_id, user_uid, {"regenerating": regenerating})
 
-    async def update_question_bank(
-        self, topic_id: str, user_uid: str, question_ids: List[str]
-    ) -> None:
+    async def update_question_bank(self, topic_id: str, user_uid: str, question_ids: List[str]) -> None:
         """Update the question bank for a topic"""
         await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
         # Invalidate cache since we updated the topic
@@ -68,9 +64,7 @@ class TopicService:
 
     # New methods for chat functionality
 
-    async def find_or_create_topics(
-        self, topic_names: List[str], user_uid: str
-    ) -> List[Topic]:
+    async def find_or_create_topics(self, topic_names: List[str], user_uid: str) -> List[Topic]:
         """Find existing topics or create new ones from user input"""
         topics = []
 
@@ -85,9 +79,7 @@ class TopicService:
             if existing_topics:
                 # Use the first matching topic
                 topics.append(existing_topics[0])
-                logger.info(
-                    "Found existing topic: %s for user %s", topic_name, user_uid
-                )
+                logger.info("Found existing topic: %s for user %s", topic_name, user_uid)
             else:
                 # Create new topic
                 new_topic = await self.create_topic(
@@ -178,9 +170,7 @@ class TopicService:
 
         return matching_topics
 
-    async def validate_topics(
-        self, topic_names: List[str], user_uid: str
-    ) -> Dict[str, Any]:
+    async def validate_topics(self, topic_names: List[str], user_uid: str) -> Dict[str, Any]:
         """Validate topic names and provide suggestions"""
         valid_topics = []
         suggestions = []
@@ -195,9 +185,7 @@ class TopicService:
 
             if search_results:
                 # Found exact or close match
-                exact_match = any(
-                    t.name.lower() == topic_name.lower() for t in search_results
-                )
+                exact_match = any(t.name.lower() == topic_name.lower() for t in search_results)
                 if exact_match:
                     valid_topics.append(topic_name)
                 else:
@@ -219,9 +207,7 @@ class TopicService:
             "has_errors": len(suggestions) > 0,
         }
 
-    async def _find_user_topic_by_name(
-        self, user_uid: str, topic_name: str
-    ) -> List[Topic]:
+    async def _find_user_topic_by_name(self, user_uid: str, topic_name: str) -> List[Topic]:
         """Find a user's topic by name (case insensitive)"""
         user_topics = await self.get_user_topics(user_uid)
 

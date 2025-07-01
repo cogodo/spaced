@@ -52,8 +52,7 @@ def _create_before_sleep_callback(func_name: str, max_attempts: int):
         error_message = str(retry_state.outcome.exception())
 
         logger.warning(
-            f"Function '{func_name}' failed on attempt {attempt}, "
-            f"retrying in {delay:.2f}s",
+            f"Function '{func_name}' failed on attempt {attempt}, " f"retrying in {delay:.2f}s",
             function=func_name,
             attempt=attempt,
             max_attempts=max_attempts,
@@ -88,9 +87,7 @@ def retry_with_backoff(config: Optional[RetryConfig] = None):
                     exp_base=config.exponential_base,
                 ),
                 retry=retry_if_exception_type(config.retryable_exceptions),
-                before_sleep=_create_before_sleep_callback(
-                    func_name, config.max_attempts
-                ),
+                before_sleep=_create_before_sleep_callback(func_name, config.max_attempts),
                 reraise=True,  # Reraise the last exception
             )
 
@@ -116,9 +113,7 @@ def retry_with_backoff(config: Optional[RetryConfig] = None):
 
             except RetryError as e:
                 increment_counter("retry_exhausted", {"function": func_name})
-                raise RetryExhaustedError(
-                    config.max_attempts, e.last_attempt.exception()
-                ) from e
+                raise RetryExhaustedError(config.max_attempts, e.last_attempt.exception()) from e
 
             except Exception as e:
                 # Non-retryable exception
@@ -159,9 +154,7 @@ def async_retry_with_backoff(config: Optional[RetryConfig] = None):
                     exp_base=config.exponential_base,
                 ),
                 retry=retry_if_exception_type(config.retryable_exceptions),
-                before_sleep=_create_before_sleep_callback(
-                    func_name, config.max_attempts
-                ),
+                before_sleep=_create_before_sleep_callback(func_name, config.max_attempts),
                 reraise=True,
             )
 
@@ -187,15 +180,11 @@ def async_retry_with_backoff(config: Optional[RetryConfig] = None):
 
             except RetryError as e:
                 increment_counter("async_retry_exhausted", {"function": func_name})
-                raise RetryExhaustedError(
-                    config.max_attempts, e.last_attempt.exception()
-                ) from e
+                raise RetryExhaustedError(config.max_attempts, e.last_attempt.exception()) from e
 
             except Exception as e:
                 # Non-retryable exception
-                increment_counter(
-                    "async_retry_non_retryable_error", {"function": func_name}
-                )
+                increment_counter("async_retry_non_retryable_error", {"function": func_name})
                 logger.error(
                     f"Async function '{func_name}' failed with non-retryable exception",
                     function=func_name,
