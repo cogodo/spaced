@@ -48,6 +48,8 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         """Initialize services on startup"""
+        print(f"Server starting in '{settings.environment}' mode.")
+        print(f"Allowed CORS origins: {allow_origins}")
         try:
             initialize_firebase()
             print("Firebase initialized successfully")
