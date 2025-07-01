@@ -6,9 +6,9 @@ set -x
 DOMAIN="getspaced.app"
 APP_USER="appuser"
 APP_HOME="/home/$APP_USER"
-SRC_DIR="$APP_HOME/src"
+BACKEND_DIR="$APP_HOME/backend" # Simplified path
 SERVICE_ACCOUNT_JSON_PATH="$APP_HOME/firebase_service_account.json"
-GITHUB_REPO="https://github.com/cogodo/spaced.git"
+GITHUB_REPO="cogodo/spaced" # Format for git archive
 GIT_BRANCH="main"
 CERTBOT_EMAIL="cogo@umich.edu"
 
@@ -32,22 +32,24 @@ if ! id "$APP_USER" &>/dev/null; then
 fi
 sudo chown -R "$APP_USER:$APP_USER" "$APP_HOME"
 
-# 4. As appuser: clone or update the repo
+# 4. As appuser: download and extract ONLY the backend code
 sudo -iu "$APP_USER" bash << EOF
 set -e
-SRC_DIR="/home/appuser/src"
-GITHUB_REPO="https://github.com/cogodo/spaced.git"
+APP_HOME="/home/appuser"
+BACKEND_DIR="\$APP_HOME/backend"
+GITHUB_REPO="cogodo/spaced"
 GIT_BRANCH="main"
 
-if [ -d "\$SRC_DIR/.git" ]; then
-    echo "Updating existing repository..."
-    cd "\$SRC_DIR"
-    git fetch origin "\$GIT_BRANCH"
-    git reset --hard "origin/\$GIT_BRANCH"
-else
-    echo "Cloning new repository..."
-    git clone --branch "\$GIT_BRANCH" "\$GITHUB_REPO" "\$SRC_DIR"
-fi
+# Remove old directories to ensure a clean deployment
+rm -rf "\$BACKEND_DIR"
+rm -rf "\$APP_HOME/src" # Clean up old structure
+
+echo "Downloading and extracting backend from repository..."
+cd "\$APP_HOME"
+# Use git archive to download only the src/backend directory
+curl -L "https://github.com/\$GITHUB_REPO/archive/\$GIT_BRANCH.tar.gz" | \
+    tar -xz --strip-components=2 "spaced-\$GIT_BRANCH/src/backend"
+# The 'mv' command is no longer needed as tar creates the 'backend' directory.
 EOF
 
 # 5. Set up Python environment with uv
@@ -55,23 +57,11 @@ echo "Setting up Python environment..."
 sudo -iu "$APP_USER" bash << EOF
 set -e
 APP_HOME="/home/appuser"
-SRC_DIR="\$APP_HOME/src"
+BACKEND_DIR="\$APP_HOME/backend"
+VENV_DIR="\$BACKEND_DIR/.venv"
 UV_CACHE_DIR="\$APP_HOME/.cache/uv"
 
-# Find the correct backend directory with pyproject.toml
-if [ -f "\$SRC_DIR/src/backend/pyproject.toml" ]; then
-    BACKEND_DIR="\$SRC_DIR/src/backend"
-elif [ -f "\$SRC_DIR/backend/pyproject.toml" ]; then
-    BACKEND_DIR="\$SRC_DIR/backend"
-else
-    echo "Error: Could not find pyproject.toml in expected locations"
-    echo "Checking \$SRC_DIR/src/backend/ and \$SRC_DIR/backend/"
-    find "\$SRC_DIR" -name "pyproject.toml" -type f
-    exit 1
-fi
-
 echo "Using backend directory: \$BACKEND_DIR"
-VENV_DIR="\$BACKEND_DIR/.venv"
 
 cd "\$BACKEND_DIR"
 mkdir -p "\$UV_CACHE_DIR"
@@ -81,51 +71,28 @@ uv pip install --upgrade pip
 uv pip install -e .
 EOF
 
-# 6. Create .env file
+# 6. Create .env file for systemd service (separate from code)
 echo "Creating .env file..."
+ENV_FILE="$APP_HOME/.backend.env" # Place env file outside the code directory
 
-# Find the correct backend directory for .env file
-if [ -f "$SRC_DIR/src/backend/pyproject.toml" ]; then
-    BACKEND_DIR="$SRC_DIR/src/backend"
-elif [ -f "$SRC_DIR/backend/pyproject.toml" ]; then
-    BACKEND_DIR="$SRC_DIR/backend"
-else
-    echo "Error: Could not find pyproject.toml for .env file creation"
-    exit 1
-fi
-
-ENV_FILE="$BACKEND_DIR/.env"
-
-sudo -u "$APP_USER" tee "$ENV_FILE" > /dev/null << EOF
+sudo -u root tee "$ENV_FILE" > /dev/null << EOF
 ENVIRONMENT=production
 DEBUG=False
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
 FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
-FIREBASE_SERVICE_ACCOUNT_JSON=\$(cat $SERVICE_ACCOUNT_JSON_PATH)
 REDIS_URL=redis://localhost:6379
 OPENAI_API_KEY=$OPENAI_API_KEY
-CORS_ORIGINS="https://getspaced.app,https://api.getspaced.app"
+CORS_ORIGINS='["https://getspaced.app","https://api.getspaced.app"]'
 EOF
 sudo chmod 600 "$ENV_FILE"
 sudo chown "$APP_USER:$APP_USER" "$ENV_FILE"
 
 # 7. Create systemd unit for backend
 echo "Creating systemd service file..."
-
-# Find the correct backend directory for systemd service
-if [ -f "$SRC_DIR/src/backend/pyproject.toml" ]; then
-    BACKEND_DIR="$SRC_DIR/src/backend"
-elif [ -f "$SRC_DIR/backend/pyproject.toml" ]; then
-    BACKEND_DIR="$SRC_DIR/backend"
-else
-    echo "Error: Could not find pyproject.toml for systemd service configuration"
-    exit 1
-fi
-
 VENV_DIR="$BACKEND_DIR/.venv"
-ENV_FILE="$BACKEND_DIR/.env"
+ENV_FILE="$APP_HOME/.backend.env"
 
 sudo tee /etc/systemd/system/backend.service > /dev/null << EOF
 [Unit]
@@ -136,7 +103,9 @@ After=network.target
 User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$BACKEND_DIR
+# Load env vars from the file and the Firebase secret directly
 EnvironmentFile=$ENV_FILE
+Environment="FIREBASE_SERVICE_ACCOUNT_JSON=\$(cat $SERVICE_ACCOUNT_JSON_PATH)"
 ExecStart=$VENV_DIR/bin/start-backend
 Restart=on-failure
 RestartSec=5
@@ -195,6 +164,14 @@ sudo certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" -d "api.$
 
 # 11. Test Nginx configuration and reload
 sudo nginx -t && sudo systemctl reload nginx
+
+# 12. Copy backup environment file into the backend directory
+echo "Copying backup environment file into backend directory..."
+if [ -f "$APP_HOME/env.backup" ]; then
+    sudo -u "$APP_USER" cp "$APP_HOME/env.backup" "$BACKEND_DIR/.env"
+else
+    echo "Warning: $APP_HOME/env.backup not found. Skipping copy of .env file."
+fi
 
 echo "Deployment complete!"
 echo "Your API should be available at https://api.$DOMAIN"
