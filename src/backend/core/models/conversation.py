@@ -1,5 +1,16 @@
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
+
+class Turn(BaseModel):
+    """
+    Represents a single turn in a conversation, with user input and bot response.
+    """
+
+    user_input: str
+    bot_response: str
+
 
 # --- State Management Models ---
 
@@ -14,6 +25,7 @@ class ConversationState(BaseModel):
     misconceptions: List[str] = Field(default_factory=list)
     question_ids: List[str] = Field(default_factory=list)
     answered_question_ids: List[str] = Field(default_factory=list)
+    history: List[Turn] = Field(default_factory=list)
     turn_count: int = 0
 
 
@@ -27,9 +39,7 @@ class LLMStateUpdate(BaseModel):
 
     score: int = Field(description="Score from 0 to 5 for the user's last answer.")
     hint_given: bool = Field(default=False, description="True if a hint was provided.")
-    misconception: Optional[str] = Field(
-        default=None, description="A summary of any misconception identified."
-    )
+    misconception: Optional[str] = Field(default=None, description="A summary of any misconception identified.")
 
 
 class LLMResponse(BaseModel):
@@ -37,7 +47,5 @@ class LLMResponse(BaseModel):
     Defines the expected JSON structure from the LLM.
     """
 
-    user_facing_response: str = Field(
-        description="The conversational response to show to the user."
-    )
+    user_facing_response: str = Field(description="The conversational response to show to the user.")
     state_update: LLMStateUpdate

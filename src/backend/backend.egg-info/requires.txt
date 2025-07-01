@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+firebase-admin
+redis
+openai
+tenacity
+ruff
+pre-commit
