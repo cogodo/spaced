@@ -1,13 +1,7 @@
-import os
 from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-
-# Build a default path to the service account key for local dev.
-# This makes local development easier as you don't need a .env file
-# if you place the key in the default location.
-_default_creds_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "firebase_service_account.json"))
 
 
 class Settings(BaseSettings):
@@ -23,9 +17,10 @@ class Settings(BaseSettings):
     api_prefix: str = ""
 
     # Firebase
+    # The absolute path to your Firebase service account JSON file.
     # This is the standard Google Cloud env var for pointing to a service account key file.
-    # The Admin SDK will automatically use this for authentication.
-    google_application_credentials: Optional[str] = Field(_default_creds_path, env="GOOGLE_APPLICATION_CREDENTIALS")
+    # This MUST be set in any environment not using the Firebase emulators.
+    google_application_credentials: Optional[str] = Field(None, env="GOOGLE_APPLICATION_CREDENTIALS")
     firebase_project_id: str = Field("spaced-b571d", env="FIREBASE_PROJECT_ID")
 
     # Redis Configuration
