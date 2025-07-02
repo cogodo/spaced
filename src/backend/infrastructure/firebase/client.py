@@ -37,19 +37,26 @@ def initialize_firebase():
         except Exception as e:
             print(f"FIREBASE WARNING: Could not load local service account file: {e}")
 
-    # For production, load credentials from the service account JSON.
-    if settings.firebase_service_account_json:
+    # For production, we MUST have valid credentials.
+    # If initialization fails here, the application is misconfigured and should not start.
+    elif settings.firebase_service_account_json:
         try:
+            print("Attempting to initialize Firebase for production...")
             service_account_info = json.loads(settings.firebase_service_account_json)
             cred = credentials.Certificate(service_account_info)
             _app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
-        except json.JSONDecodeError:
-            json_snippet = (settings.firebase_service_account_json or "")[:100]
-            print(f"FIREBASE ERROR: Failed to parse service account JSON. Snippet: {json_snippet}...")
+            print("Firebase initialized successfully for production.")
         except Exception as e:
-            print(f"FIREBASE ERROR: Failed to initialize Firebase: {e}")
+            json_snippet = (settings.firebase_service_account_json or "")[:150]
+            print("FATAL: Failed to initialize Firebase for production. The server will exit.")
+            print(f"Error: {e}")
+            print(f"Service account JSON snippet: {json_snippet}...")
+            # In a production/staging environment, this is a fatal error.
+            raise SystemExit("Fatal: Firebase initialization failed.") from e
     else:
-        print("FIREBASE WARNING: No service account credentials provided for production.")
+        # If we are in production and have no credentials, it's a fatal error.
+        print("FATAL: In a production environment, FIREBASE_SERVICE_ACCOUNT_JSON must be set.")
+        raise SystemExit("Fatal: Firebase credentials not configured.")
 
 
 def get_firestore_client():
