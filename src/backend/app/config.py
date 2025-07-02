@@ -1,11 +1,17 @@
+import os
 from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+# Build a default path to the service account key for local dev.
+# This makes local development easier as you don't need a .env file
+# if you place the key in the default location.
+_default_creds_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "firebase_service_account.json"))
+
 
 class Settings(BaseSettings):
-    # Application Configuration - Use DEVELOPMENT_MODE instead of ENVIRONMENT
+    # Application Configuration
     debug: bool = Field(True, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")
 
@@ -17,10 +23,12 @@ class Settings(BaseSettings):
     api_prefix: str = ""
 
     # Firebase
-    firebase_service_account_json: Optional[str] = Field(None, env="FIREBASE_SERVICE_ACCOUNT_JSON")
+    # This is the standard Google Cloud env var for pointing to a service account key file.
+    # The Admin SDK will automatically use this for authentication.
+    google_application_credentials: Optional[str] = Field(_default_creds_path, env="GOOGLE_APPLICATION_CREDENTIALS")
     firebase_project_id: str = Field("spaced-b571d", env="FIREBASE_PROJECT_ID")
 
-    # Redis Configuration (using REDIS_URL from Render)
+    # Redis Configuration
     redis_url: str = Field("redis://localhost:6379", env="REDIS_URL")
 
     # OpenAI API Key
