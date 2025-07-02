@@ -6,6 +6,7 @@ import '../screens/chat_screen.dart'; // For SessionState and ChatMessage
 import '../services/session_api.dart';
 import '../services/chat_session_service.dart';
 import '../services/logger_service.dart';
+import 'package:flutter/material.dart';
 
 class ChatProvider extends ChangeNotifier {
   final _logger = getLogger('ChatProvider');
@@ -58,23 +59,28 @@ class ChatProvider extends ChangeNotifier {
     // without having to set environment variables for each build.
     if (kIsWeb) {
       final host = Uri.base.host;
-      if (host.contains('staging')) {
-        // You should replace this with your actual staging API URL
+      if (host == 'staging.getspaced.app') {
         backendUrl = 'https://api.staging.getspaced.app';
       } else if (host == 'localhost' || host == '127.0.0.1') {
         backendUrl = 'http://localhost:8000';
       } else {
-        // Default to production for any other hostname
+        // Default to production for any other hostname, including the production app domain
         backendUrl = 'https://api.getspaced.app';
       }
     } else {
-      // For mobile builds, we continue to use the environment variable.
-      // This provides flexibility for custom builds or configurations.
-      backendUrl = const String.fromEnvironment(
-        'BACKEND_URL',
-        defaultValue:
-            'https://api.getspaced.app', // Default to production for safety
-      );
+      // For mobile builds, we use 10.0.2.2 for Android emulator to connect to host localhost
+      // For other platforms, we still use environment variables for flexibility.
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        backendUrl = 'http://10.0.2.2:8000';
+      } else {
+        // For iOS simulator and other platforms, localhost should work.
+        // But for consistency and to avoid issues, you can also use your machine's local IP.
+        backendUrl = const String.fromEnvironment(
+          'BACKEND_URL',
+          defaultValue:
+              'http://localhost:8000', // Default to localhost for non-Android
+        );
+      }
     }
 
     // Log the backend URL for debugging

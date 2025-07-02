@@ -403,7 +403,6 @@ class SessionApi {
 
     final requestBody = {
       'id': effectiveSessionId, // Session ID (required by backend)
-      'userUid': user.uid, // User UID (required by backend)
       'topics': topics, // Send all topics as list
       'session_type': sessionType,
       'max_topics': maxTopics,
