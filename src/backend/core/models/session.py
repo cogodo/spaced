@@ -21,7 +21,6 @@ class Session(BaseModel):
     id: str
     userUid: str
     topicId: str
-    questionIndex: int = 0
     questionIds: List[str] = []
     startedAt: datetime
     nextReviewAt: Optional[datetime] = None

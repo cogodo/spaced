@@ -6,7 +6,6 @@ from app.config import settings
 from core.models.conversation import (
     ConversationState,
     LLMResponse,
-    LLMStateUpdate,
     Turn,
 )
 from core.repositories.question_repository import QuestionRepository
@@ -29,9 +28,9 @@ class ConversationService:
         self.topic_repo = TopicRepository()
         self.question_repo = QuestionRepository()
 
-    async def process_turn(self, user_id: str, session_id: str, user_input: str) -> Turn:
+    async def process_turn(self, user_id: str, session_id: str, topic_id: str, user_input: str) -> Turn:
         try:
-            state = await self.get_or_create_state(user_id, session_id)
+            state = await self.get_or_create_state(user_id, session_id, topic_id)
             prompt = self._build_prompt(state, user_input)
             llm_response_str = await self._call_llm(prompt)
             llm_response = LLMResponse.model_validate_json(llm_response_str)
@@ -72,25 +71,57 @@ class ConversationService:
                 )
 
             await self._save_state(user_id, session_id, state)
-            return Turn(bot_response=response_text, state=state)
+            return Turn(user_input=user_input, bot_response=response_text)
 
         except ValueError as e:
             # Catches errors like topic not found in _get_or_create_state,
             # or other value errors like no questions found.
             print(f"Error processing turn: {e}")
             return Turn(
+                user_input=user_input,
                 bot_response=(
                     "I'm having a bit of trouble with this topic. It seems there are "
                     "no questions available. Please try another topic."
                 ),
-                state=None,
             )
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return Turn(
+                user_input=user_input,
                 bot_response=("I'm sorry, an unexpected error occurred. Please try again later."),
-                state=None,
             )
+
+    async def skip_question(self, user_id: str, session_id: str) -> Dict[str, Any]:
+        """
+        Skips the current question, updates the state, and returns the next question.
+        """
+        state = await self.redis_manager.get_conversation_state(user_id, session_id)
+        if not state:
+            raise ValueError("Conversation state not found.")
+
+        # Mark current question as answered (skipped)
+        state.answered_question_ids.append(state.question_ids[state.question_index])
+        state.question_index += 1
+        state.history.append(Turn(user_input="skip", bot_response="Question skipped."))
+
+        # Save the updated state
+        await self._save_state(user_id, session_id, state)
+
+        # Check for completion
+        if state.question_index >= len(state.question_ids):
+            return {
+                "is_done": True,
+                "next_question": "Congratulations, you've completed all questions for this topic!",
+            }
+
+        # Get the next question
+        next_question = await self.question_repo.get_by_id(
+            user_id=user_id,
+            topic_id=state.topic_id,
+            question_id=state.question_ids[state.question_index],
+        )
+
+        return {"is_done": False, "next_question": next_question.text}
 
     async def end_session(self, user_id: str, session_id: str) -> Dict[str, Any]:
         """
@@ -142,18 +173,29 @@ class ConversationService:
             user_id=user_id,
             topic_id=topic_id,
             question_ids=question_ids,
+            questions=questions,
         )
 
-    def _update_state(self, state: ConversationState, update: LLMStateUpdate, question_id: str) -> ConversationState:
+    def _update_state(
+        self, state: ConversationState, llm_response: LLMResponse, user_input: str, is_sufficient: bool
+    ) -> ConversationState:
         """Updates the conversation state based on the LLM response."""
-        state.score_history.append(update.score)
-        if update.hint_given:
-            state.hints_given += 1
-        if update.misconception:
-            state.misconceptions.append(update.misconception)
-
-        state.answered_question_ids.append(question_id)
+        # Update history
+        state.history.append(Turn(user_input=user_input, bot_response=llm_response.user_facing_response))
         state.turn_count += 1
+
+        # Update scoring and metadata
+        state.score_history.append(llm_response.state_update.score)
+        if llm_response.state_update.hint_given:
+            state.hints_given += 1
+        if llm_response.state_update.misconception:
+            state.misconceptions.append(llm_response.state_update.misconception)
+
+        # Move to next question if answer was sufficient
+        if is_sufficient:
+            state.answered_question_ids.append(state.question_ids[state.question_index])
+            state.question_index += 1
+
         return state
 
     def _build_prompt(self, state: ConversationState, user_input: str, is_json_mode: bool = True) -> str:

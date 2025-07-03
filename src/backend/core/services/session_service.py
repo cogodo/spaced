@@ -92,7 +92,6 @@ class SessionService:
                 id=session_id,  # Use the provided session ID
                 userUid=user_uid,
                 topicId=topic_id,
-                questionIndex=0,
                 questionIds=[q.id for q in questions],
                 responses=[],
                 startedAt=datetime.now(),
@@ -262,100 +261,6 @@ class SessionService:
                     "updatedAt": datetime.now(),
                 },
             )
-
-        return result
-
-    async def skip_question(self, session_id: str, user_uid: str) -> dict:
-        """Skip current question (score as 0 with feedback)"""
-        session, question = await self.get_current_question(session_id, user_uid)
-
-        if not session or not question:
-            raise ValueError("Invalid session or question not found")
-
-        # Add skipped message to subcollection (with embedded question text for
-        # efficiency)
-        await self.repository.add_message(
-            user_uid=user_uid,
-            session_id=session_id,
-            question_id=question.id,
-            question_text=question.text,
-            answer_text="",  # Empty for skipped
-            score=0,
-        )
-
-        # Update session - track answered questions and current session progress
-        session.answeredQuestionIds.append(question.id)
-        session.currentSessionQuestionCount += 1
-
-        # Update session metadata in Firebase
-        await self.repository.update(
-            session_id,
-            user_uid,
-            {
-                "answeredQuestionIds": session.answeredQuestionIds,
-                "currentSessionQuestionCount": session.currentSessionQuestionCount,
-                "messageCount": len(session.answeredQuestionIds),  # Update message count
-                "updatedAt": datetime.now(),
-                "lastMessageAt": datetime.now(),
-            },
-        )
-
-        # Update Redis cache
-        await self.redis_manager.store_learning_session(session)
-
-        # Check if current session is complete (5 questions) or all questions answered
-        current_session_complete = session.currentSessionQuestionCount >= session.maxQuestionsPerSession
-        all_questions_answered = len(session.answeredQuestionIds) >= len(session.questionIds)
-
-        result = {
-            "score": 0,
-            "feedback": "Question skipped",
-            "explanation": "No response provided",
-            "correct": False,
-            "isComplete": current_session_complete,
-            "questionIndex": session.currentSessionQuestionCount,
-            "totalQuestions": session.maxQuestionsPerSession,
-            "topicProgress": len(session.answeredQuestionIds),
-            "totalTopicQuestions": len(session.questionIds),
-        }
-
-        if current_session_complete:
-            # Get current session messages for scoring
-            messages = await self.get_session_messages(session_id, user_uid)
-            current_session_messages = (
-                messages[-session.currentSessionQuestionCount :]
-                if len(messages) >= session.currentSessionQuestionCount
-                else messages
-            )
-            session_score = await self._calculate_session_score_from_messages(current_session_messages)
-            result["finalScore"] = session_score
-
-            # Update FSRS after each session completion using session performance
-            fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
-            result["fsrs"] = fsrs_update
-
-            # Check if all topic questions are answered for completion status
-            if all_questions_answered:
-                overall_score = await self._calculate_final_score_from_messages(messages)
-                result["topicComplete"] = True
-                result["overallTopicScore"] = overall_score
-
-            await self.redis_manager.mark_session_complete(session_id, session_score)
-            await self.repository.update(
-                session_id,
-                user_uid,
-                {
-                    "isCompleted": True,
-                    "state": "completed",
-                    "finalScores": {"overall": int(session_score * 20)},
-                    "updatedAt": datetime.now(),
-                },
-            )
-        else:
-            # Get the next question if session is not complete
-            _, next_question = await self.get_current_question(session_id, user_uid)
-            if next_question:
-                result["nextQuestion"] = next_question.text
 
         return result
 

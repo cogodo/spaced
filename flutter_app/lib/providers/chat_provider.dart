@@ -349,75 +349,95 @@ class ChatProvider extends ChangeNotifier {
     _isStartingSession = true;
     _logger.info('Starting session with popular topic: ${topic.name}');
 
-    // Generate session ID upfront
-    final sessionId = _uuid.v4();
-    final now = DateTime.now();
-
-    // Set session ID immediately before API call
-    _currentSessionId = sessionId;
-
-    // Set loading state immediately for UI feedback
-    _sessionState = SessionState.active;
-    _messages = [];
-    _isLoading = false;
-    _finalScores = null;
-    _currentTopicId = null; // Reset topic ID
-
-    // Notify listeners for immediate loading state
-    notifyListeners();
-
-    // Start the backend session first to get the proper session ID
-    _setLoadingWithTyping(
-      true,
-      typingMessage: "Preparing your learning session...",
-      generatingQuestions: true,
-    );
-
     try {
-      final response = await _api.startSession(
-        topics: [topic.name],
-        maxTopics: _maxTopics,
-        maxQuestions: _maxQuestions,
-        sessionType: 'custom_topics',
-        sessionId: _currentSessionId, // Pass our frontend session ID (now set)
-      );
+      // If we're in the topic collection phase, reuse the current session
+      if (_currentSession != null &&
+          _sessionState == SessionState.collectingTopics) {
+        _logger.info(
+          'Reusing existing session ${_currentSession!.id} for popular topic selection',
+        );
 
-      _currentTopicId = response.topicId; // Store the topic ID
+        // Add the popular topic to the existing session
+        _currentSession = _currentSession!.copyWith(
+          topics: [topic.name],
+          updatedAt: DateTime.now(),
+        );
 
-      // Create session with frontend session ID (not backend response ID)
-      _currentSession = ChatSession.create(
-        id: sessionId, // Use frontend-generated session ID
-        topics: response.topics.isNotEmpty ? response.topics : [topic.name],
-        name: 'New Session - ${_formatTimestamp(now)}',
-        topicId: _currentTopicId, // Pass the topicId
-      );
+        // Start backend session with the existing session ID
+        await _startBackendSession('custom_topics', [topic.name]);
+      } else {
+        _logger.info('No existing session to reuse, creating a new one');
 
-      _currentSessionId = sessionId; // Keep consistent with frontend session
-      _sessionState = SessionState.active;
+        // Generate session ID upfront
+        final sessionId = _uuid.v4();
+        final now = DateTime.now();
 
-      // Show the response message which includes the first question
-      _addAIMessage(response.message);
+        // Set session ID immediately before API call
+        _currentSessionId = sessionId;
 
-      _logger.info('Backend session started successfully');
+        // Set loading state immediately for UI feedback
+        _sessionState = SessionState.active;
+        _messages = [];
+        _isLoading = false;
+        _finalScores = null;
+        _currentTopicId = null; // Reset topic ID
 
-      _updateCurrentSession();
+        // Notify listeners for immediate loading state
+        notifyListeners();
 
-      // Save session to Firebase with updated token if user is authenticated
-      if (_userId != null) {
-        try {
-          await _sessionService.saveSession(_userId!, _currentSession!);
-          _logger.info('Session saved to Firebase with updated token');
+        // Start the backend session first to get the proper session ID
+        _setLoadingWithTyping(
+          true,
+          typingMessage: "Preparing your learning session...",
+          generatingQuestions: true,
+        );
 
-          // Refresh session history to show the updated session
-          await loadSessionHistory();
-        } catch (e) {
-          _logger.warning('Failed to save updated session to Firebase: $e');
+        final response = await _api.startSession(
+          topics: [topic.name],
+          maxTopics: _maxTopics,
+          maxQuestions: _maxQuestions,
+          sessionType: 'custom_topics',
+          sessionId:
+              _currentSessionId, // Pass our frontend session ID (now set)
+        );
+
+        _currentTopicId = response.topicId; // Store the topic ID
+
+        // Create session with frontend session ID (not backend response ID)
+        _currentSession = ChatSession.create(
+          id: sessionId, // Use frontend-generated session ID
+          topics: response.topics.isNotEmpty ? response.topics : [topic.name],
+          name: 'New Session - ${_formatTimestamp(now)}',
+          topicId: _currentTopicId, // Pass the topicId
+        );
+
+        _currentSessionId = sessionId; // Keep consistent with frontend session
+        _sessionState = SessionState.active;
+
+        // Show the response message which includes the first question
+        _addAIMessage(response.message);
+
+        _logger.info('Backend session started successfully');
+
+        _updateCurrentSession();
+
+        // Save session to Firebase with updated token if user is authenticated
+        if (_userId != null) {
+          try {
+            await _sessionService.saveSession(_userId!, _currentSession!);
+            _logger.info('Session saved to Firebase with updated token');
+
+            // Refresh session history to show the updated session
+            await loadSessionHistory();
+          } catch (e) {
+            _logger.warning('Failed to save updated session to Firebase: $e');
+          }
         }
-      }
 
-      // Navigate to token URL after session is properly set up
-      if (_router != null && _currentSession != null) {
-        _router!.go('/app/chat/${_currentSession!.token}');
+        // Navigate to token URL after session is properly set up
+        if (_router != null && _currentSession != null) {
+          _router!.go('/app/chat/${_currentSession!.token}');
+        }
       }
     } catch (e) {
       _logger.severe('Error starting session with popular topic: $e');
@@ -1105,25 +1125,18 @@ class ChatProvider extends ChangeNotifier {
     _setLoadingWithTyping(true, typingMessage: "Skipping question...");
 
     try {
-      final response = await _api.skipQuestion(sessionId: _currentSessionId!);
+      final response = await _api.skipConversationQuestion(
+        sessionId: _currentSessionId!,
+      );
 
-      // Process the response similarly to how answers are handled
+      // Process the response
       if (response.isDone) {
         _sessionState = SessionState.completed;
-        _finalScores = response.scores;
-        _currentSession = _currentSession!.copyWith(
-          state: SessionState.completed,
-          isCompleted: true,
-          finalScores: _finalScores,
-          updatedAt: DateTime.now(),
-        );
-        if (response.message != null) {
-          _addAIMessage(response.message!);
-        }
+        _addAIMessage(response.nextQuestion); // Show completion message
       } else {
-        if (response.message != null) {
-          _addAIMessage(response.message!);
-        }
+        _addAIMessage(
+          "⏭️ **Question Skipped**\n\n**Next Question:**\n${response.nextQuestion}",
+        );
       }
     } catch (e) {
       _logger.severe('Error skipping question: $e');

@@ -51,6 +51,7 @@ class ChatSessionService {
         'topics': session.topics,
         'state': session.state.name,
         'finalScores': session.finalScores,
+        'startedAt': Timestamp.fromDate(session.createdAt),
         'createdAt': Timestamp.fromDate(session.createdAt),
         'updatedAt': Timestamp.fromDate(session.updatedAt),
         'isCompleted': session.isCompleted,

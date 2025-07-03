@@ -71,12 +71,21 @@ class ConversationTurnRequest(BaseModel):
     user_input: str
 
 
+class SkipQuestionRequest(BaseModel):
+    session_id: str
+
+
 class EndConversationRequest(BaseModel):
     session_id: str
 
 
 class ConversationTurnResponse(BaseModel):
     bot_response: str
+
+
+class SkipQuestionResponse(BaseModel):
+    is_done: bool
+    next_question: str
 
 
 class EndConversationResponse(BaseModel):
@@ -226,14 +235,14 @@ async def handle_conversation_turn(request: ConversationTurnRequest, current_use
         conversation_service = ConversationService()
         user_id = current_user["uid"]
 
-        bot_response = await conversation_service.handle_turn(
+        turn_result = await conversation_service.process_turn(
             user_id=user_id,
             session_id=request.session_id,
             topic_id=request.topic_id,
             user_input=request.user_input,
         )
 
-        return ConversationTurnResponse(bot_response=bot_response)
+        return ConversationTurnResponse(bot_response=turn_result.bot_response)
 
     except Exception as e:
         logger.error(
@@ -243,6 +252,26 @@ async def handle_conversation_turn(request: ConversationTurnRequest, current_use
         )
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
         raise HTTPException(500, f"Failed to handle conversation turn: {safe_error_message}")
+
+
+@router.post("/conversation/skip", response_model=SkipQuestionResponse)
+async def skip_conversation_question(request: SkipQuestionRequest, current_user: dict = Depends(get_current_user)):
+    """Skips the current question in a conversation."""
+    try:
+        conversation_service = ConversationService()
+        user_id = current_user["uid"]
+
+        result = await conversation_service.skip_question(user_id=user_id, session_id=request.session_id)
+        return SkipQuestionResponse(**result)
+
+    except Exception as e:
+        logger.error(
+            "Error skipping conversation question for session %s",
+            request.session_id,
+            extra={"error_detail": str(e)},
+        )
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to skip question: {safe_error_message}")
 
 
 @router.post("/conversation/end", response_model=EndConversationResponse)

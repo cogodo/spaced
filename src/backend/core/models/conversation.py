@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from .question import Question
+
 
 class Turn(BaseModel):
     """
@@ -20,13 +22,17 @@ class ConversationState(BaseModel):
     Represents the user's state in a conversation, stored in Redis.
     """
 
-    score_history: List[int] = Field(default_factory=list)
+    user_id: str
+    topic_id: str
+    question_index: int = 0
+    score_history: List[int] = Field(default_factory=list, exclude=True)
     hints_given: int = 0
-    misconceptions: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list, exclude=True)
     question_ids: List[str] = Field(default_factory=list)
     answered_question_ids: List[str] = Field(default_factory=list)
-    history: List[Turn] = Field(default_factory=list)
+    history: List[Turn] = Field(default_factory=list, exclude=True)
     turn_count: int = 0
+    questions: List[Question] = Field(default_factory=list, exclude=True)
 
 
 # --- LLM Interaction Models ---
