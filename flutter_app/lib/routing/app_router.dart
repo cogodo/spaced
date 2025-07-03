@@ -130,14 +130,7 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         name: 'app-all',
         builder: (context, state) {
           _logger.info('📋 Building app all items route');
-          return TabNavigationScreen(
-            child: AllReviewItemsScreen(
-              allTasks: const [],
-              onDeleteTask: (task) async {
-                // No-op - no more task management
-              },
-            ),
-          );
+          return TabNavigationScreen(child: AllReviewItemsScreen());
         },
       ),
 
