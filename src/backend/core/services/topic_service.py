@@ -1,10 +1,11 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from core.models import FSRSParams, Topic
 from core.monitoring.logger import get_logger
 from core.repositories import TopicRepository
+from core.services.fsrs_service import FSRSService
 from infrastructure.cache import TopicCache
 
 logger = get_logger("topic_service")
@@ -216,43 +217,6 @@ class TopicService:
 
         return matching_topics
 
-    async def validate_topics(self, topic_names: List[str], user_uid: str) -> Dict[str, Any]:
-        """Validate topic names and provide suggestions"""
-        valid_topics = []
-        suggestions = []
-
-        for topic_name in topic_names:
-            topic_name = topic_name.strip()
-            if not topic_name:
-                continue
-
-            # Check if topic exists or is close to existing topics
-            search_results = await self.search_topics(topic_name, user_uid)
-
-            if search_results:
-                # Found exact or close match
-                exact_match = any(t.name.lower() == topic_name.lower() for t in search_results)
-                if exact_match:
-                    valid_topics.append(topic_name)
-                else:
-                    # Suggest the closest match
-                    suggestions.append(
-                        {
-                            "input": topic_name,
-                            "suggestion": search_results[0].name,
-                            "type": "existing_topic",
-                        }
-                    )
-            else:
-                # No match found, topic will be created
-                valid_topics.append(topic_name)
-
-        return {
-            "valid_topics": valid_topics,
-            "suggestions": suggestions,
-            "has_errors": len(suggestions) > 0,
-        }
-
     async def _find_user_topic_by_name(self, user_uid: str, topic_name: str) -> List[Topic]:
         """Find a user's topic by name (case insensitive)"""
         user_topics = await self.get_user_topics(user_uid)
@@ -263,3 +227,107 @@ class TopicService:
                 matching_topics.append(topic)
 
         return matching_topics
+
+    async def get_topics_with_review_status(self, user_uid: str) -> List[Dict[str, Any]]:
+        """Get all topics for a user with FSRS review status"""
+        fsrs_service = FSRSService()
+        topics = await self.get_user_topics(user_uid)
+        topics_with_status = []
+        current_time = datetime.now(timezone.utc)
+
+        for topic in topics:
+            is_due = False
+            is_overdue = False
+            days_until_review = None
+            review_urgency = "not_scheduled"
+
+            if topic.nextReviewAt:
+                time_diff = topic.nextReviewAt - current_time
+                days_until_review = time_diff.days
+                if time_diff.total_seconds() <= 0:
+                    is_overdue = True
+                    review_urgency = "overdue"
+                elif days_until_review <= 1:
+                    is_due = True
+                    review_urgency = "due_today"
+                elif days_until_review <= 3:
+                    review_urgency = "due_soon"
+                else:
+                    review_urgency = "scheduled"
+
+            retention_probability = None
+            if topic.lastReviewedAt:
+                days_since_review = (current_time - topic.lastReviewedAt).days
+                retention_probability = fsrs_service.calculate_retention_probability(
+                    topic.fsrsParams, days_since_review
+                )
+
+            topic_data = {
+                "id": topic.id,
+                "name": topic.name,
+                "description": topic.description,
+                "questionCount": len(topic.questionBank),
+                "createdAt": topic.createdAt,
+                "lastReviewedAt": topic.lastReviewedAt,
+                "nextReviewAt": topic.nextReviewAt,
+                "isDue": is_due,
+                "isOverdue": is_overdue,
+                "daysUntilReview": days_until_review,
+                "reviewUrgency": review_urgency,
+                "retentionProbability": retention_probability,
+                "fsrsParams": {
+                    "ease": topic.fsrsParams.ease,
+                    "interval": topic.fsrsParams.interval,
+                    "repetition": topic.fsrsParams.repetition,
+                },
+            }
+            topics_with_status.append(topic_data)
+
+        urgency_order = {"overdue": 0, "due_today": 1, "due_soon": 2, "scheduled": 3, "not_scheduled": 4}
+        topics_with_status.sort(key=lambda x: urgency_order.get(x["reviewUrgency"], 5))
+        return topics_with_status
+
+    async def get_due_topics(self, user_uid: str) -> Dict[str, Any]:
+        """Get topics due for review today, categorized"""
+        topics = await self.get_user_topics(user_uid)
+        current_time = datetime.now(timezone.utc)
+        end_of_today = current_time.replace(hour=23, minute=59, second=59)
+        due_topics, overdue_topics, upcoming_topics = [], [], []
+
+        for topic in topics:
+            if not topic.nextReviewAt:
+                continue
+            topic_data = {
+                "id": topic.id,
+                "name": topic.name,
+                "description": topic.description,
+                "questionCount": len(topic.questionBank),
+                "nextReviewAt": topic.nextReviewAt,
+                "fsrsParams": topic.fsrsParams.dict(),
+            }
+            if topic.nextReviewAt <= current_time:
+                topic_data["daysOverdue"] = (current_time - topic.nextReviewAt).days
+                overdue_topics.append(topic_data)
+            elif topic.nextReviewAt <= end_of_today:
+                due_topics.append(topic_data)
+            elif topic.nextReviewAt <= current_time + timedelta(days=3):
+                topic_data["daysUntil"] = (topic.nextReviewAt - current_time).days
+                upcoming_topics.append(topic_data)
+
+        overdue_topics.sort(key=lambda x: x["daysOverdue"], reverse=True)
+        due_topics.sort(key=lambda x: x["nextReviewAt"])
+        upcoming_topics.sort(key=lambda x: x["nextReviewAt"])
+
+        return {
+            "overdue": overdue_topics,
+            "dueToday": due_topics,
+            "upcoming": upcoming_topics,
+            "totalDue": len(overdue_topics) + len(due_topics),
+            "totalOverdue": len(overdue_topics),
+            "reviewDate": current_time.isoformat(),
+        }
+
+    async def get_review_statistics(self, user_uid: str) -> Dict[str, Any]:
+        """Get review statistics for a user (placeholder)."""
+        logger.info("Review statistics feature is not yet implemented.")
+        return {"message": "Feature coming soon: Comprehensive review statistics and insights."}

@@ -3,15 +3,25 @@ from typing import Any, Dict, Optional
 from openai import AsyncOpenAI
 
 from app.config import settings
+from core.models.context import Context, TurnState
 from core.models.conversation import (
     ConversationState,
     LLMResponse,
     Turn,
 )
+from core.models.llm_outputs import NextAction
+from core.monitoring.logger import get_logger
 from core.repositories.question_repository import QuestionRepository
 from core.repositories.topic_repository import TopicRepository
+from core.services.clarification_service import ClarificationService
+from core.services.context_service import ContextService
+from core.services.evaluation_service import EvaluationService
+from core.services.feedback_service import FeedbackService
 from core.services.question_service import QuestionService
+from core.services.routing_service import RoutingService
 from infrastructure.redis.session_manager import RedisSessionManager
+
+logger = get_logger(__name__)
 
 # --- LLM Interaction Models ---
 
@@ -27,69 +37,105 @@ class ConversationService:
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.topic_repo = TopicRepository()
         self.question_repo = QuestionRepository()
+        self.context_service = ContextService()
+        self.evaluation_service = EvaluationService()
+        self.feedback_service = FeedbackService()
+        self.routing_service = RoutingService()
+        self.clarification_service = ClarificationService()
 
-    async def process_turn(self, user_id: str, session_id: str, topic_id: str, user_input: str) -> Turn:
-        try:
-            state = await self.get_or_create_state(user_id, session_id, topic_id)
-            prompt = self._build_prompt(state, user_input)
-            llm_response_str = await self._call_llm(prompt)
-            llm_response = LLMResponse.model_validate_json(llm_response_str)
-            response_text = llm_response.user_facing_response
+    async def process_turn(self, chat_id: str, user_uid: str, user_input: str) -> str:
+        """
+        Processes a single turn of the conversation, managing state and returning
+        the next bot message.
+        """
+        logger.info(f"Processing turn for chat {chat_id}")
+        context = await self.context_service.get_context(chat_id, user_uid)
+        if not context:
+            raise ValueError("Chat context not found.")
 
-            # The LLM decides if we should move to the next question by including a
-            # token.
-            if "[NEXT_QUESTION]" in response_text:
-                state = self._update_state(
-                    state=state,
-                    llm_response=llm_response,
-                    user_input=user_input,
-                    is_sufficient=True,
-                )
+        # Main state machine logic
+        if context.turnState == TurnState.AWAITING_INITIAL_ANSWER:
+            return await self._handle_initial_answer(context, user_input)
+        elif context.turnState == TurnState.AWAITING_FOLLOW_UP:
+            return await self._handle_follow_up(context, user_input)
+        elif context.turnState == TurnState.AWAITING_NEXT_ACTION:
+            return await self._handle_next_action(context, user_input)
+        else:
+            raise ValueError(f"Invalid turn state: {context.turnState}")
 
-                # Check for topic completion before getting the next question
-                if state.question_index >= len(state.question_ids):
-                    response_text = response_text.replace(
-                        "[NEXT_QUESTION]",
-                        ("\\n\\nCongratulations, you've completed all questions for this topic!"),
-                    )
-                else:
-                    next_question = await self.question_repo.get_by_id(
-                        user_id=user_id,
-                        topic_id=state.topic_id,
-                        question_id=state.question_ids[state.question_index],
-                    )
-                    response_text = response_text.replace(
-                        "[NEXT_QUESTION]",
-                        f"\\n\\n**Next Question:** {next_question.text}",
-                    )
+    async def _handle_initial_answer(self, context: Context, user_input: str) -> str:
+        """Handles the user's first answer to a question."""
+        _, question = await self.context_service.get_current_question(context.chatId, context.userUid)
+        if not question:
+            return "It looks like we've run out of questions! Well done."
+
+        score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
+        feedback = await self.feedback_service.generate_feedback(question, user_input, score)
+
+        if score.score >= 4:
+            # Good answer, move to next question prompt
+            context.scores[question.id] = score.score
+            context.turnState = TurnState.AWAITING_NEXT_ACTION
+            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+            return f"{feedback}\n\nReady for the next question, or do you have any questions about this one?"
+        else:
+            # Poor answer, await follow-up
+            context.initialScore = score.score
+            context.turnState = TurnState.AWAITING_FOLLOW_UP
+            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+            return feedback
+
+    async def _handle_follow_up(self, context: Context, user_input: str) -> str:
+        """Handles the user's response after receiving a hint."""
+        _, question = await self.context_service.get_current_question(context.chatId, context.userUid)
+        if not question:
+            return "Error: Could not find the current question."
+
+        # Re-evaluate the answer, this time noting it's after a hint
+        second_score = await self.evaluation_service.score_answer(question, user_input, after_hint=True)
+
+        # Average the scores
+        final_score = round((context.initialScore + second_score.score) / 2)
+        context.scores[question.id] = final_score
+        context.turnState = TurnState.AWAITING_NEXT_ACTION
+
+        await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+
+        return f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
+
+    async def _handle_next_action(self, context: Context, user_input: str) -> str:
+        """Handles the user's response when prompted for the next action."""
+        decision = await self.routing_service.determine_next_action(user_input)
+
+        if decision.next_action == NextAction.MOVE_TO_NEXT_QUESTION:
+            context.questionIdx += 1
+            context.initialScore = None
+            context.turnState = TurnState.AWAITING_INITIAL_ANSWER
+            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+
+            _, next_question = await self.context_service.get_current_question(context.chatId, context.userUid)
+            if not next_question:
+                return "You've completed all the questions! Great job."
+            return f"Great, let's move on. Here is your next question:\n\n{next_question.text}"
+
+        elif decision.next_action == NextAction.END_CHAT:
+            context.end_session()
+            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+            return "Got it. This chat session has now ended. Well done!"
+
+        elif decision.next_action == NextAction.AWAIT_CLARIFICATION:
+            _, question = await self.context_service.get_current_question(context.chatId, context.userUid)
+            answer, impact = await self.clarification_service.handle_clarification(question, user_input)
+
+            # If the clarification was very helpful, penalize score and move on
+            if impact.adjusted_score == 1:
+                context.scores[question.id] = 1
+                context.turnState = TurnState.AWAITING_NEXT_ACTION
+                await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+                return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later. Ready for the next question?"
             else:
-                state = self._update_state(
-                    state=state,
-                    llm_response=llm_response,
-                    user_input=user_input,
-                    is_sufficient=False,
-                )
-
-            await self._save_state(user_id, session_id, state)
-            return Turn(user_input=user_input, bot_response=response_text)
-
-        except ValueError as e:
-            # Catches errors like topic not found in _get_or_create_state,
-            # or other value errors like no questions found.
-            print(f"Error processing turn: {e}")
-            return Turn(
-                user_input=user_input,
-                bot_response=(
-                    "I'm having a bit of trouble with this topic. It seems there are "
-                    "no questions available. Please try another topic."
-                ),
-            )
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return Turn(
-                user_input=user_input,
-                bot_response=("I'm sorry, an unexpected error occurred. Please try again later."),
-            )
+                # Otherwise, just provide the info and wait for another attempt
+                return f"{answer}\n\nDoes that help clarify things? Feel free to try answering the original question again."
 
     async def skip_question(self, user_id: str, session_id: str) -> Dict[str, Any]:
         """
