@@ -7,6 +7,7 @@ import '../widgets/topic_selection_widget.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import '../widgets/chat_bubble.dart';
+import '../services/session_api.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -39,6 +40,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Prevent duplicate sends
   bool _isSending = false;
+
+  // Map to store self-evaluation scores for each message
+  final Map<int, int> _selfEvaluationScores = {};
 
   // Sidebar collapse state
   bool _isSidebarCollapsed = false;
@@ -171,45 +175,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     if (chatProvider.isLoading) return;
 
-    // Set sending state to prevent duplicates
     setState(() {
       _isSending = true;
     });
 
     try {
-      // If no active session exists, start a new one first
-      if (!chatProvider.hasActiveSession) {
-        chatProvider
-            .startNewSession()
-            .then((_) {
-              // Send the message after the session is started
-              chatProvider.sendMessage(text);
-            })
-            .whenComplete(() {
-              if (mounted) {
-                setState(() {
-                  _isSending = false;
-                });
-              }
-            });
-      } else {
-        chatProvider.sendMessage(text).whenComplete(() {
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-        });
-      }
+      chatProvider.sendMessage(text).whenComplete(() {
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+        }
+      });
 
       _messageController.clear();
-
-      // Keep focus on text field for better UX
       if (!_textFieldFocusNode.hasFocus) {
         _textFieldFocusNode.requestFocus();
       }
     } catch (e) {
-      // Reset sending state on error
       if (mounted) {
         setState(() {
           _isSending = false;
@@ -293,6 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         }
                         return _buildMessageBubble(
                           chatProvider.messages[index],
+                          index,
                         );
                       },
                     ),
@@ -483,14 +467,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 );
                 // Use existing session and handle topics input instead of creating new session
                 await chatProvider.handleTopicsInput(topics);
-              },
-              onPopularTopicSelected: (topic) async {
-                final chatProvider = Provider.of<ChatProvider>(
-                  context,
-                  listen: false,
-                );
-                // Use the proper method that handles state transitions
-                await chatProvider.startSessionWithPopularTopic(topic);
               },
             ),
           ),
@@ -772,7 +748,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         isProcessingAnswer: chatProvider.isProcessingAnswer,
                       );
                     }
-                    return _buildMessageBubble(chatProvider.messages[index]);
+                    return _buildMessageBubble(
+                      chatProvider.messages[index],
+                      index,
+                    );
                   },
                 ),
               ),
@@ -783,8 +762,68 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message) {
+  Widget _buildMessageBubble(ChatMessage message, int messageIndex) {
+    if (message.text ==
+        "Please use the buttons below to evaluate your answer.") {
+      return Column(
+        children: [
+          ChatBubble(message: message, formatTimestamp: _formatTimestamp),
+          _buildSelfEvaluationButtons(
+            messageIndex - 1,
+          ), // Associate with user's message
+        ],
+      );
+    }
     return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
+  }
+
+  Widget _buildSelfEvaluationButtons(int messageIndex) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(5, (index) {
+        final score = index + 1;
+        final isSelected = _selfEvaluationScores[messageIndex] == score;
+        return ElevatedButton(
+          onPressed:
+              _selfEvaluationScores.containsKey(messageIndex)
+                  ? null
+                  : () => _submitSelfEvaluation(messageIndex, score),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isSelected ? Colors.green : _getScoreColor(score),
+          ),
+          child: Text('$score'),
+        );
+      }),
+    );
+  }
+
+  Color _getScoreColor(int score) {
+    switch (score) {
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.orangeAccent;
+      case 3:
+        return Colors.yellow;
+      case 4:
+        return Colors.lightGreen;
+      case 5:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Future<void> _submitSelfEvaluation(int messageIndex, int score) async {
+    // Prevent re-submission
+    if (_selfEvaluationScores.containsKey(messageIndex)) return;
+
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    setState(() {
+      _selfEvaluationScores[messageIndex] = score;
+    });
+
+    await chatProvider.submitSelfEvaluation(score);
   }
 
   Widget _buildActionButtons() {
@@ -928,8 +967,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     decoration: InputDecoration(
                       hintText: _getInputHint(chatProvider.sessionState),
                       hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color?.withValues(
-                          alpha: 0.6,
+                        color: theme.textTheme.bodyMedium?.color?.withAlpha(
+                          0.6.toInt(),
                         ),
                         letterSpacing: 0.2,
                       ),
@@ -1003,13 +1042,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         (chatProvider.isLoading ||
                                 chatProvider.isTyping ||
                                 _isSending)
-                            ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                            ? theme.colorScheme.primary.withAlpha(0.5.toInt())
                             : theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
                     disabledBackgroundColor: theme.colorScheme.primary
-                        .withValues(alpha: 0.5),
+                        .withAlpha(0.5.toInt()),
                     disabledForegroundColor: theme.colorScheme.onPrimary
-                        .withValues(alpha: 0.7),
+                        .withAlpha(0.7.toInt()),
                     fixedSize: const Size(56, 56), // Consistent size
                     shape: const CircleBorder(),
                     elevation:
@@ -1018,8 +1057,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                 _isSending)
                             ? 0
                             : 2,
-                    shadowColor: theme.colorScheme.primary.withValues(
-                      alpha: 0.3,
+                    shadowColor: theme.colorScheme.primary.withAlpha(
+                      0.3.toInt(),
                     ),
                   ),
                   icon:
@@ -1080,11 +1119,13 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final bool isSystem;
+  int? evaluation;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.isSystem = false,
+    this.evaluation,
   });
 }

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -35,6 +35,20 @@ async def create_topic(request: CreateTopicRequest, current_user: dict = Depends
         logger.error("Error creating topic", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
         raise HTTPException(500, f"Failed to create topic: {safe_error_message}")
+
+
+@router.delete("/{topic_id}")
+async def delete_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a topic"""
+    topic_service = TopicService()
+
+    try:
+        await topic_service.delete_topic(topic_id, current_user.get("uid"))
+        return {"message": "Topic deleted successfully"}
+    except Exception as e:
+        logger.error("Error deleting topic", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(500, f"Failed to delete topic: {safe_error_message}")
 
 
 @router.get("/{user_uid}")
@@ -121,7 +135,7 @@ async def get_topics_with_review_status(
 
         # Enhance each topic with review status
         topics_with_status = []
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
 
         for topic in topics:
             # Calculate review status
@@ -206,7 +220,7 @@ async def get_todays_reviews(user_uid: str, current_user: dict = Depends(get_cur
         # Get all user topics
         topics = await topic_service.get_user_topics(user_uid)
 
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         end_of_today = current_time.replace(hour=23, minute=59, second=59)
 
         due_topics = []
@@ -300,7 +314,7 @@ async def get_review_statistics(user_uid: str, current_user: dict = Depends(get_
                 "insights": [],
             }
 
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
 
         # Calculate statistics
         total_topics = len(topics)
@@ -382,7 +396,7 @@ async def calculate_study_streak(topics_with_reviews: List[Topic]) -> int:
     sorted_dates = sorted(review_dates, reverse=True)
 
     # Calculate streak starting from most recent date
-    current_date = datetime.now().date()
+    current_date = datetime.now(timezone.utc).date()
     streak = 0
 
     for i, review_date in enumerate(sorted_dates):

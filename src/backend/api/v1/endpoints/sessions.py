@@ -22,6 +22,10 @@ class ResponseRequest(BaseModel):
     answer: str
 
 
+class SelfEvaluationRequest(BaseModel):
+    score: int
+
+
 @router.post("/start", response_model=dict)
 async def start_session(request: StartSessionRequest, current_user: dict = Depends(get_current_user)):
     """Start a new learning session"""
@@ -96,6 +100,34 @@ async def respond_to_question(
         logger.error("Error submitting response", extra={"error_detail": str(e)})
         safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
         raise HTTPException(status_code=500, detail=f"Failed to submit response: {safe_error_message}")
+
+
+@router.post("/{session_id}/self-evaluate")
+async def self_evaluate(
+    session_id: str,
+    request: SelfEvaluationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit self-evaluation score"""
+    session_service = SessionService()
+
+    # Verify session exists and user owns it
+    session = await session_service.get_session(session_id, current_user.get("uid"))
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.userUid != current_user.get("uid"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        result = await session_service.submit_self_evaluation(session_id, current_user.get("uid"), request.score)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error submitting self-evaluation", extra={"error_detail": str(e)})
+        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit self-evaluation: {safe_error_message}")
 
 
 @router.post("/{session_id}/end")

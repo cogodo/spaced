@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from core.models import FSRSParams, Message, Session
@@ -79,7 +79,7 @@ class SessionService:
 
             # Reset current session counter for new session
             existing_session.currentSessionQuestionCount = 0
-            existing_session.startedAt = datetime.now()
+            existing_session.startedAt = datetime.now(timezone.utc)
 
             # Create/update with the new session ID
             await self.repository.create(existing_session)
@@ -94,7 +94,7 @@ class SessionService:
                 topicId=topic_id,
                 questionIds=[q.id for q in questions],
                 responses=[],
-                startedAt=datetime.now(),
+                startedAt=datetime.now(timezone.utc),
                 answeredQuestionIds=[],
                 currentSessionQuestionCount=0,
                 maxQuestionsPerSession=5,
@@ -204,8 +204,8 @@ class SessionService:
                 "answeredQuestionIds": session.answeredQuestionIds,
                 "currentSessionQuestionCount": session.currentSessionQuestionCount,
                 "messageCount": len(session.answeredQuestionIds),  # Update message count
-                "updatedAt": datetime.now(),
-                "lastMessageAt": datetime.now(),
+                "updatedAt": datetime.now(timezone.utc),
+                "lastMessageAt": datetime.now(timezone.utc),
             },
         )
 
@@ -258,11 +258,62 @@ class SessionService:
                     "isCompleted": True,
                     "state": "completed",
                     "finalScores": {"overall": int(session_score * 20)},
-                    "updatedAt": datetime.now(),
+                    "updatedAt": datetime.now(timezone.utc),
                 },
             )
 
         return result
+
+    async def submit_self_evaluation(self, session_id: str, user_uid: str, score: int) -> dict:
+        """Submit self-evaluation score and get next question"""
+        session, question = await self.get_current_question(session_id, user_uid)
+
+        if not session or not question:
+            raise ValueError("Invalid session or question not found")
+
+        # Add message to subcollection
+        await self.repository.add_message(
+            user_uid=user_uid,
+            session_id=session_id,
+            question_id=question.id,
+            question_text=question.text,
+            answer_text="Self-evaluated",
+            score=score,
+        )
+
+        # Update session
+        session.answeredQuestionIds.append(question.id)
+        session.currentSessionQuestionCount += 1
+
+        await self.repository.update(
+            session_id,
+            user_uid,
+            {
+                "answeredQuestionIds": session.answeredQuestionIds,
+                "currentSessionQuestionCount": session.currentSessionQuestionCount,
+                "messageCount": len(session.answeredQuestionIds),
+                "updatedAt": datetime.now(timezone.utc),
+                "lastMessageAt": datetime.now(timezone.utc),
+            },
+        )
+
+        # Update Redis cache
+        await self.redis_manager.store_learning_session(session)
+
+        # Check for session completion
+        if session.currentSessionQuestionCount >= session.maxQuestionsPerSession:
+            # Calculate the average score for the session before updating FSRS
+            messages = await self.get_session_messages(session_id, user_uid)
+            session_score = await self._calculate_session_score_from_messages(messages)
+            await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
+            return {"isComplete": True}
+
+        # Get next question
+        _, next_question = await self.get_current_question(session_id, user_uid)
+        return {
+            "isComplete": False,
+            "nextQuestion": next_question.text if next_question else None,
+        }
 
     async def end_session(self, session_id: str, user_uid: str) -> dict:
         """End session early and calculate scores for current session only"""
@@ -293,15 +344,16 @@ class SessionService:
             if current_session_messages:
                 session_score = await self._calculate_session_score_from_messages(current_session_messages)
                 questions_answered = len(current_session_messages)
+
+                # Update FSRS after session end using session performance
+                try:
+                    fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
+                except Exception as e:
+                    print(f"Warning: Could not update FSRS parameters: {e}")
+                    fsrs_update = {}
             else:
                 session_score = 0.0
                 questions_answered = 0
-
-            # Update FSRS after session end using session performance
-            try:
-                fsrs_update = await self._update_topic_fsrs_advanced(session.topicId, session_score, user_uid)
-            except Exception as e:
-                print(f"Warning: Could not update FSRS parameters: {e}")
                 fsrs_update = {}
         else:
             session_score = 0.0
@@ -323,7 +375,7 @@ class SessionService:
                     "isCompleted": True,
                     "state": "completed",
                     "finalScores": {"overall": int(session_score * 20)} if session_score > 0 else {"overall": 0},
-                    "updatedAt": datetime.now(),
+                    "updatedAt": datetime.now(timezone.utc),
                 },
             )
         except Exception as e:
@@ -397,11 +449,14 @@ class SessionService:
                 fsrs_result["newEase"],
                 fsrs_result["intervalDays"],
                 fsrs_result["repetitionCount"],
+                datetime.now(timezone.utc),
             )
 
             # Get the updated topic to calculate next review date
             updated_topic = await self.topic_service.get_topic(topic_id, user_uid)
-            days_until_review = (updated_topic.nextReviewAt - datetime.now()).days if updated_topic.nextReviewAt else 0
+            days_until_review = (
+                (updated_topic.nextReviewAt - datetime.now(timezone.utc)).days if updated_topic.nextReviewAt else 0
+            )
 
             result = {
                 "nextReviewDays": days_until_review,

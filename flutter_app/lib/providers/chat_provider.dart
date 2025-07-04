@@ -238,37 +238,8 @@ class ChatProvider extends ChangeNotifier {
   }) async {
     _logger.info('Starting new chat session with type: $sessionType');
 
-    // For due_items review, check if we can reuse the current active session
-    if (sessionType == 'due_items' &&
-        _currentSession != null &&
-        _sessionState == SessionState.active &&
-        selectedTopics != null) {
-      _logger.info('Reusing existing active session for due items review');
-
-      // Add system message about continuing with selected topics
-      _addSystemMessage(
-        "Continuing your review session with: ${selectedTopics.join(', ')} 🧠✨\n\n"
-        "Let's keep building on your progress!",
-      );
-
-      // Start backend session with existing session ID and selected topics
-      await _startBackendSession(sessionType, selectedTopics);
-
-      // Navigate to the current session URL if router is available
-      if (_router != null && _currentSession != null) {
-        _router!.go('/app/chat/${_currentSession!.token}');
-      }
-
-      // Update session and notify listeners
-      _updateCurrentSession();
-      notifyListeners();
-      return;
-    }
-
     final sessionId = _uuid.v4();
     final now = DateTime.now();
-
-    // No need to generate tokens - we'll use sessionId as token
 
     // Determine topics based on session type
     List<String> topics = [];
@@ -297,26 +268,13 @@ class ChatProvider extends ChangeNotifier {
     _isLoading = false;
     _finalScores = null;
 
-    // Add appropriate welcome message based on session type
-    if (sessionType == 'due_items') {
-      _addSystemMessage(
-        "Great! Let's review your selected topics using spaced repetition. 🧠✨\n\n"
-        "I'll ask you questions about: ${topics.join(', ')}\n\n"
-        "This will help reinforce your memory and identify areas that need more attention.",
-      );
-      _sessionState = SessionState.active;
-
-      // Start the backend session immediately for due items
-      await _startBackendSession(sessionType, topics);
-    } else {
-      // Default behavior - show topic selection (no intro message)
-      _sessionState = SessionState.collectingTopics;
-    }
+    // Start the backend session immediately to get the first question
+    await _startBackendSession(sessionType, topics);
 
     _updateCurrentSession();
     notifyListeners();
 
-    // Save session to Firebase immediately if user is authenticated (for all session types)
+    // Save session to Firebase immediately if user is authenticated
     if (_userId != null) {
       try {
         await _sessionService.saveSession(_userId!, _currentSession!);
@@ -326,13 +284,7 @@ class ChatProvider extends ChangeNotifier {
         await loadSessionHistory();
       } catch (e) {
         _logger.warning('Failed to save new session to Firebase: $e');
-        // Continue without Firebase - session will be saved later
       }
-    }
-
-    // Navigate to token URL only after session is saved
-    if (sessionType == 'due_items' && _router != null) {
-      _router!.go('/app/chat/${_currentSession!.token}');
     }
 
     _logger.info('New chat session started with ID: $sessionId');
@@ -493,6 +445,9 @@ class ChatProvider extends ChangeNotifier {
       );
 
       _currentTopicId = response.topicId; // Store the topic ID
+      _logger.info(
+        'Backend session started. Received Topic ID: ${_currentTopicId}',
+      );
 
       // Use our frontend session ID for consistency
       _sessionState = SessionState.active;
@@ -713,38 +668,10 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Handle answer input during active session
-  Future<void> _handleAnswerInput(String answer) async {
-    if (_currentSessionId == null || _currentTopicId == null) {
-      _addAIMessage(
-        "Session error: No active session or topic ID. Let's start over.",
-      );
-      _resetSession();
-      return;
-    }
-
-    _setLoadingWithTyping(
-      true,
-      typingMessage: "Analyzing your response...",
-      processingAnswer: true,
-    );
-
-    try {
-      final response = await _api.handleConversationTurn(
-        sessionId: _currentSessionId!,
-        topicId: _currentTopicId!,
-        userInput: answer,
-      );
-
-      _addAIMessage(response.botResponse);
-    } on SessionApiException catch (e) {
-      _sessionState = SessionState.error;
-      _addAIMessage("Error: ${e.message}");
-    } finally {
-      _setLoadingWithTyping(false);
-    }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
+  Future<void> _handleAnswerInput(String answer) {
+    // For self-evaluation, just add a placeholder message
+    _addAIMessage("Please use the buttons below to evaluate your answer.");
+    return Future.value();
   }
 
   /// Update current session with latest messages and metadata
@@ -811,68 +738,6 @@ class ChatProvider extends ChangeNotifier {
     } else {
       _setTyping(false);
     }
-  }
-
-  /// Build completion message
-  String _buildCompletionMessage(Map<String, int> scores) {
-    final buffer = StringBuffer();
-    buffer.writeln("🎉 **Session Complete!**");
-    buffer.writeln();
-    buffer.writeln("Here are your learning scores (0-5 scale):");
-    buffer.writeln();
-
-    scores.forEach((topic, score) {
-      String emoji;
-      String feedback;
-
-      if (score >= 4) {
-        emoji = "🌟";
-        feedback = "Excellent!";
-      } else if (score >= 3) {
-        emoji = "✅";
-        feedback = "Good progress";
-      } else if (score >= 2) {
-        emoji = "📚";
-        feedback = "Needs practice";
-      } else {
-        emoji = "🔄";
-        feedback = "Review recommended";
-      }
-
-      buffer.writeln("$emoji **$topic**: $score/5 - $feedback");
-    });
-
-    buffer.writeln();
-    buffer.writeln("**Spaced Repetition Recommendations:**");
-
-    final lowScores = scores.entries.where((e) => e.value < 3).toList();
-    if (lowScores.isNotEmpty) {
-      buffer.writeln(
-        "• Review these topics in 1 day: ${lowScores.map((e) => e.key).join(', ')}",
-      );
-    }
-
-    final mediumScores =
-        scores.entries.where((e) => e.value >= 3 && e.value < 4).toList();
-    if (mediumScores.isNotEmpty) {
-      buffer.writeln(
-        "• Review these topics in 3 days: ${mediumScores.map((e) => e.key).join(', ')}",
-      );
-    }
-
-    final highScores = scores.entries.where((e) => e.value >= 4).toList();
-    if (highScores.isNotEmpty) {
-      buffer.writeln(
-        "• Review these topics in 1 week: ${highScores.map((e) => e.key).join(', ')}",
-      );
-    }
-
-    buffer.writeln();
-    buffer.writeln(
-      "Would you like to start a **new session** with different topics?",
-    );
-
-    return buffer.toString();
   }
 
   /// Format timestamp for display
@@ -1160,21 +1025,19 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
+    _logger.info(
+      'Ending session. Session ID: $_currentSessionId, Topic ID: $_currentTopicId',
+    );
     _setLoadingWithTyping(true, typingMessage: "Ending session...");
 
     try {
-      final result = await _api.endConversation(sessionId: _currentSessionId!);
+      // This call is crucial as it triggers the backend to finalize the session
+      // and perform the FSRS update based on the session's performance.
+      await _api.endSession(sessionId: _currentSessionId!);
 
-      // Mark session as completed
+      // Mark session as completed on the frontend
       _sessionState = SessionState.completed;
-
-      // Build completion scores from result
-      final finalScore = (result['final_score'] as num?)?.toDouble() ?? 0.0;
-      final questionsAnswered = result['questions_answered'] as int? ?? 0;
-      final totalQuestions = result['total_questions'] as int? ?? 1;
-      final percentageScore = result['percentage_score'] as int? ?? 0;
-
-      _finalScores = {'overall': percentageScore};
+      _finalScores = {}; // Clear scores
 
       _currentSession = _currentSession!.copyWith(
         state: SessionState.completed,
@@ -1183,18 +1046,13 @@ class ChatProvider extends ChangeNotifier {
         updatedAt: DateTime.now(),
       );
 
-      // Show completion message
-      final completionMessage =
-          ("🏁 **Session Ended Early**\n\n"
-              "📊 **Your Results:**\n"
-              "• Questions Answered: $questionsAnswered\n"
-              "• Average Score: ${finalScore.toStringAsFixed(1)}/5.0\n"
-              "• Percentage: $percentageScore%\n\n"
-              "Your progress has been saved and will help optimize your future learning sessions.");
-
+      // Show our simplified, client-side completion message
+      const completionMessage =
+          "🏁 **Session Ended**\n\n"
+          "Your progress has been saved. Great work!";
       _addAIMessage(completionMessage);
 
-      _logger.info('Session ended early successfully');
+      _logger.info('Session ended successfully and FSRS update triggered.');
     } catch (e) {
       _logger.severe('Error ending session: $e');
       if (e is SessionApiException) {
@@ -1230,5 +1088,50 @@ class ChatProvider extends ChangeNotifier {
       _logger.severe('Error repairing session metadata: $e');
       rethrow; // Re-throw for UI error handling
     }
+  }
+
+  Future<void> submitSelfEvaluation(int score) async {
+    if (_currentSessionId == null) return;
+
+    _setLoadingWithTyping(true, processingAnswer: true);
+
+    try {
+      // Add the user's score to the message for local display *before* API call
+      final lastUserMessageIndex = _messages.lastIndexWhere((m) => m.isUser);
+      if (lastUserMessageIndex != -1) {
+        _messages[lastUserMessageIndex].evaluation = score;
+        notifyListeners(); // Update UI to show the score has been recorded
+      }
+
+      final response = await _api.submitSelfEvaluation(
+        sessionId: _currentSessionId!,
+        score: score,
+      );
+
+      if (response.isComplete) {
+        // The session is over. Call endCurrentSession to show our simplified message.
+        await endCurrentSession();
+      } else if (response.nextQuestion != null) {
+        // The session is ongoing, show the next question.
+        _addAIMessage(response.nextQuestion!);
+      } else {
+        // Handle unexpected case where session is not complete but no question is provided
+        _addAIMessage(
+          "I've received your answer. Let me prepare the next question...",
+        );
+      }
+    } catch (e) {
+      _logger.severe('Error submitting self-evaluation: $e');
+      if (e is SessionApiException) {
+        _addAIMessage('Error submitting evaluation: ${e.message}');
+      } else {
+        _addAIMessage('An unexpected error occurred while saving your answer.');
+      }
+    } finally {
+      _setLoadingWithTyping(false);
+    }
+
+    _updateCurrentSession();
+    await _autoSaveSession();
   }
 }

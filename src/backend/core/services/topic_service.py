@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from core.models import FSRSParams, Topic
@@ -60,6 +61,51 @@ class TopicService:
         """Update the question bank for a topic"""
         await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
         # Invalidate cache since we updated the topic
+        self.cache.invalidate_user(user_uid)
+
+    async def update_fsrs_params(
+        self,
+        topic_id: str,
+        user_uid: str,
+        ease: float,
+        interval: int,
+        repetition: int,
+        last_reviewed_at: datetime,
+    ):
+        """Update FSRS parameters and review dates for a topic using a safe read-modify-write pattern."""
+        # 1. Read the full topic object first to ensure we have the complete, correct model.
+        topic = await self.repository.get_by_id(topic_id, user_uid)
+        if not topic:
+            logger.error(f"Cannot update FSRS params: Topic {topic_id} not found for user {user_uid}")
+            return
+
+        # 2. Modify the Pydantic model in memory.
+        next_review_at = last_reviewed_at + timedelta(days=interval)
+
+        topic.fsrsParams.ease = ease
+        topic.fsrsParams.interval = interval
+        topic.fsrsParams.repetition = repetition
+        topic.lastReviewedAt = last_reviewed_at
+        topic.nextReviewAt = next_review_at
+
+        # 3. Create the update payload from the modified model.
+        # This avoids dot notation and sends a structured object, just like the working `create` method.
+        update_data = {
+            "fsrsParams": topic.fsrsParams.dict(),
+            "lastReviewedAt": topic.lastReviewedAt,
+            "nextReviewAt": topic.nextReviewAt,
+        }
+
+        await self.repository.update(topic_id, user_uid, update_data)
+        self.cache.invalidate_user(user_uid)
+
+    async def delete_topic(self, topic_id: str, user_uid: str):
+        """Delete a topic and all its questions"""
+        # We need to also delete all questions associated with the topic.
+        # This is not yet implemented in the QuestionRepository, so we will
+        # need to add it there first.
+        # For now, we will just delete the topic.
+        await self.repository.delete(topic_id, user_uid)
         self.cache.invalidate_user(user_uid)
 
     # New methods for chat functionality

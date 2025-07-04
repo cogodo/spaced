@@ -167,14 +167,51 @@ class UserTopic {
   final String id;
   final String name;
   final String description;
+  final int questionCount;
+  final DateTime? createdAt;
+  final DateTime? lastReviewedAt;
+  final DateTime? nextReviewAt;
+  final bool isDue;
+  final bool isOverdue;
+  final String reviewUrgency;
+  final Map<String, dynamic> fsrsParams;
 
-  UserTopic({required this.id, required this.name, required this.description});
+  UserTopic({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.questionCount,
+    this.createdAt,
+    this.lastReviewedAt,
+    this.nextReviewAt,
+    required this.isDue,
+    required this.isOverdue,
+    required this.reviewUrgency,
+    required this.fsrsParams,
+  });
 
   factory UserTopic.fromJson(Map<String, dynamic> json) {
     return UserTopic(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String,
+      questionCount: json['questionCount'] as int,
+      createdAt:
+          json['createdAt'] != null
+              ? DateTime.parse(json['createdAt'] as String)
+              : null,
+      lastReviewedAt:
+          json['lastReviewedAt'] != null
+              ? DateTime.parse(json['lastReviewedAt'] as String)
+              : null,
+      nextReviewAt:
+          json['nextReviewAt'] != null
+              ? DateTime.parse(json['nextReviewAt'] as String)
+              : null,
+      isDue: json['isDue'] as bool,
+      isOverdue: json['isOverdue'] as bool,
+      reviewUrgency: json['reviewUrgency'] as String,
+      fsrsParams: json['fsrsParams'] as Map<String, dynamic>,
     );
   }
 }
@@ -751,6 +788,117 @@ class SessionApi {
       throw SessionApiException('Network error: $e');
     }
   }
+
+  /// Get all topics for a user
+  Future<List<UserTopic>> getAllTopics() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw SessionApiException('User not authenticated');
+    }
+
+    final url = Uri.parse('$baseUrl/topics/${user.uid}/with-review-status');
+    try {
+      final response = await _topicBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http.get(url, headers: headers).timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body) as List;
+          return data
+              .map(
+                (topicData) =>
+                    UserTopic.fromJson(topicData as Map<String, dynamic>),
+              )
+              .toList();
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to get topics: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
+
+  Future<void> deleteTopic(String topicId) async {
+    final url = Uri.parse('$baseUrl/topics/$topicId');
+    try {
+      final response = await _topicBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http.delete(url, headers: headers).timeout(timeout);
+        });
+      });
+
+      if (response.statusCode != 200) {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to delete topic: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
+
+  Future<SelfEvaluationResponse> submitSelfEvaluation({
+    required String sessionId,
+    required int score,
+  }) async {
+    final url = Uri.parse('$baseUrl/sessions/$sessionId/self-evaluate');
+    try {
+      final response = await _sessionBreaker.execute(() async {
+        return await _makeRequestWithRetry((headers) async {
+          return await http
+              .post(url, headers: headers, body: jsonEncode({'score': score}))
+              .timeout(timeout);
+        });
+      });
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return SelfEvaluationResponse.fromJson(data);
+        } catch (e) {
+          throw SessionApiException('Invalid response format: $e');
+        }
+      } else {
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw SessionApiException(
+          'Failed to submit self-evaluation: $errorBody',
+          response.statusCode,
+        );
+      }
+    } on CircuitBreakerException catch (e) {
+      throw SessionApiException(
+        'Service temporarily unavailable: ${e.message}',
+      );
+    } catch (e) {
+      if (e is SessionApiException) rethrow;
+      throw SessionApiException('Network error: $e');
+    }
+  }
 }
 
 class SkipQuestionResponse {
@@ -763,6 +911,20 @@ class SkipQuestionResponse {
     return SkipQuestionResponse(
       isDone: json['is_done'],
       nextQuestion: json['next_question'],
+    );
+  }
+}
+
+class SelfEvaluationResponse {
+  final bool isComplete;
+  final String? nextQuestion;
+
+  SelfEvaluationResponse({required this.isComplete, this.nextQuestion});
+
+  factory SelfEvaluationResponse.fromJson(Map<String, dynamic> json) {
+    return SelfEvaluationResponse(
+      isComplete: json['isComplete'] as bool,
+      nextQuestion: json['nextQuestion'] as String?,
     );
   }
 }

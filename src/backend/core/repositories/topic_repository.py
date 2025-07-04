@@ -38,7 +38,7 @@ class TopicRepository:
     async def update(self, topic_id: str, user_uid: str, updates: dict) -> None:
         """Update topic fields in user's subcollection"""
         doc_ref = self._get_user_topics_collection(user_uid).document(topic_id)
-        doc_ref.update(updates)
+        await doc_ref.update(updates)
 
     async def delete(self, topic_id: str, user_uid: str) -> None:
         """Delete a topic and all its questions"""
