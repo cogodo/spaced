@@ -35,8 +35,8 @@ def create_app() -> FastAPI:
             "http://localhost:8080",
         ]
     else:
-        # In production, use a comma-separated string from settings
-        allow_origins = settings.cors_origins.split(",") if settings.cors_origins else []
+        # In production, settings.cors_origins is already a list
+        allow_origins = settings.cors_origins if settings.cors_origins else []
 
     app.add_middleware(
         CORSMiddleware,
