@@ -21,16 +21,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # Navigate to your app directory
-            # cd /path/to/your/app
-            
-            # Pull the latest changes from the staging branch
-            # git pull origin staging
-            
-            # Run your bootstrap/restart script
-            # For example:
-            # bash ~/bootstrap.sh
-            
+            sudo /opt/bootstrap.sh
             echo "Deployment to staging complete!"
 
   deploy-production:
@@ -47,14 +38,5 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # Navigate to your app directory
-            # cd /path/to/your/app
-            
-            # Pull the latest changes from the main branch
-            # git pull origin main
-            
-            # Run your bootstrap/restart script
-            # For example:
-            # bash ~/bootstrap.sh
-
+            sudo /opt/bootstrap.sh
             echo "Deployment to production complete!" 
