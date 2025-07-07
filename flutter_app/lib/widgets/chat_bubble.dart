@@ -20,13 +20,13 @@ class ChatBubble extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Align(
-      alignment: message.isUser ? Alignment.centerLeft : Alignment.centerRight,
+      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           mainAxisAlignment:
-              isUser ? MainAxisAlignment.start : MainAxisAlignment.end,
+              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isUser) ...[
@@ -90,24 +90,24 @@ class ChatBubble extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.outline.withOpacity(0.1),
           width: 1,
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Markdown content for user messages
-          _buildMarkdownContent(context, theme, TextAlign.left, isUser: true),
+          _buildMarkdownContent(context, theme, TextAlign.right, isUser: true),
           const SizedBox(height: 4),
           // Timestamp
           Text(
             formatTimestamp(message.timestamp),
             style: theme.textTheme.bodySmall?.copyWith(letterSpacing: 0.3),
-            textAlign: TextAlign.left,
+            textAlign: TextAlign.right,
           ),
         ],
       ),
