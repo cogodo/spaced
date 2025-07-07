@@ -15,13 +15,20 @@ from core.repositories.question_repository import QuestionRepository
 from core.repositories.topic_repository import TopicRepository
 from core.services.clarification_service import ClarificationService
 from core.services.context_service import ContextService
-from core.services.evaluation_service import EvaluationService
-from core.services.feedback_service import FeedbackService
+from core.services.evaluation_service import EvaluationError, EvaluationService
+from core.services.feedback_service import FeedbackError, FeedbackService
 from core.services.question_service import QuestionService
 from core.services.routing_service import RoutingService
 from infrastructure.redis.session_manager import RedisSessionManager
 
 logger = get_logger(__name__)
+
+
+class ConversationServiceError(Exception):
+    """Base exception for ConversationService errors."""
+
+    pass
+
 
 # --- LLM Interaction Models ---
 
@@ -48,20 +55,32 @@ class ConversationService:
         Processes a single turn of the conversation, managing state and returning
         the next bot message.
         """
-        logger.info(f"Processing turn for chat {chat_id}")
-        context = await self.context_service.get_context(chat_id, user_uid)
-        if not context:
-            raise ValueError("Chat context not found.")
+        try:
+            logger.info(f"Processing turn for chat {chat_id}")
+            context = await self.context_service.get_context(chat_id, user_uid)
+            if not context:
+                raise ValueError("Chat context not found.")
 
-        # Main state machine logic
-        if context.turnState == TurnState.AWAITING_INITIAL_ANSWER:
-            return await self._handle_initial_answer(context, user_input)
-        elif context.turnState == TurnState.AWAITING_FOLLOW_UP:
-            return await self._handle_follow_up(context, user_input)
-        elif context.turnState == TurnState.AWAITING_NEXT_ACTION:
-            return await self._handle_next_action(context, user_input)
-        else:
-            raise ValueError(f"Invalid turn state: {context.turnState}")
+            # Main state machine logic
+            if context.turnState == TurnState.AWAITING_INITIAL_ANSWER:
+                return await self._handle_initial_answer(context, user_input)
+            elif context.turnState == TurnState.AWAITING_FOLLOW_UP:
+                return await self._handle_follow_up(context, user_input)
+            elif context.turnState == TurnState.AWAITING_NEXT_ACTION:
+                return await self._handle_next_action(context, user_input)
+            else:
+                raise ValueError(f"Invalid turn state: {context.turnState}")
+        except (EvaluationError, FeedbackError) as e:
+            # Catch specific, known errors and log them.
+            # These are errors that are part of the expected "unhappy path"
+            logger.error(f"A service error occurred during turn processing for chat {chat_id}: {e}", exc_info=True)
+            # We can raise a specific error that the endpoint can then handle
+            raise ConversationServiceError(f"Failed to process turn: {e}") from e
+        except Exception as e:
+            # Catch any other, unexpected errors.
+            logger.error(f"An unexpected error occurred processing turn for chat {chat_id}", exc_info=True)
+            # Re-raise a generic error to be handled by the endpoint
+            raise ConversationServiceError("An unexpected internal error occurred.") from e
 
     async def _handle_initial_answer(self, context: Context, user_input: str) -> str:
         """Handles the user's first answer to a question."""
@@ -69,21 +88,26 @@ class ConversationService:
         if not question:
             return "It looks like we've run out of questions! Well done."
 
-        score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
-        feedback = await self.feedback_service.generate_feedback(question, user_input, score)
+        try:
+            score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
+            feedback = await self.feedback_service.generate_feedback(question, user_input, score)
 
-        if score.score >= 4:
-            # Good answer, move to next question prompt
-            context.scores[question.id] = score.score
-            context.turnState = TurnState.AWAITING_NEXT_ACTION
-            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
-            return f"{feedback}\n\nReady for the next question, or do you have any questions about this one?"
-        else:
-            # Poor answer, await follow-up
-            context.initialScore = score.score
-            context.turnState = TurnState.AWAITING_FOLLOW_UP
-            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
-            return feedback
+            if score.score >= 4:
+                # Good answer, move to next question prompt
+                context.scores[question.id] = score.score
+                context.turnState = TurnState.AWAITING_NEXT_ACTION
+                self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+                return f"{feedback}\n\nReady for the next question, or do you have any questions about this one?"
+            else:
+                # Poor answer, await follow-up
+                context.initialScore = score.score
+                context.turnState = TurnState.AWAITING_FOLLOW_UP
+                self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+                return feedback
+
+        except ValueError as e:
+            logger.error(f"Error processing initial answer: {str(e)}")
+            return f"I'm having trouble processing your answer right now. {str(e)}"
 
     async def _handle_follow_up(self, context: Context, user_input: str) -> str:
         """Handles the user's response after receiving a hint."""
@@ -91,51 +115,66 @@ class ConversationService:
         if not question:
             return "Error: Could not find the current question."
 
-        # Re-evaluate the answer, this time noting it's after a hint
-        second_score = await self.evaluation_service.score_answer(question, user_input, after_hint=True)
+        try:
+            # Re-evaluate the answer, this time noting it's after a hint
+            second_score = await self.evaluation_service.score_answer(question, user_input, after_hint=True)
 
-        # Average the scores
-        final_score = round((context.initialScore + second_score.score) / 2)
-        context.scores[question.id] = final_score
-        context.turnState = TurnState.AWAITING_NEXT_ACTION
+            # Average the scores
+            final_score = round((context.initialScore + second_score.score) / 2)
+            context.scores[question.id] = final_score
+            context.turnState = TurnState.AWAITING_NEXT_ACTION
 
-        await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+            self.context_service.repository.update(context.chatId, context.userUid, context.dict())
 
-        return f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
+            return f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
+
+        except ValueError as e:
+            logger.error(f"Error processing follow-up answer: {str(e)}")
+            return f"I'm having trouble processing your follow-up answer right now. {str(e)}"
 
     async def _handle_next_action(self, context: Context, user_input: str) -> str:
         """Handles the user's response when prompted for the next action."""
-        decision = await self.routing_service.determine_next_action(user_input)
+        try:
+            decision = await self.routing_service.determine_next_action(user_input)
 
-        if decision.next_action == NextAction.MOVE_TO_NEXT_QUESTION:
-            context.questionIdx += 1
-            context.initialScore = None
-            context.turnState = TurnState.AWAITING_INITIAL_ANSWER
-            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+            if decision.next_action == NextAction.MOVE_TO_NEXT_QUESTION:
+                context.questionIdx += 1
+                context.initialScore = None
+                context.turnState = TurnState.AWAITING_INITIAL_ANSWER
+                self.context_service.repository.update(context.chatId, context.userUid, context.dict())
 
-            _, next_question = await self.context_service.get_current_question(context.chatId, context.userUid)
-            if not next_question:
-                return "You've completed all the questions! Great job."
-            return f"Great, let's move on. Here is your next question:\n\n{next_question.text}"
+                _, next_question = await self.context_service.get_current_question(context.chatId, context.userUid)
+                if not next_question:
+                    return "You've completed all the questions! Great job."
+                return f"Great, let's move on. Here is your next question:\n\n{next_question.text}"
 
-        elif decision.next_action == NextAction.END_CHAT:
-            context.end_session()
-            await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
-            return "Got it. This chat session has now ended. Well done!"
+            elif decision.next_action == NextAction.END_CHAT:
+                summary = await self.end_session(context)
+                return f"Session ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
-        elif decision.next_action == NextAction.AWAIT_CLARIFICATION:
-            _, question = await self.context_service.get_current_question(context.chatId, context.userUid)
-            answer, impact = await self.clarification_service.handle_clarification(question, user_input)
+            elif decision.next_action == NextAction.AWAIT_CLARIFICATION:
+                _, question = await self.context_service.get_current_question(context.chatId, context.userUid)
 
-            # If the clarification was very helpful, penalize score and move on
-            if impact.adjusted_score == 1:
-                context.scores[question.id] = 1
-                context.turnState = TurnState.AWAITING_NEXT_ACTION
-                await self.context_service.repository.update(context.chatId, context.userUid, context.dict())
-                return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later. Ready for the next question?"
-            else:
-                # Otherwise, just provide the info and wait for another attempt
-                return f"{answer}\n\nDoes that help clarify things? Feel free to try answering the original question again."
+                try:
+                    answer, impact = await self.clarification_service.handle_clarification(question, user_input)
+
+                    # If the clarification was very helpful, penalize score and move on
+                    if impact.adjusted_score == 1:
+                        context.scores[question.id] = 1
+                        context.turnState = TurnState.AWAITING_NEXT_ACTION
+                        self.context_service.repository.update(context.chatId, context.userUid, context.dict())
+                        return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later. Ready for the next question?"
+                    else:
+                        # Otherwise, just provide the info and wait for another attempt
+                        return f"{answer}\n\nDoes that help clarify things? Feel free to try answering the original question again."
+
+                except ValueError as e:
+                    logger.error(f"Error handling clarification: {str(e)}")
+                    return f"I'm having trouble providing clarification right now. {str(e)}"
+
+        except ValueError as e:
+            logger.error(f"Error determining next action: {str(e)}")
+            return f"I'm having trouble understanding your response right now. {str(e)}"
 
     async def skip_question(self, user_id: str, session_id: str) -> Dict[str, Any]:
         """
@@ -169,41 +208,85 @@ class ConversationService:
 
         return {"is_done": False, "next_question": next_question.text}
 
-    async def end_session(self, user_id: str, session_id: str) -> Dict[str, Any]:
+    async def end_session(self, context: Context) -> Dict[str, Any]:
         """
-        Ends the session, calculates analytics, and cleans up the state from Redis.
+        Ends the session, calculates analytics, updates FSRS, and returns a summary.
         """
-        state = await self.redis_manager.get_conversation_state(user_id, session_id)
+        logger.info(f"Ending session for chat {context.chatId}")
+        context.end_session()
+        self.context_service.repository.update(context.chatId, context.userUid, context.dict())
 
-        if not state:
-            # If state doesn't exist, it might have expired or was never created.
-            # Return a default/empty analytics object.
-            return {
-                "final_score": 0.0,
-                "questions_answered": 0,
-                "total_questions": 0,
-                "percentage_score": 0,
-            }
-
-        questions_answered = len(state.answered_question_ids)
-        total_questions = len(state.question_ids)
-
-        if not state.score_history:
-            final_score = 0.0
+        # Calculate stats
+        questions_answered = len(context.scores)
+        if questions_answered == 0:
+            average_score = 0
         else:
-            final_score = sum(state.score_history) / len(state.score_history)
+            average_score = sum(context.scores.values()) / questions_answered
 
-        percentage_score = int((final_score / 5) * 100) if final_score > 0 else 0
+        # Get topic name for the motivational message
+        topic_name = "your recent topic"
+        try:
+            if context.topicId and context.userUid:
+                topic = await self.topic_repo.get_by_id(context.topicId, context.userUid)
+                if topic:
+                    topic_name = topic.name
+        except Exception as e:
+            logger.warning(f"Could not retrieve topic name for chat {context.chatId}: {e}")
 
-        # Clean up the session state from Redis
-        await self.redis_manager.delete_conversation_state(user_id, session_id)
+        # Generate motivational message
+        motivational_message = await self._generate_summary_message(average_score, questions_answered, topic_name)
 
-        return {
-            "final_score": round(final_score, 2),
+        # Update FSRS
+        if questions_answered > 0:
+            try:
+                from core.services.fsrs_service import FSRSService
+
+                fsrs_service = FSRSService()
+                await fsrs_service.update_fsrs_for_topic(context.userUid, context.topicId, context.scores)
+                logger.info(f"Successfully updated FSRS for topic {context.topicId}")
+            except Exception as e:
+                logger.error(f"Failed to update FSRS for topic {context.topicId}: {e}", exc_info=True)
+                # Don't fail the whole session end if FSRS update fails
+
+        # Create summary
+        summary = {
             "questions_answered": questions_answered,
-            "total_questions": total_questions,
-            "percentage_score": percentage_score,
+            "average_score": average_score,
+            "message": motivational_message,
         }
+
+        return summary
+
+    async def _generate_summary_message(self, average_score: float, questions_answered: int, topic_name: str) -> str:
+        """Generates a short, motivational summary message based on session performance."""
+        if questions_answered == 0:
+            return "No questions were answered in this session, but keep at it!"
+
+        prompt = f"""
+        Generate a short, motivational, and friendly message for a user who just finished a learning session on the topic "{topic_name}".
+
+        Their performance:
+        - Questions answered: {questions_answered}
+        - Average score: {average_score:.2f} out of 5
+
+        The message should be encouraging. If the score is low, motivate them to keep practicing. If the score is high, congratulate them. The tone should be like a friendly tutor. It must be concise (1-2 sentences).
+        """
+
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=settings.openai_model,
+                messages=[
+                    {"role": "system", "content": "You are Spaced, a friendly and motivational learning tutor."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=100,
+                temperature=0.5,
+            )
+            content = response.choices[0].message.content
+            return content.strip() if content else "Great job! Keep up the consistent practice."
+        except Exception as e:
+            logger.error(f"Error generating summary message: {e}", exc_info=True)
+            return "Great job! Keep up the consistent practice."
 
     async def get_or_create_state(
         self, user_id: str, session_id: str, topic_id: Optional[str] = None
@@ -304,22 +387,21 @@ Return your entire response as a single JSON object with two keys:
         return summary
 
     async def _call_llm(self, prompt: str) -> str:
-        """Calls the OpenAI API and returns the response content."""
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4-turbo-preview",  # Using a more advanced model
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are Spaced, a friendly conversational tutor who always "
-                        "responds in the specified JSON format."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
-        )
-        return response.choices[0].message.content
+        """Helper to call the LLM and return the text content."""
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=settings.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2048,  # Explicitly set a higher token limit
+                temperature=0.3,
+            )
+            content = response.choices[0].message.content
+            if not content:
+                raise ValueError("LLM returned empty content.")
+            return content
+        except Exception as e:
+            logger.error(f"Error calling LLM: {e}", exc_info=True)
+            raise ConversationServiceError("Failed to get a response from the AI.") from e
 
     async def _save_state(self, user_id: str, session_id: str, state: ConversationState):
-        await self.redis_manager.store_conversation_state(user_id, session_id, state)
+        await self.redis_manager.save_conversation_state(user_id, session_id, state)

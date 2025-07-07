@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
 
 from api.v1.router import api_router
 from app.config import settings
@@ -52,6 +51,13 @@ def create_app() -> FastAPI:
     async def startup_event():
         """Initialize services on application startup."""
         print(f"Server starting in '{settings.environment}' mode.")
+
+        # --- Configuration Checks ---
+        if not settings.openai_api_key:
+            logger.critical("FATAL: OPENAI_API_KEY is not set. The application cannot start.")
+            raise ValueError("OPENAI_API_KEY is not set. Please configure your environment.")
+
+        # --- Initializations ---
         try:
             initialize_firebase()
             print("Firebase initialized successfully.")
@@ -75,7 +81,7 @@ def create_app() -> FastAPI:
 
     # --- Routers ---
     # The main API router for version 1
-    app.include_router(api_router, prefix=settings.api_prefix)
+    app.include_router(api_router, prefix="/api/v1")
 
     # Note: The /monitoring router is now the primary source for health checks.
     # The old health_router has been removed.
@@ -85,9 +91,6 @@ def create_app() -> FastAPI:
 
 # Create the application instance
 app = create_app()
-
-# This is the entry point for AWS Lambda
-handler = Mangum(app)
 
 if __name__ == "__main__":
     import uvicorn

@@ -63,7 +63,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
     }
 
     switch (currentPath) {
-      case Routes.appHome:
+      case Routes.appTodays:
         return 0;
       case Routes.appAll:
         return 1;
@@ -77,7 +77,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
   // Helper method to navigate to route by index
   void _navigateToIndex(BuildContext context, int index) {
     final routes = [
-      Routes.appHome, // /app
+      Routes.appTodays, // /app/today
       Routes.appAll, // /app/all
       Routes.appChat, // /app/chat
     ];
@@ -378,12 +378,10 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: InkWell(
                     onTap: () {
-                      final chatProvider = Provider.of<ChatProvider>(
+                      Provider.of<ChatProvider>(
                         context,
                         listen: false,
-                      );
-                      chatProvider.startNewSession();
-                      context.go(Routes.appChat);
+                      ).startNewChatFlow();
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/chat_session.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
@@ -33,10 +34,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
 
-  // For due topics selection (kept for backwards compatibility)
-  List<dynamic> _dueTasks = []; // Changed from List<Task> to List<dynamic>
-  Set<String> _selectedTopics = {};
-  bool _isLoadingDueTasks = false;
+  // For due topics selection
+  Set<ChatSessionSummary> _selectedSessions = {};
 
   // Prevent duplicate sends
   bool _isSending = false;
@@ -47,29 +46,27 @@ class _ChatScreenState extends State<ChatScreen> {
   // Sidebar collapse state
   bool _isSidebarCollapsed = false;
 
+  late final ChatProvider _chatProvider;
+
   @override
   void initState() {
     super.initState();
+    _chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    // Load session based on token, but don't auto-start new sessions
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-
+      // If a session token is in the URL, try to load it, but only if it's
+      // not already the active session in the provider. This prevents redundant
+      // loading when navigating back to an already active chat.
       if (widget.sessionToken != null) {
-        // Load specific session by token
-        _loadSessionByToken(widget.sessionToken!);
-      } else {
-        // Check if there's an active session and redirect to its token URL
-        final currentToken = chatProvider.currentSessionToken;
-        if (currentToken != null) {
-          // Redirect to the active session's token URL
-          context.go('/app/chat/$currentToken');
-        } else {
-          // No session token and no active session - reset to initial state for session selection
-          chatProvider.resetToInitialState();
+        if (_chatProvider.currentSession?.token != widget.sessionToken) {
+          _chatProvider.loadSessionByToken(widget.sessionToken!);
         }
       }
-      // Don't auto-start new sessions - wait for user input
+      // If there's no token in the URL and no session is active, ensure
+      // we are in the initial state to start a new chat.
+      else if (!_chatProvider.hasActiveSession) {
+        _chatProvider.setSessionState(SessionState.initial);
+      }
     });
   }
 
@@ -81,83 +78,44 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.sessionToken != oldWidget.sessionToken) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (widget.sessionToken != null) {
-          _loadSessionByToken(widget.sessionToken!);
+          final chatProvider = Provider.of<ChatProvider>(
+            context,
+            listen: false,
+          );
+          // Also check here to prevent redundant loading on navigation.
+          if (chatProvider.currentSession?.token == widget.sessionToken) {
+            return;
+          }
+          _chatProvider.loadSessionByToken(widget.sessionToken!);
         }
-      });
-    }
-  }
-
-  Future<void> _loadSessionByToken(String token) async {
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-
-    try {
-      await chatProvider.loadSessionByToken(token);
-    } catch (e) {
-      // Handle session not found or error
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Session not found: $token'),
-            action: SnackBarAction(
-              label: 'Start New',
-              onPressed: () => chatProvider.startNewSession(),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadDueTasks() async {
-    setState(() {
-      _isLoadingDueTasks = true;
-    });
-
-    try {
-      // Since we removed the old task system, just set empty tasks
-      setState(() {
-        _dueTasks = [];
-        _selectedTopics.clear();
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading due tasks: $e')));
-      }
-    } finally {
-      setState(() {
-        _isLoadingDueTasks = false;
       });
     }
   }
 
   void _startNewItemsSession() {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.startNewSession(sessionType: 'custom_topics');
+    chatProvider.setSessionState(SessionState.collectingTopics);
   }
 
   void _startPastReviewsSession() {
-    _loadDueTasks();
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     chatProvider.setSessionState(SessionState.selectingDueTopics);
   }
 
   void _startDueTopicsSession() {
-    if (_selectedTopics.isEmpty) {
+    if (_selectedSessions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one topic to review'),
+          content: Text('Please select at least one session to review'),
         ),
       );
       return;
     }
 
+    final topics =
+        _selectedSessions.expand<String>((s) => s.topics).toSet().toList();
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.startNewSession(
-      sessionType: 'due_items',
-      selectedTopics: _selectedTopics.toList(),
-    );
+    chatProvider.startNewSession(topics);
   }
 
   @override
@@ -247,7 +205,7 @@ class _ChatScreenState extends State<ChatScreen> {
               // Show due topics selection
               if (chatProvider.sessionState ==
                   SessionState.selectingDueTopics) {
-                return _buildDueTopicsSelection();
+                return _buildDueTopicsSelection(chatProvider);
               }
 
               // Show normal chat interface
@@ -465,8 +423,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   context,
                   listen: false,
                 );
-                // Use existing session and handle topics input instead of creating new session
-                await chatProvider.handleTopicsInput(topics);
+                await chatProvider.startNewSession(topics);
               },
             ),
           ),
@@ -475,7 +432,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildDueTopicsSelection() {
+  Widget _buildDueTopicsSelection(ChatProvider chatProvider) {
     final theme = Theme.of(context);
 
     return Column(
@@ -487,7 +444,7 @@ class _ChatScreenState extends State<ChatScreen> {
             color: theme.colorScheme.surface,
             border: Border(
               bottom: BorderSide(
-                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                color: theme.colorScheme.outline.withOpacity(0.2),
               ),
             ),
           ),
@@ -519,11 +476,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Choose which topics you\'d like to review today',
+                          'Choose which past sessions you\'d like to review topics from',
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.7,
-                            ),
+                            color: theme.colorScheme.onSurface.withOpacity(0.7),
                           ),
                         ),
                       ],
@@ -538,35 +493,35 @@ class _ChatScreenState extends State<ChatScreen> {
         // Content
         Expanded(
           child:
-              _isLoadingDueTasks
+              chatProvider.isLoadingHistory
                   ? const Center(child: CircularProgressIndicator())
-                  : _dueTasks.isEmpty
-                  ? _buildNoDueTasksMessage()
-                  : _buildDueTasksList(),
+                  : chatProvider.sessionHistory.isEmpty
+                  ? _buildNoSessionsMessage()
+                  : _buildSessionsList(chatProvider.sessionHistory),
         ),
 
         // Bottom action bar
-        if (_dueTasks.isNotEmpty)
+        if (chatProvider.sessionHistory.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               border: Border(
                 top: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                  color: theme.colorScheme.outline.withOpacity(0.2),
                 ),
               ),
             ),
             child: Row(
               children: [
                 Text(
-                  '${_selectedTopics.length} topic${_selectedTopics.length == 1 ? '' : 's'} selected',
+                  '${_selectedSessions.length} session${_selectedSessions.length == 1 ? '' : 's'} selected',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const Spacer(),
                 ElevatedButton(
                   onPressed:
-                      _selectedTopics.isEmpty ? null : _startDueTopicsSession,
+                      _selectedSessions.isEmpty ? null : _startDueTopicsSession,
                   child: const Text('Start Review Session'),
                 ),
               ],
@@ -576,7 +531,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildNoDueTasksMessage() {
+  Widget _buildNoSessionsMessage() {
     final theme = Theme.of(context);
 
     return Center(
@@ -587,13 +542,13 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.check_circle_outline,
+              Icons.history_toggle_off,
               size: 80,
               color: theme.colorScheme.primary,
             ),
             const SizedBox(height: 24),
             Text(
-              'All Caught Up!',
+              'No Past Sessions',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.onSurface,
@@ -602,9 +557,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'You don\'t have any topics due for review right now. Great job staying on top of your learning!',
+              'You don\'t have any past sessions to review. Complete a session first!',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -619,19 +574,15 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildDueTasksList() {
+  Widget _buildSessionsList(List<ChatSessionSummary> sessions) {
     final theme = Theme.of(context);
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _dueTasks.length,
+      itemCount: sessions.length,
       itemBuilder: (context, index) {
-        final task = _dueTasks[index];
-        // Since we no longer have the old Task model, we'll need to handle this differently
-        // For now, treat tasks as simple strings or maps
-        final taskName =
-            task is String ? task : (task['name'] ?? 'Unknown Task');
-        final isSelected = _selectedTopics.contains(taskName);
+        final session = sessions[index];
+        final isSelected = _selectedSessions.contains(session);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -640,77 +591,29 @@ class _ChatScreenState extends State<ChatScreen> {
             onChanged: (bool? value) {
               setState(() {
                 if (value == true) {
-                  _selectedTopics.add(taskName);
+                  _selectedSessions.add(session);
                 } else {
-                  _selectedTopics.remove(taskName);
+                  _selectedSessions.remove(session);
                 }
               });
             },
             title: Text(
-              taskName,
+              session.displayName,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _buildTaskChip(
-                      'No difficulty data',
-                      theme.colorScheme.secondary,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildTaskChip(
-                      'No repetition data',
-                      theme.colorScheme.tertiary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _getTaskDueText(task),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: _getTaskDueColor(task, theme),
-                  ),
-                ),
-              ],
+            subtitle: Text(
+              'Topics: ${session.topics.join(', ')}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
             controlAffinity: ListTileControlAffinity.trailing,
           ),
         );
       },
     );
-  }
-
-  Widget _buildTaskChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  String _getTaskDueText(dynamic task) {
-    // Since we no longer have the Task model, return empty or placeholder text
-    return 'No due date available';
-  }
-
-  Color _getTaskDueColor(dynamic task, ThemeData theme) {
-    // Since we no longer have the Task model, return default color
-    return theme.colorScheme.onSurface.withValues(alpha: 0.6);
   }
 
   Widget _buildMessagesArea() {
@@ -778,23 +681,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildSelfEvaluationButtons(int messageIndex) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(5, (index) {
-        final score = index + 1;
-        final isSelected = _selfEvaluationScores[messageIndex] == score;
-        return ElevatedButton(
-          onPressed:
-              _selfEvaluationScores.containsKey(messageIndex)
-                  ? null
-                  : () => _submitSelfEvaluation(messageIndex, score),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isSelected ? Colors.green : _getScoreColor(score),
-          ),
-          child: Text('$score'),
-        );
-      }),
-    );
+    return Container(); // Disabled for now
   }
 
   Color _getScoreColor(int score) {
@@ -815,15 +702,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _submitSelfEvaluation(int messageIndex, int score) async {
-    // Prevent re-submission
-    if (_selfEvaluationScores.containsKey(messageIndex)) return;
-
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    setState(() {
-      _selfEvaluationScores[messageIndex] = score;
-    });
-
-    await chatProvider.submitSelfEvaluation(score);
+    // Disabled
   }
 
   Widget _buildActionButtons() {

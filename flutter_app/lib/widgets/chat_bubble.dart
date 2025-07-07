@@ -19,66 +19,69 @@ class ChatBubble extends StatelessWidget {
     final isUser = message.isUser;
     final theme = Theme.of(context);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            // AI avatar
-            Container(
-              width: 32,
-              height: 32,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                color:
-                    message.isSystem
-                        ? theme.colorScheme.secondaryContainer
-                        : theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
+    return Align(
+      alignment: message.isUser ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisAlignment:
+              isUser ? MainAxisAlignment.start : MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser) ...[
+              // AI avatar
+              Container(
+                width: 32,
+                height: 32,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color:
+                      message.isSystem
+                          ? theme.colorScheme.secondaryContainer
+                          : theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  message.isSystem ? Icons.info : Icons.smart_toy,
+                  size: 18,
+                  color:
+                      message.isSystem
+                          ? theme.colorScheme.onSecondaryContainer
+                          : theme.colorScheme.onPrimaryContainer,
+                ),
               ),
-              child: Icon(
-                message.isSystem ? Icons.info : Icons.smart_toy,
-                size: 18,
-                color:
-                    message.isSystem
-                        ? theme.colorScheme.onSecondaryContainer
-                        : theme.colorScheme.onPrimaryContainer,
+            ],
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.7,
+                ),
+                child:
+                    isUser
+                        ? _buildUserBubble(context, theme)
+                        : _buildAiBubble(context, theme),
               ),
             ),
+            if (isUser) ...[
+              // User avatar
+              Container(
+                width: 32,
+                height: 32,
+                margin: const EdgeInsets.only(left: 12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.person,
+                  size: 18,
+                  color: theme.colorScheme.onPrimary,
+                ),
+              ),
+            ],
           ],
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              child:
-                  isUser
-                      ? _buildUserBubble(context, theme)
-                      : _buildAiBubble(context, theme),
-            ),
-          ),
-          if (isUser) ...[
-            // User avatar
-            Container(
-              width: 32,
-              height: 32,
-              margin: const EdgeInsets.only(left: 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                Icons.person,
-                size: 18,
-                color: theme.colorScheme.onPrimary,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -95,16 +98,16 @@ class ChatBubble extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Markdown content for user messages
-          _buildMarkdownContent(context, theme, TextAlign.right, isUser: true),
+          _buildMarkdownContent(context, theme, TextAlign.left, isUser: true),
           const SizedBox(height: 4),
           // Timestamp
           Text(
             formatTimestamp(message.timestamp),
             style: theme.textTheme.bodySmall?.copyWith(letterSpacing: 0.3),
-            textAlign: TextAlign.right,
+            textAlign: TextAlign.left,
           ),
         ],
       ),

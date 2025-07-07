@@ -12,6 +12,7 @@ except ImportError:
     FSRSScheduler = None
 
 from core.models import FSRSParams
+from core.repositories.topic_repository import TopicRepository
 
 
 class FSRSService:
@@ -20,6 +21,39 @@ class FSRSService:
             self.fsrs = FSRSScheduler()
         else:
             self.fsrs = None
+        self.topic_repo = TopicRepository()
+
+    async def update_fsrs_for_topic(self, user_uid: str, topic_id: str, scores: Dict[str, int]):
+        """
+        Updates the FSRS parameters for a topic based on a session's scores.
+        """
+        topic = await self.topic_repo.get_by_id(topic_id, user_uid)
+        if not topic:
+            # Handle case where topic is not found
+            return
+
+        # Calculate average performance for this session
+        if not scores:
+            return  # No scores to process
+        avg_performance = sum(scores.values()) / len(scores)
+
+        # Get current FSRS params or use default
+        current_params = topic.fsrsParams or FSRSParams()
+
+        # Use existing logic to calculate next review
+        review_data = self.calculate_next_review(current_params, avg_performance, topic.lastReviewedAt)
+
+        # Update the topic with the new FSRS data
+        update_data = {
+            "fsrsParams": review_data["updatedParams"].dict(),
+            "nextReviewAt": review_data["nextReviewAt"],
+            "lastReviewedAt": datetime.now(),
+        }
+        await self.topic_repo.update(
+            topic_id,
+            user_uid,
+            update_data,
+        )
 
     def calculate_next_review(
         self,

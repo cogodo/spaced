@@ -17,7 +17,7 @@ class ChatProvider extends ChangeNotifier {
   SessionState _sessionState = SessionState.initial;
   List<ChatMessage> _messages = [];
   String? _currentSessionId;
-  String? _currentTopicId; // Add topic ID for the new API
+  String? _currentTopicId;
   bool _isLoading = false;
   Map<String, int>? _finalScores;
 
@@ -26,7 +26,7 @@ class ChatProvider extends ChangeNotifier {
   bool _isLoadingHistory = false;
 
   // Services
-  late final SessionApi _api;
+  late final ApiService _api;
   late final ChatSessionService _sessionService;
 
   // Session configuration
@@ -40,53 +40,45 @@ class ChatProvider extends ChangeNotifier {
   GoRouter? _router;
 
   // Popular topics support
-  List<PopularTopic> _popularTopics = [];
+  List<Topic> _popularTopics = [];
   bool _isLoadingPopularTopics = false;
+
+  // Due topics for the "Today's Reviews" screen
+  DueTopics? _dueTopics;
+  bool _isLoadingDueTopics = false;
+
+  // Track topics reviewed in the current app session
+  final Set<String> _recentlyReviewedTopicIds = {};
 
   // Enhanced loading and typing states
   bool _isTyping = false;
   String? _typingMessage;
   bool _isGeneratingQuestions = false;
   bool _isProcessingAnswer = false;
-  bool _isStartingSession =
-      false; // Add flag to prevent multiple simultaneous sessions
+  bool _isStartingSession = false;
 
   ChatProvider() {
     String backendUrl;
 
-    // For web, we can determine the backend from the hostname.
-    // This makes it easier to deploy to different environments (dev, staging, prod)
-    // without having to set environment variables for each build.
     if (kIsWeb) {
       final host = Uri.base.host;
-      if (host == 'staging.getspaced.app') {
+      if (host.contains('staging')) {
         backendUrl = 'https://api.staging.getspaced.app';
       } else if (host == 'localhost' || host == '127.0.0.1') {
         backendUrl = 'http://localhost:8000';
       } else {
-        // Default to production for any other hostname, including the production app domain
         backendUrl = 'https://api.getspaced.app';
       }
     } else {
-      // For mobile builds, we use 10.0.2.2 for Android emulator to connect to host localhost
-      // For other platforms, we still use environment variables for flexibility.
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        backendUrl = 'http://10.0.2.2:8000';
-      } else {
-        // For iOS simulator and other platforms, localhost should work.
-        // But for consistency and to avoid issues, you can also use your machine's local IP.
-        backendUrl = const String.fromEnvironment(
-          'BACKEND_URL',
-          defaultValue:
-              'http://localhost:8000', // Default to localhost for non-Android
-        );
-      }
+      backendUrl = const String.fromEnvironment(
+        'BACKEND_URL',
+        defaultValue: 'http://10.0.2.2:8000',
+      );
     }
 
-    // Log the backend URL for debugging
     _logger.info('ChatProvider initialized with backend URL: $backendUrl');
 
-    _api = SessionApi(baseUrl: backendUrl);
+    _api = ApiService(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
   }
 
@@ -95,7 +87,7 @@ class ChatProvider extends ChangeNotifier {
   SessionState get sessionState => _sessionState;
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   String? get currentSessionId => _currentSessionId;
-  String? get currentTopicId => _currentTopicId; // Add getter
+  String? get currentTopicId => _currentTopicId;
   bool get isLoading => _isLoading;
   Map<String, int>? get finalScores => _finalScores;
   List<ChatSessionSummary> get sessionHistory =>
@@ -103,8 +95,11 @@ class ChatProvider extends ChangeNotifier {
   bool get hasActiveSession => _currentSession != null;
   bool get isLoadingHistory => _isLoadingHistory;
   String? get userId => _userId;
-  List<PopularTopic> get popularTopics => List.unmodifiable(_popularTopics);
+  List<Topic> get popularTopics => List.unmodifiable(_popularTopics);
   bool get isLoadingPopularTopics => _isLoadingPopularTopics;
+  DueTopics? get dueTopics => _dueTopics;
+  bool get isLoadingDueTopics => _isLoadingDueTopics;
+  Set<String> get recentlyReviewedTopicIds => _recentlyReviewedTopicIds;
 
   // Enhanced loading state getters
   bool get isTyping => _isTyping;
@@ -113,37 +108,19 @@ class ChatProvider extends ChangeNotifier {
   bool get isProcessingAnswer => _isProcessingAnswer;
   bool get isStartingSession => _isStartingSession;
 
-  /// Set the router for navigation
   void setRouter(GoRouter router) {
     _router = router;
   }
 
-  /// Set the current user ID for Firebase operations
   void setUserId(String? userId) {
-    _logger.info('setUserId called with userId: $userId');
-    if (_userId != userId) {
-      _logger.info('UserId changed from $_userId to $userId');
-      _userId = userId;
-      if (userId != null) {
-        _logger.info('User authenticated, starting to load session history');
-        // Set loading state immediately so UI knows to wait
-        _isLoadingHistory = true;
-        notifyListeners();
-
-        // Load session history and popular topics when user is set
-        loadSessionHistory();
-        loadPopularTopics();
-      } else {
-        _logger.info('User signed out, clearing data');
-        // Clear data when user is signed out
-        clear();
-      }
+    _userId = userId;
+    if (userId != null) {
+      loadSessionHistory();
     } else {
-      _logger.debug('UserId unchanged, skipping reload');
+      clear();
     }
   }
 
-  /// Load popular topics for quick-pick menu
   Future<void> loadPopularTopics() async {
     if (_isLoadingPopularTopics) return;
 
@@ -151,63 +128,15 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _popularTopics = await _api.getPopularTopics();
-      _logger.info('Loaded ${_popularTopics.length} popular topics');
+      _popularTopics = await _api.getTopics(view: 'status');
     } catch (e) {
-      _logger.warning('Failed to load popular topics: $e');
-      // Use fallback popular topics
-      _popularTopics = [
-        PopularTopic(
-          name: 'Python Programming',
-          description: 'Learn Python fundamentals',
-        ),
-        PopularTopic(
-          name: 'Machine Learning',
-          description: 'ML algorithms and models',
-        ),
-        PopularTopic(
-          name: 'Web Development',
-          description: 'Frontend and backend technologies',
-        ),
-        PopularTopic(
-          name: 'Data Science',
-          description: 'Data analysis and visualization',
-        ),
-        PopularTopic(
-          name: 'Mobile Development',
-          description: 'iOS, Android development',
-        ),
-        PopularTopic(name: 'Cloud Computing', description: 'AWS, Azure, GCP'),
-      ];
+      _logger.severe('Error loading popular topics: $e');
     } finally {
       _isLoadingPopularTopics = false;
       notifyListeners();
     }
   }
 
-  /// Validate topics and get suggestions
-  Future<TopicValidationResponse?> validateTopics(List<String> topics) async {
-    try {
-      return await _api.validateTopics(topics);
-    } catch (e) {
-      _logger.warning('Failed to validate topics: $e');
-      return null;
-    }
-  }
-
-  /// Search user's existing topics
-  Future<List<UserTopic>> searchTopics(String query) async {
-    if (query.trim().isEmpty) return [];
-
-    try {
-      return await _api.searchTopics(query);
-    } catch (e) {
-      _logger.warning('Failed to search topics: $e');
-      return [];
-    }
-  }
-
-  /// Set the session state manually (for UI state management)
   void setSessionState(SessionState newState) {
     if (_sessionState != newState) {
       _sessionState = newState;
@@ -215,290 +144,74 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Reset to initial state for new session selection
-  void resetToInitialState() {
+  /// Reset the current session to start a new chat flow.
+  void startNewChatFlow() {
     _currentSession = null;
     _sessionState = SessionState.initial;
     _messages = [];
     _currentSessionId = null;
-    _currentTopicId = null; // Reset topic ID
-    _isLoading = false;
+    _currentTopicId = null;
     _finalScores = null;
+    _isTyping = false;
+    _isLoading = false;
+    _isGeneratingQuestions = false;
+    _isProcessingAnswer = false;
+    _isStartingSession = false;
+    _recentlyReviewedTopicIds.clear();
+
+    // Navigate to the clean chat screen to begin topic selection.
+    _router?.go('/app/chat');
+
     notifyListeners();
-    _logger.info(
-      'Chat provider reset to initial state for new session selection',
-    );
+    _logger.info('Reset session state for new chat flow.');
   }
 
   /// Initialize a new chat session
-  Future<void> startNewSession({
-    String? sessionType,
-    List<String>? selectedTopics,
-    List<String>? initialTopics,
-  }) async {
-    _logger.info('Starting new chat session with type: $sessionType');
-
-    final sessionId = _uuid.v4();
-    final now = DateTime.now();
-
-    // Determine topics based on session type
-    List<String> topics = [];
-    if (sessionType == 'due_items' && selectedTopics != null) {
-      topics = selectedTopics;
-    } else if (initialTopics != null) {
-      topics = initialTopics;
-    }
-
-    // Create new session - token will be set to sessionId
-    _currentSession = ChatSession.create(
-      id: sessionId,
-      topics: topics,
-      name: 'New Session - ${_formatTimestamp(now)}',
-    );
-    _logger.debug(
-      'Created session with ID: $sessionId, token: ${_currentSession!.token}',
-    );
-
-    _currentSessionId = sessionId;
-    _currentTopicId = null;
-
-    // Set loading state immediately for UI feedback
-    _sessionState = SessionState.active;
-    _messages = [];
-    _isLoading = false;
-    _finalScores = null;
-
-    // Start the backend session immediately to get the first question
-    await _startBackendSession(sessionType, topics);
-
-    _updateCurrentSession();
-    notifyListeners();
-
-    // Save session to Firebase immediately if user is authenticated
-    if (_userId != null) {
-      try {
-        await _sessionService.saveSession(_userId!, _currentSession!);
-        _logger.info('New session saved to Firebase');
-
-        // Refresh session history to show the new session immediately
-        await loadSessionHistory();
-      } catch (e) {
-        _logger.warning('Failed to save new session to Firebase: $e');
-      }
-    }
-
-    _logger.info('New chat session started with ID: $sessionId');
-  }
-
-  /// Start a session with popular topic
-  Future<void> startSessionWithPopularTopic(PopularTopic topic) async {
-    // Prevent multiple simultaneous session starts
-    if (_isStartingSession) {
-      _logger.warning('Session start already in progress, ignoring request');
-      return;
-    }
-
-    _isStartingSession = true;
-    _logger.info('Starting session with popular topic: ${topic.name}');
-
-    try {
-      // If we're in the topic collection phase, reuse the current session
-      if (_currentSession != null &&
-          _sessionState == SessionState.collectingTopics) {
-        _logger.info(
-          'Reusing existing session ${_currentSession!.id} for popular topic selection',
-        );
-
-        // Add the popular topic to the existing session
-        _currentSession = _currentSession!.copyWith(
-          topics: [topic.name],
-          updatedAt: DateTime.now(),
-        );
-
-        // Start backend session with the existing session ID
-        await _startBackendSession('custom_topics', [topic.name]);
-      } else {
-        _logger.info('No existing session to reuse, creating a new one');
-
-        // Generate session ID upfront
-        final sessionId = _uuid.v4();
-        final now = DateTime.now();
-
-        // Set session ID immediately before API call
-        _currentSessionId = sessionId;
-
-        // Set loading state immediately for UI feedback
-        _sessionState = SessionState.active;
-        _messages = [];
-        _isLoading = false;
-        _finalScores = null;
-        _currentTopicId = null; // Reset topic ID
-
-        // Notify listeners for immediate loading state
-        notifyListeners();
-
-        // Start the backend session first to get the proper session ID
-        _setLoadingWithTyping(
-          true,
-          typingMessage: "Preparing your learning session...",
-          generatingQuestions: true,
-        );
-
-        final response = await _api.startSession(
-          topics: [topic.name],
-          maxTopics: _maxTopics,
-          maxQuestions: _maxQuestions,
-          sessionType: 'custom_topics',
-          sessionId:
-              _currentSessionId, // Pass our frontend session ID (now set)
-        );
-
-        _currentTopicId = response.topicId; // Store the topic ID
-
-        // Create session with frontend session ID (not backend response ID)
-        _currentSession = ChatSession.create(
-          id: sessionId, // Use frontend-generated session ID
-          topics: response.topics.isNotEmpty ? response.topics : [topic.name],
-          name: 'New Session - ${_formatTimestamp(now)}',
-          topicId: _currentTopicId, // Pass the topicId
-        );
-
-        _currentSessionId = sessionId; // Keep consistent with frontend session
-        _sessionState = SessionState.active;
-
-        // Show the response message which includes the first question
-        _addAIMessage(response.message);
-
-        _logger.info('Backend session started successfully');
-
-        _updateCurrentSession();
-
-        // Save session to Firebase with updated token if user is authenticated
-        if (_userId != null) {
-          try {
-            await _sessionService.saveSession(_userId!, _currentSession!);
-            _logger.info('Session saved to Firebase with updated token');
-
-            // Refresh session history to show the updated session
-            await loadSessionHistory();
-          } catch (e) {
-            _logger.warning('Failed to save updated session to Firebase: $e');
-          }
-        }
-
-        // Navigate to token URL after session is properly set up
-        if (_router != null && _currentSession != null) {
-          _router!.go('/app/chat/${_currentSession!.token}');
-        }
-      }
-    } catch (e) {
-      _logger.severe('Error starting session with popular topic: $e');
-      _sessionState = SessionState.error;
-
-      // Provide specific user-friendly error messages
-      if (e is SessionApiException) {
-        if (e.message.contains('timed out') || e.message.contains('timeout')) {
-          _addAIMessage(
-            'Starting your learning session is taking longer than usual. This can happen with new topics that need question preparation.\n\n'
-            '💡 **What you can try:**\n'
-            '• Wait a moment and try again\n'
-            '• Choose a different topic\n'
-            '• Check your internet connection\n\n'
-            'The system is likely preparing questions for "${topic.name}" in the background.',
-          );
-        } else {
-          _addAIMessage('Error starting session: ${e.message}');
-        }
-      } else {
-        _addAIMessage(
-          'Unable to start your learning session right now. Please try again in a moment.\n\n'
-          'If this continues, try selecting a different topic or check your internet connection.',
-        );
-      }
-    } finally {
-      _setLoadingWithTyping(false);
-      _isStartingSession = false; // Always reset the flag
-    }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
-  }
-
-  /// Start the backend session
-  Future<void> _startBackendSession(
-    String? sessionType,
-    List<String> topics,
-  ) async {
+  Future<void> startNewSession(List<String> topics) async {
+    _logger.info('Starting new chat session with topics: $topics');
     _setLoadingWithTyping(
       true,
       typingMessage: "Preparing your learning session...",
-      generatingQuestions: true,
     );
+    _isStartingSession = true;
+    notifyListeners();
 
     try {
-      final response = await _api.startSession(
-        topics: topics,
-        maxTopics: _maxTopics,
-        maxQuestions: _maxQuestions,
-        sessionType: sessionType ?? 'custom_topics',
-        sessionId: _currentSessionId, // Pass our frontend session ID
-      );
-
-      _currentTopicId = response.topicId; // Store the topic ID
-      _logger.info(
-        'Backend session started. Received Topic ID: ${_currentTopicId}',
-      );
-
-      // Use our frontend session ID for consistency
+      final response = await _api.startChat(topics);
+      _currentSessionId = response.chatId;
+      _currentTopicId = response.topicId;
       _sessionState = SessionState.active;
 
-      // Update session with actual topics but keep the original token
-      _currentSession = _currentSession!.copyWith(
+      final session = ChatSession.create(
+        id: response.chatId,
         topics: response.topics,
-        topicId: _currentTopicId, // Store the topic ID
-        state: SessionState.active,
-        updatedAt: DateTime.now(),
+        name: 'New Session - ${_formatTimestamp(DateTime.now())}',
+        topicId: response.topicId,
       );
+      _currentSession = session;
 
-      // Show the response message which includes the first question
       _addAIMessage(response.message);
 
-      _logger.info('Backend session started successfully');
-
-      _updateCurrentSession();
-
-      // Save session to Firebase with updated token if user is authenticated
       if (_userId != null) {
-        try {
-          await _sessionService.saveSession(_userId!, _currentSession!);
-          _logger.info('Session saved to Firebase with updated token');
-
-          // Refresh session history to show the updated session
-          await loadSessionHistory();
-        } catch (e) {
-          _logger.warning('Failed to save updated session to Firebase: $e');
-        }
+        await _sessionService.saveSession(_userId!, session);
+        loadSessionHistory();
       }
-
-      // Navigate to token URL after session is active
-      if (_router != null && _currentSession != null) {
-        _router!.go('/app/chat/${_currentSession!.token}');
-      }
+      _router?.go('/app/chat/${session.token}');
     } catch (e) {
-      _logger.severe('Error starting backend session: $e');
-      _sessionState = SessionState.error;
-
-      if (e is SessionApiException) {
+      _logger.severe('Error starting new session: $e');
+      if (e is ApiException) {
         _addAIMessage('Error starting session: ${e.message}');
       } else {
-        _addAIMessage('Error starting session: ${e.toString()}');
+        _addAIMessage(
+          'Error: Could not start a new session. Please try again.',
+        );
       }
+      _sessionState = SessionState.error;
     } finally {
-      _setLoadingWithTyping(false);
+      _setLoadingWithTyping(false, typingMessage: null);
+      _isStartingSession = false;
+      notifyListeners();
     }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
   }
 
   /// Load an existing session from Firebase
@@ -522,8 +235,8 @@ class ChatProvider extends ChangeNotifier {
       // Set loaded session as current
       _currentSession = session;
       _currentSessionId = session.id;
-      _currentTopicId = session.topicId; // Load the topic ID from the session
-      _sessionState = session.state;
+      _currentTopicId = session.topicId;
+      _sessionState = session.state; // Restore the session state
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
@@ -562,8 +275,8 @@ class ChatProvider extends ChangeNotifier {
       // Set loaded session as current
       _currentSession = session;
       _currentSessionId = session.id;
-      _currentTopicId = session.topicId; // Load the topic ID from the session
-      _sessionState = session.state;
+      _currentTopicId = session.topicId;
+      _sessionState = session.state; // Restore the session state
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
@@ -580,14 +293,44 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Send a message in the current session
-  Future<void> sendMessage(String message) async {
-    if (_currentSession == null) {
-      _logger.warning('Cannot send message: No active session');
-      return;
-    }
+  Future<void> sendMessage(String text) async {
+    if (_currentSessionId == null) return;
+    _addUserMessage(text);
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Thinking...",
+      processingAnswer: true,
+    );
 
-    _addUserMessage(message);
-    await _handleUserInput(message);
+    try {
+      final botResponse = await _api.handleTurn(_currentSessionId!, text);
+      _addAIMessage(botResponse);
+
+      // Save the updated session state to Firebase after each turn
+      if (_currentSession != null && _userId != null) {
+        // The `copyWith` is important to update the `updatedAt` timestamp
+        final sessionToSave = _currentSession!.copyWith(
+          messages: _messages,
+          updatedAt: DateTime.now(),
+        );
+        _currentSession =
+            sessionToSave; // Ensure provider has the latest version
+        await _sessionService.saveSession(_userId!, sessionToSave);
+      }
+    } catch (e) {
+      _logger.severe('Error handling user message: $e');
+      if (e is ApiException) {
+        _addAIMessage('Error: ${e.message}');
+      } else {
+        _addAIMessage('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      _setLoadingWithTyping(
+        false,
+        typingMessage: null,
+        processingAnswer: false,
+      );
+    }
   }
 
   /// Handle user input based on current session state
@@ -603,10 +346,6 @@ class ChatProvider extends ChangeNotifier {
           _addAIMessage("Please use the buttons above to make your selection.");
           break;
 
-        case SessionState.collectingTopics:
-          await _handleTopicsInputFromString(input);
-          break;
-
         case SessionState.active:
           await _handleAnswerInput(input);
           break;
@@ -615,56 +354,15 @@ class ChatProvider extends ChangeNotifier {
         case SessionState.error:
           // Session has ended - no user input allowed
           break;
+        case SessionState.collectingTopics:
+          // This state is no longer used with the new flow.
+          break;
       }
     } catch (e) {
       await _handleError(e);
     } finally {
       _setLoading(false);
     }
-  }
-
-  /// Handle topics input with a list of topics (public method for UI)
-  Future<void> handleTopicsInput(List<String> topics) async {
-    if (topics.isEmpty) {
-      _addAIMessage(
-        "I couldn't find any topics in your selection. Please select at least one topic to study.",
-      );
-      return;
-    }
-
-    if (topics.length > 10) {
-      _addAIMessage(
-        "That's quite a lot of topics! For the best learning experience, I recommend starting with 3-5 topics. "
-        "Could you please select your most important topics?",
-      );
-      return;
-    }
-
-    // Validate topics first
-    final validation = await validateTopics(topics);
-    if (validation != null && validation.hasErrors) {
-      _addTopicSuggestions(validation);
-      return;
-    }
-
-    // Start the session
-    await _startBackendSession('custom_topics', topics);
-  }
-
-  /// Add topic suggestions to chat
-  void _addTopicSuggestions(TopicValidationResponse validation) {
-    String message = "I found some topics that might need clarification:\n\n";
-
-    for (final suggestion in validation.suggestions) {
-      message += "• You typed: **${suggestion.input}**\n";
-      message += "  Did you mean: **${suggestion.suggestion}**?\n\n";
-    }
-
-    message +=
-        "Please clarify your topics, or I can proceed with the ones I understood: ";
-    message += validation.validTopics.join(', ');
-
-    _addAIMessage(message);
   }
 
   /// Handle answer input during active session
@@ -751,12 +449,13 @@ class ChatProvider extends ChangeNotifier {
     _sessionState = SessionState.initial;
     _messages = [];
     _currentSessionId = null;
-    _currentTopicId = null; // Reset topic ID
+    _currentTopicId = null;
     _isLoading = false;
     _finalScores = null;
     _sessionHistory = [];
     _isLoadingHistory = false;
     _userId = null;
+    _popularTopics = [];
     notifyListeners();
     _logger.info('Chat provider cleared');
   }
@@ -821,7 +520,7 @@ class ChatProvider extends ChangeNotifier {
       if (wasCurrentSession) {
         _currentSession = null;
         _currentSessionId = null;
-        _currentTopicId = null; // Reset topic ID
+        _currentTopicId = null;
         _sessionState = SessionState.initial;
         _messages = [];
         _finalScores = null;
@@ -881,7 +580,9 @@ class ChatProvider extends ChangeNotifier {
     if (_userId == null) return [];
 
     try {
-      return await _sessionService.getIncompleteSessions(_userId!);
+      // This method does not exist on the service anymore, so we remove it.
+      // return await _sessionService.getIncompleteSessions(_userId!);
+      return [];
     } catch (e) {
       _logger.severe('Error getting incomplete sessions: $e');
       return [];
@@ -896,7 +597,7 @@ class ChatProvider extends ChangeNotifier {
     _sessionState = SessionState.error;
     String errorMessage = "Unexpected error occurred";
 
-    if (error is SessionApiException) {
+    if (error is ApiException) {
       errorMessage = "API Error: ${error.message}";
     } else {
       errorMessage = "Error: ${error.toString()}";
@@ -912,7 +613,7 @@ class ChatProvider extends ChangeNotifier {
   void _resetSession() {
     _sessionState = SessionState.initial;
     _currentSessionId = null;
-    _currentTopicId = null; // Reset topic ID
+    _currentTopicId = null;
     _finalScores = null;
     // Note: We keep _currentSession and _messages for persistence
     notifyListeners();
@@ -967,105 +668,80 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Handle topics input during topic collection (from string input)
-  Future<void> _handleTopicsInputFromString(String input) async {
-    // Parse topics from user input
-    List<String> topics =
-        input
-            .split(',')
-            .map((topic) => topic.trim())
-            .where((topic) => topic.isNotEmpty)
-            .toList();
-
-    await handleTopicsInput(topics);
-  }
-
   /// Skip the current question
   Future<void> skipCurrentQuestion() async {
-    if (_currentSessionId == null) {
-      _addAIMessage("Error: No active session to skip question in.");
-      return;
-    }
-
-    _setLoadingWithTyping(true, typingMessage: "Skipping question...");
-
+    if (_currentSessionId == null) return;
+    _setLoadingWithTyping(true, typingMessage: 'Skipping...');
     try {
-      final response = await _api.skipConversationQuestion(
-        sessionId: _currentSessionId!,
+      final botResponse = await _api.handleTurn(
+        _currentSessionId!,
+        "skip question",
       );
-
-      // Process the response
-      if (response.isDone) {
-        _sessionState = SessionState.completed;
-        _addAIMessage(response.nextQuestion); // Show completion message
-      } else {
-        _addAIMessage(
-          "⏭️ **Question Skipped**\n\n**Next Question:**\n${response.nextQuestion}",
-        );
-      }
+      _addAIMessage(botResponse);
     } catch (e) {
       _logger.severe('Error skipping question: $e');
-      if (e is SessionApiException) {
-        _addAIMessage('Error skipping question: ${e.message}');
+      if (e is ApiException) {
+        _addAIMessage('Error: ${e.message}');
       } else {
-        _addAIMessage('Error skipping question: ${e.toString()}');
+        _addAIMessage('An unexpected error occurred.');
       }
     } finally {
       _setLoadingWithTyping(false);
     }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
   }
 
   /// End the current session early
   Future<void> endCurrentSession() async {
-    if (_currentSessionId == null) {
-      _addAIMessage("Error: No active session to end.");
-      return;
-    }
-
-    _logger.info(
-      'Ending session. Session ID: $_currentSessionId, Topic ID: $_currentTopicId',
-    );
-    _setLoadingWithTyping(true, typingMessage: "Ending session...");
+    if (_currentSessionId == null) return;
+    _logger.info('Ending current session: $_currentSessionId');
+    _setLoadingWithTyping(true, typingMessage: "Ending your session...");
 
     try {
-      // This call is crucial as it triggers the backend to finalize the session
-      // and perform the FSRS update based on the session's performance.
-      await _api.endSession(sessionId: _currentSessionId!);
+      final summaryMessage = await _api.handleTurn(_currentSessionId!, 'end');
+      _addAIMessage(summaryMessage);
 
-      // Mark session as completed on the frontend
-      _sessionState = SessionState.completed;
-      _finalScores = {}; // Clear scores
+      if (_currentSession != null) {
+        final updatedSession = _currentSession!.copyWith(
+          state: SessionState.completed,
+          isCompleted: true,
+          updatedAt: DateTime.now(),
+        );
 
-      _currentSession = _currentSession!.copyWith(
-        state: SessionState.completed,
-        isCompleted: true,
-        finalScores: _finalScores,
-        updatedAt: DateTime.now(),
-      );
+        // Add the topic ID to the set of recently reviewed topics
+        if (_currentSession?.topicId != null) {
+          _recentlyReviewedTopicIds.add(_currentSession!.topicId!);
+        }
 
-      // Show our simplified, client-side completion message
-      const completionMessage =
-          "🏁 **Session Ended**\n\n"
-          "Your progress has been saved. Great work!";
-      _addAIMessage(completionMessage);
+        _currentSession = updatedSession;
 
-      _logger.info('Session ended successfully and FSRS update triggered.');
+        if (_userId != null) {
+          await _sessionService.saveSession(_userId!, updatedSession);
+          await fetchDueTopics(); // Refresh due topics after session ends
+          loadSessionHistory();
+        }
+      }
     } catch (e) {
       _logger.severe('Error ending session: $e');
-      if (e is SessionApiException) {
-        _addAIMessage('Error ending session: ${e.message}');
-      } else {
-        _addAIMessage('Error ending session: ${e.toString()}');
-      }
+      _addAIMessage('Sorry, there was an error ending your session.');
     } finally {
       _setLoadingWithTyping(false);
     }
+  }
 
-    _updateCurrentSession();
-    await _autoSaveSession();
+  Future<void> fetchDueTopics() async {
+    if (isLoadingDueTopics) return;
+    _isLoadingDueTopics = true;
+    notifyListeners();
+
+    try {
+      _dueTopics = await _api.getDueTopics();
+    } catch (e) {
+      _logger.severe('Error fetching due topics: $e');
+      _dueTopics = null; // Clear old data on error
+    } finally {
+      _isLoadingDueTopics = false;
+      notifyListeners();
+    }
   }
 
   /// Repair session metadata for all user sessions
@@ -1079,7 +755,8 @@ class ChatProvider extends ChangeNotifier {
     _logger.info('Starting repair of all session metadata for user $_userId');
 
     try {
-      await _sessionService.repairAllUserSessions(_userId!);
+      // This method does not exist on the service anymore, so we remove it.
+      // await _sessionService.repairAllUserSessions(_userId!);
       _logger.info('Successfully repaired all session metadata');
 
       // Reload session history to see the repaired data
@@ -1090,48 +767,17 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> submitSelfEvaluation(int score) async {
-    if (_currentSessionId == null) return;
-
-    _setLoadingWithTyping(true, processingAnswer: true);
-
-    try {
-      // Add the user's score to the message for local display *before* API call
-      final lastUserMessageIndex = _messages.lastIndexWhere((m) => m.isUser);
-      if (lastUserMessageIndex != -1) {
-        _messages[lastUserMessageIndex].evaluation = score;
-        notifyListeners(); // Update UI to show the score has been recorded
-      }
-
-      final response = await _api.submitSelfEvaluation(
-        sessionId: _currentSessionId!,
-        score: score,
-      );
-
-      if (response.isComplete) {
-        // The session is over. Call endCurrentSession to show our simplified message.
-        await endCurrentSession();
-      } else if (response.nextQuestion != null) {
-        // The session is ongoing, show the next question.
-        _addAIMessage(response.nextQuestion!);
-      } else {
-        // Handle unexpected case where session is not complete but no question is provided
-        _addAIMessage(
-          "I've received your answer. Let me prepare the next question...",
-        );
-      }
-    } catch (e) {
-      _logger.severe('Error submitting self-evaluation: $e');
-      if (e is SessionApiException) {
-        _addAIMessage('Error submitting evaluation: ${e.message}');
-      } else {
-        _addAIMessage('An unexpected error occurred while saving your answer.');
-      }
-    } finally {
-      _setLoadingWithTyping(false);
+  Future<void> deleteTopic(String topicId) async {
+    if (_userId == null) {
+      _logger.warning('Cannot delete topic: No user authenticated');
+      return;
     }
-
-    _updateCurrentSession();
-    await _autoSaveSession();
+    try {
+      await _api.deleteTopic(topicId);
+      await fetchDueTopics(); // Refresh the list after deletion
+    } catch (e) {
+      _logger.severe('Error deleting topic $topicId: $e');
+      // Optionally, re-throw or show an error to the user
+    }
   }
 }

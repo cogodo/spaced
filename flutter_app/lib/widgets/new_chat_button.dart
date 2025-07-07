@@ -14,19 +14,9 @@ class NewChatButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       child: ElevatedButton.icon(
-        onPressed: () async {
-          final chatProvider = Provider.of<ChatProvider>(
-            context,
-            listen: false,
-          );
-
-          // Start new session
-          await chatProvider.startNewSession();
-
-          // Navigate to default chat route
-          if (context.mounted) {
-            context.go('/app/chat');
-          }
+        onPressed: () {
+          // This now calls the provider to handle resetting state and navigation.
+          Provider.of<ChatProvider>(context, listen: false).startNewChatFlow();
         },
         icon: const Icon(Icons.add, size: 20),
         label: const Text(

@@ -134,41 +134,13 @@ class LearningChatbotLogger:
 
     def _log(self, level: int, message: str, args: tuple, extra: Dict[str, Any]):
         """Internal logging method with format arguments and extra context"""
-        # Apply format arguments if provided
-        if args:
-            try:
-                # Escape any curly braces in arguments to prevent format string issues
-                safe_args = []
-                for arg in args:
-                    if isinstance(arg, str):
-                        # Escape curly braces in string arguments
-                        safe_arg = str(arg).replace("{", "{{").replace("}", "}}")
-                        safe_args.append(safe_arg)
-                    else:
-                        safe_args.append(arg)
-                formatted_message = message % tuple(safe_args)
-            except (TypeError, ValueError) as e:
-                # Fallback if formatting fails
-                formatted_message = f"{message} [Format Error: {e}]"
-        else:
-            formatted_message = message
+        # Separate exc_info from other extra fields because it's a special
+        # argument in the logging framework.
+        exc_info = extra.pop("exc_info", None)
 
-        if extra:
-            # Create a LogRecord with extra data
-            record = self.logger.makeRecord(
-                self.logger.name,
-                level,
-                "",
-                0,
-                formatted_message,
-                (),
-                None,
-                func="",
-                extra=extra,
-            )
-            self.logger.handle(record)
-        else:
-            self.logger.log(level, formatted_message)
+        # The logger will automatically handle the exception information
+        # when exc_info is True or an exception tuple.
+        self.logger.log(level, message, *args, exc_info=exc_info, extra=extra)
 
     # Context managers for request tracking
     def with_request_context(self, request_id: str, user_id: str = ""):

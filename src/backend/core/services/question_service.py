@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -6,6 +7,24 @@ from openai import AsyncOpenAI
 from app.config import settings
 from core.models import Question, Topic
 from core.repositories import QuestionRepository
+
+
+class OpenAITimeoutError(Exception):
+    """Custom exception for OpenAI API timeouts."""
+
+    pass
+
+
+class QuestionServiceError(Exception):
+    """Base exception for QuestionService."""
+
+    pass
+
+
+class QuestionGenerationError(QuestionServiceError):
+    """Exception for failures during question generation."""
+
+    pass
 
 
 class QuestionService:
@@ -129,9 +148,25 @@ class QuestionService:
                 await self.repository.create(question, user_uid)
                 questions.append(question)
 
+            except OpenAITimeoutError as e:
+                print(f"Timeout generating initial question {i + 1}, retrying... Error: {e}")
+                # Simple retry logic, could be more sophisticated
+                try:
+                    generated_question = await self._generate_question(topic, template, difficulty)
+                    question = Question(
+                        id=str(uuid.uuid4()),
+                        topicId=topic.id,
+                        text=generated_question,
+                        type=question_type,
+                        difficulty=difficulty,
+                    )
+                    await self.repository.create(question, user_uid)
+                    questions.append(question)
+                except Exception as retry_e:
+                    print(f"Retry failed for question {i + 1}: {retry_e}")
             except Exception as e:
-                print(f"Failed to generate initial question {i + 1}: {e}")
-                continue
+                # Wrap the original exception in our custom error for better handling upstream
+                raise QuestionGenerationError(f"Failed to generate initial question for topic '{topic.name}'") from e
 
         return questions
 
@@ -196,9 +231,6 @@ return it unchanged.
     async def _call_openai(self, prompt: str, max_tokens: int = 200, temperature: float = 0.7) -> str:
         """Make OpenAI API call with error handling and timeout"""
         try:
-            import asyncio
-
-            # Add timeout to prevent hanging requests
             response = await asyncio.wait_for(
                 self.openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -216,7 +248,7 @@ return it unchanged.
             )
             return response.choices[0].message.content
         except asyncio.TimeoutError:
-            raise Exception("OpenAI API call timed out after 15 seconds")
+            raise OpenAITimeoutError("OpenAI API call timed out after 15 seconds")
         except Exception as e:
             # Escape curly braces in error message to prevent f-string formatting errors
             safe_error = str(e).replace("{", "{{").replace("}", "}}")

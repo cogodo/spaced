@@ -10,6 +10,7 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/privacy_policy_screen.dart';
 import '../screens/tab_navigation_screen.dart';
+import '../screens/home_screen.dart';
 import '../screens/all_review_items_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/todays_reviews_screen.dart';
@@ -120,6 +121,15 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         name: 'app-home',
         builder: (context, state) {
           _logger.info('🏠 Building app home route');
+          return TabNavigationScreen(child: HomeScreen());
+        },
+      ),
+
+      GoRoute(
+        path: Routes.appTodays,
+        name: 'app-todays',
+        builder: (context, state) {
+          _logger.info('📅 Building app today\'s reviews route');
           return TabNavigationScreen(child: TodaysReviewsScreen());
         },
       ),

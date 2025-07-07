@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from core.models import Session
 from core.models.conversation import ConversationState
 from infrastructure.redis.client import get_redis_client
 
@@ -175,23 +174,7 @@ class RedisSessionManager:
         except (ValueError, TypeError):
             return False
 
-    # Session-specific helper methods for learning chatbot
-
-    async def store_learning_session(self, session: Session) -> str:
-        """Store a learning session specifically"""
-        session_data = session.dict()
-        return await self.create_session(session_data, ttl=7200)  # 2 hours for learning sessions
-
-    async def get_learning_session(self, session_id: str) -> Optional[Session]:
-        """Retrieve a learning session as a Session object"""
-        data = await self.get_session(session_id)
-        if data:
-            try:
-                return Session.model_validate(data)
-            except Exception as e:
-                print(f"Error deserializing session {session_id}: {e}")
-                return None
-        return None
+    # Session-specific helper methods removed - using Context-based approach instead
 
     async def update_session_progress(self, session_id: str, question_index: int, responses: list) -> bool:
         """Update session progress"""

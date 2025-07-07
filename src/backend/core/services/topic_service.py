@@ -11,6 +11,12 @@ from infrastructure.cache import TopicCache
 logger = get_logger("topic_service")
 
 
+class TopicServiceError(Exception):
+    """Base exception for TopicService errors."""
+
+    pass
+
+
 class TopicService:
     def __init__(self):
         self.repository = TopicRepository()
@@ -60,9 +66,12 @@ class TopicService:
 
     async def update_question_bank(self, topic_id: str, user_uid: str, question_ids: List[str]) -> None:
         """Update the question bank for a topic"""
-        await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
-        # Invalidate cache since we updated the topic
-        self.cache.invalidate_user(user_uid)
+        try:
+            await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
+            # Invalidate cache since we updated the topic
+            self.cache.invalidate_user(user_uid)
+        except Exception as e:
+            raise TopicServiceError(f"Failed to update question bank for topic {topic_id}") from e
 
     async def update_fsrs_params(
         self,
@@ -115,27 +124,30 @@ class TopicService:
         """Find existing topics or create new ones from user input"""
         topics = []
 
-        for topic_name in topic_names:
-            topic_name = topic_name.strip()
-            if not topic_name:
-                continue
+        try:
+            for topic_name in topic_names:
+                topic_name = topic_name.strip()
+                if not topic_name:
+                    continue
 
-            # First, try to find existing topic for this user
-            existing_topics = await self._find_user_topic_by_name(user_uid, topic_name)
+                # First, try to find existing topic for this user
+                existing_topics = await self._find_user_topic_by_name(user_uid, topic_name)
 
-            if existing_topics:
-                # Use the first matching topic
-                topics.append(existing_topics[0])
-                logger.info("Found existing topic: %s for user %s", topic_name, user_uid)
-            else:
-                # Create new topic
-                new_topic = await self.create_topic(
-                    user_uid=user_uid,
-                    name=topic_name,
-                    description=f"Learning topic: {topic_name}",
-                )
-                topics.append(new_topic)
-                logger.info("Created new topic: %s for user %s", topic_name, user_uid)
+                if existing_topics:
+                    # Use the first matching topic
+                    topics.append(existing_topics[0])
+                    logger.info("Found existing topic: %s for user %s", topic_name, user_uid)
+                else:
+                    # Create new topic
+                    new_topic = await self.create_topic(
+                        user_uid=user_uid,
+                        name=topic_name,
+                        description=f"Learning topic: {topic_name}",
+                    )
+                    topics.append(new_topic)
+                    logger.info("Created new topic: %s for user %s", topic_name, user_uid)
+        except Exception as e:
+            raise TopicServiceError("Failed to find or create topics") from e
 
         return topics
 
@@ -288,46 +300,81 @@ class TopicService:
         return topics_with_status
 
     async def get_due_topics(self, user_uid: str) -> Dict[str, Any]:
-        """Get topics due for review today, categorized"""
-        topics = await self.get_user_topics(user_uid)
-        current_time = datetime.now(timezone.utc)
-        end_of_today = current_time.replace(hour=23, minute=59, second=59)
-        due_topics, overdue_topics, upcoming_topics = [], [], []
+        """
+        Get all topics with review status for a user, letting the client handle
+        "due today" categorization based on their local timezone.
+        """
+        topics_with_status = await self.get_topics_with_review_status(user_uid)
 
-        for topic in topics:
-            if not topic.nextReviewAt:
-                continue
-            topic_data = {
-                "id": topic.id,
-                "name": topic.name,
-                "description": topic.description,
-                "questionCount": len(topic.questionBank),
-                "nextReviewAt": topic.nextReviewAt,
-                "fsrsParams": topic.fsrsParams.dict(),
-            }
-            if topic.nextReviewAt <= current_time:
-                topic_data["daysOverdue"] = (current_time - topic.nextReviewAt).days
-                overdue_topics.append(topic_data)
-            elif topic.nextReviewAt <= end_of_today:
-                due_topics.append(topic_data)
-            elif topic.nextReviewAt <= current_time + timedelta(days=3):
-                topic_data["daysUntil"] = (topic.nextReviewAt - current_time).days
-                upcoming_topics.append(topic_data)
-
-        overdue_topics.sort(key=lambda x: x["daysOverdue"], reverse=True)
-        due_topics.sort(key=lambda x: x["nextReviewAt"])
-        upcoming_topics.sort(key=lambda x: x["nextReviewAt"])
+        # Find the most recent review date among all topics to display in the UI
+        most_recent_review = None
+        for topic in topics_with_status:
+            last_reviewed = topic.get("lastReviewedAt")
+            if last_reviewed:
+                if most_recent_review is None or last_reviewed > most_recent_review:
+                    most_recent_review = last_reviewed
 
         return {
-            "overdue": overdue_topics,
-            "dueToday": due_topics,
-            "upcoming": upcoming_topics,
-            "totalDue": len(overdue_topics) + len(due_topics),
-            "totalOverdue": len(overdue_topics),
-            "reviewDate": current_time.isoformat(),
+            "topics": topics_with_status,
+            "lastReviewedAt": most_recent_review.isoformat() if most_recent_review else None,
         }
 
     async def get_review_statistics(self, user_uid: str) -> Dict[str, Any]:
-        """Get review statistics for a user (placeholder)."""
+        """Get review statistics for a user"""
+        # topics_with_status = await self.get_topics_with_review_status(user_uid)
         logger.info("Review statistics feature is not yet implemented.")
         return {"message": "Feature coming soon: Comprehensive review statistics and insights."}
+
+    async def get_topic_with_review_status(self, topic_id: str, user_uid: str) -> Optional[Dict[str, Any]]:
+        """Get a specific topic with FSRS review status"""
+        topic = await self.get_topic(topic_id, user_uid)
+        if not topic:
+            return None
+
+        fsrs_service = FSRSService()
+        current_time = datetime.now(timezone.utc)
+
+        is_due = False
+        is_overdue = False
+        days_until_review = None
+        review_urgency = "not_scheduled"
+
+        if topic.nextReviewAt:
+            time_diff = topic.nextReviewAt - current_time
+            days_until_review = time_diff.days
+            if time_diff.total_seconds() <= 0:
+                is_overdue = True
+                review_urgency = "overdue"
+            elif days_until_review <= 1:
+                is_due = True
+                review_urgency = "due_today"
+            elif days_until_review <= 3:
+                review_urgency = "due_soon"
+            else:
+                review_urgency = "scheduled"
+
+        retention_probability = None
+        if topic.lastReviewedAt:
+            days_since_review = (current_time - topic.lastReviewedAt).days
+            retention_probability = fsrs_service.calculate_retention_probability(topic.fsrsParams, days_since_review)
+
+        return {
+            "id": topic.id,
+            "name": topic.name,
+            "description": topic.description,
+            "questionCount": len(topic.questionBank),
+            "createdAt": topic.createdAt,
+            "lastReviewedAt": topic.lastReviewedAt,
+            "nextReviewAt": topic.nextReviewAt,
+            "isDue": is_due,
+            "isOverdue": is_overdue,
+            "daysUntilReview": days_until_review,
+            "reviewUrgency": review_urgency,
+            "retentionProbability": retention_probability,
+            "regenerating": topic.regenerating,
+            "fsrsParams": {
+                "ease": topic.fsrsParams.ease,
+                "interval": topic.fsrsParams.interval,
+                "repetition": topic.fsrsParams.repetition,
+            },
+        }
