@@ -7,7 +7,11 @@ Requires-Dist: pydantic
 Requires-Dist: pydantic-settings
 Requires-Dist: firebase-admin
 Requires-Dist: redis
-Requires-Dist: openai
+Requires-Dist: openai<2.0.0,>=1.0.0
 Requires-Dist: tenacity
 Requires-Dist: ruff
 Requires-Dist: pre-commit
+Requires-Dist: psutil
+Requires-Dist: python-multipart
+Requires-Dist: soundfile
+Requires-Dist: numpy

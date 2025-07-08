@@ -108,6 +108,14 @@ class ChatProvider extends ChangeNotifier {
   bool get isProcessingAnswer => _isProcessingAnswer;
   bool get isStartingSession => _isStartingSession;
 
+  void addVoiceMessage(String transcript, String aiResponse) {
+    _addUserMessage('You said: "$transcript"');
+    _addAIMessage(aiResponse);
+    _updateCurrentSession();
+    _autoSaveSession(); // Persist the new messages
+    notifyListeners();
+  }
+
   void setRouter(GoRouter router) {
     _router = router;
   }

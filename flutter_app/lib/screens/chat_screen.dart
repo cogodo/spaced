@@ -9,6 +9,28 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import '../widgets/chat_bubble.dart';
 import '../services/session_api.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:developer' as developer;
+import 'package:logging/logging.dart';
+
+// Centralize the WebSocket URL
+const String _kWebSocketUrl = 'ws://127.0.0.1:8000/api/v1/voice/ws/voice';
+
+/// A simple DTO for parsing WebSocket messages from the server.
+class VoiceWsMessage {
+  final String type;
+  final String? text;
+
+  VoiceWsMessage.fromJson(Map<String, dynamic> json)
+    : type = json['type'],
+      text = json['text'];
+}
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -40,6 +62,11 @@ class _ChatScreenState extends State<ChatScreen> {
   // Prevent duplicate sends
   bool _isSending = false;
 
+  // For WebSocket streaming
+  WebSocketChannel? _channel;
+  bool _isWebSocketConnected = false;
+  StreamSubscription? _wsSubscription;
+
   // Map to store self-evaluation scores for each message
   final Map<int, int> _selfEvaluationScores = {};
 
@@ -47,24 +74,31 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSidebarCollapsed = false;
 
   late final ChatProvider _chatProvider;
+  FlutterSoundRecorder? _recorder;
+  StreamController<Uint8List>? _recordingDataController;
+  StreamSubscription? _recorderSubscription;
+
+  String _transcript = ''; // To hold the live transcript
+  Timer? _speechTimer; // To detect end of speech
 
   @override
   void initState() {
     super.initState();
     _chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    _recorder = FlutterSoundRecorder();
+  }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This is a better place for this logic than initState/didUpdateWidget.
+    // It runs when the widget's dependencies change, like when navigating.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // If a session token is in the URL, try to load it, but only if it's
-      // not already the active session in the provider. This prevents redundant
-      // loading when navigating back to an already active chat.
       if (widget.sessionToken != null) {
         if (_chatProvider.currentSession?.token != widget.sessionToken) {
           _chatProvider.loadSessionByToken(widget.sessionToken!);
         }
-      }
-      // If there's no token in the URL and no session is active, ensure
-      // we are in the initial state to start a new chat.
-      else if (!_chatProvider.hasActiveSession) {
+      } else if (!_chatProvider.hasActiveSession) {
         _chatProvider.setSessionState(SessionState.initial);
       }
     });
@@ -73,22 +107,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Handle token changes when navigating between sessions
+    // The logic is now primarily handled in didChangeDependencies,
+    // but we can keep this as a secondary check if needed, though it's
+    // often redundant if the provider handles state correctly.
     if (widget.sessionToken != oldWidget.sessionToken) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (widget.sessionToken != null) {
-          final chatProvider = Provider.of<ChatProvider>(
-            context,
-            listen: false,
-          );
-          // Also check here to prevent redundant loading on navigation.
-          if (chatProvider.currentSession?.token == widget.sessionToken) {
-            return;
-          }
-          _chatProvider.loadSessionByToken(widget.sessionToken!);
-        }
-      });
+      // This logic is now in didChangeDependencies and can likely be removed
+      // to avoid redundant loads, but keeping it for safety for now.
     }
   }
 
@@ -123,6 +147,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
+    _speechTimer?.cancel();
+    _disconnectWebSocket();
+    _recorder?.closeRecorder();
+    _recorder = null;
+    _recordingDataController?.close();
+    _recorderSubscription?.cancel();
     super.dispose();
   }
 
@@ -135,6 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _isSending = true;
+      _transcript = ''; // Clear transcript on send
     });
 
     try {
@@ -145,7 +176,6 @@ class _ChatScreenState extends State<ChatScreen> {
           });
         }
       });
-
       _messageController.clear();
       if (!_textFieldFocusNode.hasFocus) {
         _textFieldFocusNode.requestFocus();
@@ -159,6 +189,159 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _startRecording() async {
+    if (_recorder == null) return;
+    try {
+      await _recorder!.openRecorder();
+      _recordingDataController = StreamController<Uint8List>();
+      _recorderSubscription = _recordingDataController!.stream.listen((
+        pcmChunk,
+      ) {
+        if (_channel != null && _isWebSocketConnected) {
+          _channel!.sink.add(pcmChunk);
+        }
+      });
+      await _recorder!.startRecorder(
+        toStream: _recordingDataController!.sink,
+        codec: Codec.pcm16,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+      developer.log("Recording started.", name: 'VoiceChat');
+    } catch (e) {
+      developer.log("Failed to start recorder:", name: 'VoiceChat', error: e);
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    if (_recorder == null) return;
+    try {
+      await _recorder!.stopRecorder();
+      await _recorderSubscription?.cancel();
+      _recorderSubscription = null;
+      await _recordingDataController?.close();
+      _recordingDataController = null;
+      developer.log("Recording stopped.", name: 'VoiceChat');
+    } catch (e) {
+      developer.log("Failed to stop recorder:", name: 'VoiceChat', error: e);
+    }
+  }
+
+  void _handleServerMessage(dynamic message) {
+    try {
+      final wsMessage = VoiceWsMessage.fromJson(json.decode(message));
+      if (wsMessage.type == 'transcript' && wsMessage.text != null) {
+        setState(() {
+          _transcript += " ${wsMessage.text!}"; // Append transcript
+          _messageController.text = _transcript.trim();
+          _messageController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _messageController.text.length),
+          );
+        });
+        _resetSpeechTimer(); // Reset timer on new transcript
+        developer.log('Transcript: "${wsMessage.text}"', name: 'VoiceChat');
+      } else if (wsMessage.type == 'chat_response') {
+        if (wsMessage.text != null) {
+          final chatProvider = Provider.of<ChatProvider>(
+            context,
+            listen: false,
+          );
+          // Use the provider to add the user's transcript and the AI's response to the chat
+          chatProvider.addVoiceMessage(_transcript, wsMessage.text!);
+
+          // Clear the transcript and the input field
+          setState(() {
+            _transcript = '';
+            _messageController.clear();
+          });
+        }
+      }
+    } catch (e) {
+      developer.log('Received non-JSON message: $message', name: 'VoiceChat');
+    }
+  }
+
+  void _handleSocketError(Object error, StackTrace stackTrace) {
+    developer.log(
+      'WebSocket error: $error',
+      name: 'VoiceChat',
+      stackTrace: stackTrace,
+    );
+    _disconnectWebSocket(); // Disconnect on error
+  }
+
+  Future<void> _connectWebSocket() async {
+    developer.log("Connecting to WebSocket...", name: 'VoiceChat');
+
+    // The browser will prompt for permission automatically on startRecorder.
+    // No need to call a manual request here.
+
+    try {
+      final wsUrl = Uri.parse(_kWebSocketUrl);
+      _channel = WebSocketChannel.connect(wsUrl);
+
+      _wsSubscription = _channel!.stream.listen(
+        _handleServerMessage,
+        onError: _handleSocketError,
+        onDone: () {
+          developer.log(
+            'WebSocket connection done (code=${_channel?.closeCode})',
+            name: 'VoiceChat',
+          );
+          _disconnectWebSocket();
+        },
+        cancelOnError: true,
+      );
+
+      setState(() {
+        _isWebSocketConnected = true;
+        _transcript = ''; // Clear previous transcript
+      });
+      _startRecording();
+      _resetSpeechTimer(); // Start timer
+      developer.log("WebSocket connected.", name: 'VoiceChat');
+    } catch (e) {
+      developer.log("Failed to connect to WebSocket: $e", name: 'VoiceChat');
+    }
+  }
+
+  Future<void> _disconnectWebSocket() async {
+    if (!_isWebSocketConnected) return;
+
+    developer.log("Disconnecting WebSocket...", name: 'VoiceChat');
+    _speechTimer?.cancel(); // Cancel timer on disconnect
+    await _stopRecording();
+
+    // Defensive cleanup
+    try {
+      await _wsSubscription?.cancel();
+    } catch (_) {}
+    try {
+      await _channel?.sink.close();
+    } catch (_) {}
+
+    _wsSubscription = null;
+    _channel = null;
+
+    if (mounted) {
+      setState(() => _isWebSocketConnected = false);
+    }
+  }
+
+  Future<void> _toggleWebSocketConnection() async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    if (chatProvider.isLoading) {
+      developer.log("Chat is busy, ignoring voice input.", name: 'VoiceChat');
+      return;
+    }
+
+    if (_isWebSocketConnected) {
+      await _disconnectWebSocket();
+    } else {
+      await _connectWebSocket();
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -167,6 +350,22 @@ class _ChatScreenState extends State<ChatScreen> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+      }
+    });
+  }
+
+  void _resetSpeechTimer() {
+    _speechTimer?.cancel();
+    _speechTimer = Timer(const Duration(milliseconds: 1500), () {
+      developer.log("End of speech detected.", name: 'VoiceChat');
+      if (_isWebSocketConnected) {
+        _toggleWebSocketConnection();
+        // A short delay to ensure the UI updates before sending.
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (_messageController.text.isNotEmpty) {
+            _sendMessage();
+          }
+        });
       }
     });
   }
@@ -244,7 +443,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     _buildActionButtons(),
                   // Input area - with bottom margin to move it up a bit
                   Container(
-                    margin: const EdgeInsets.only(bottom: 24),
+                    margin: const EdgeInsets.only(
+                      bottom: 24,
+                      left: 16,
+                      right: 16,
+                    ),
                     child: _buildInputArea(),
                   ),
                 ],
@@ -666,18 +869,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message, int messageIndex) {
-    if (message.text ==
-        "Please use the buttons below to evaluate your answer.") {
-      return Column(
-        children: [
-          ChatBubble(message: message, formatTimestamp: _formatTimestamp),
-          _buildSelfEvaluationButtons(
-            messageIndex - 1,
-          ), // Associate with user's message
-        ],
-      );
-    }
-    return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
+    // Add a Key for better performance
+    return ChatBubble(
+      key: ValueKey(messageIndex),
+      message: message,
+      formatTimestamp: _formatTimestamp,
+    );
   }
 
   Widget _buildSelfEvaluationButtons(int messageIndex) {
@@ -817,147 +1014,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(
-        horizontal: 20,
-      ), // Add horizontal margins to make it narrower
-      child: SafeArea(
-        child: Consumer<ChatProvider>(
-          builder: (context, chatProvider, child) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    enabled:
-                        !chatProvider.isLoading &&
-                        !chatProvider.isTyping &&
-                        !_isSending &&
-                        chatProvider.sessionState != SessionState.error &&
-                        chatProvider.sessionState != SessionState.completed,
-                    focusNode: _textFieldFocusNode,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      height: 1.4,
-                      letterSpacing: 0.2,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: _getInputHint(chatProvider.sessionState),
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color?.withAlpha(
-                          0.6.toInt(),
-                        ),
-                        letterSpacing: 0.2,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: theme.scaffoldBackgroundColor,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      // Add focus border for better visual feedback
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                      isDense: false,
-                      // Show typing indicator in input when AI is thinking
-                      suffixIcon:
-                          chatProvider.isTyping
-                              ? Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: CompactTypingIndicator(),
-                              )
-                              : null,
-                    ),
-                    maxLines: 5,
-                    minLines: 1,
-                    textCapitalization: TextCapitalization.sentences,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) {
-                      if (!chatProvider.isLoading &&
-                          !chatProvider.isTyping &&
-                          !_isSending &&
-                          chatProvider.sessionState != SessionState.error &&
-                          chatProvider.sessionState != SessionState.completed) {
-                        _sendMessage();
-                      }
-                    },
-                    // Auto-focus on certain states for better UX
-                    autofocus:
-                        chatProvider.sessionState ==
-                        SessionState.collectingTopics,
-                    // Ensure text field captures all tap events
-                    onTap: () {
-                      if (!_textFieldFocusNode.hasFocus) {
-                        _textFieldFocusNode.requestFocus();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Send button
-                IconButton(
-                  onPressed:
-                      (chatProvider.isLoading ||
-                              chatProvider.isTyping ||
-                              _isSending ||
-                              chatProvider.sessionState == SessionState.error ||
-                              chatProvider.sessionState ==
-                                  SessionState.completed)
-                          ? null
-                          : _sendMessage,
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        (chatProvider.isLoading ||
-                                chatProvider.isTyping ||
-                                _isSending)
-                            ? theme.colorScheme.primary.withAlpha(0.5.toInt())
-                            : theme.colorScheme.primary,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                    disabledBackgroundColor: theme.colorScheme.primary
-                        .withAlpha(0.5.toInt()),
-                    disabledForegroundColor: theme.colorScheme.onPrimary
-                        .withAlpha(0.7.toInt()),
-                    fixedSize: const Size(56, 56), // Consistent size
-                    shape: const CircleBorder(),
-                    elevation:
-                        (chatProvider.isLoading ||
-                                chatProvider.isTyping ||
-                                _isSending)
-                            ? 0
-                            : 2,
-                    shadowColor: theme.colorScheme.primary.withAlpha(
-                      0.3.toInt(),
-                    ),
-                  ),
-                  icon:
-                      _isSending
-                          ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.colorScheme.onPrimary,
-                            ),
-                          )
-                          : const Icon(Icons.arrow_upward, size: 24),
-                  tooltip: _isSending ? 'Sending...' : 'Send message',
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    return _ChatInputBar(
+      messageController: _messageController,
+      focusNode: _textFieldFocusNode,
+      onSendMessage: _sendMessage,
+      onToggleVoice: _toggleWebSocketConnection,
+      isWebSocketConnected: _isWebSocketConnected,
+      isLoading: chatProvider.isLoading,
     );
   }
 
@@ -1007,4 +1072,74 @@ class ChatMessage {
     this.isSystem = false,
     this.evaluation,
   });
+}
+
+/// A dedicated widget for the chat input text field and action buttons.
+class _ChatInputBar extends StatelessWidget {
+  const _ChatInputBar({
+    super.key,
+    required this.messageController,
+    required this.focusNode,
+    required this.onSendMessage,
+    required this.onToggleVoice,
+    required this.isWebSocketConnected,
+    required this.isLoading,
+  });
+
+  final TextEditingController messageController;
+  final FocusNode focusNode;
+  final VoidCallback onSendMessage;
+  final VoidCallback onToggleVoice;
+  final bool isWebSocketConnected;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool isEnabled = !isLoading;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: messageController,
+              focusNode: focusNode,
+              enabled: isEnabled,
+              onSubmitted: (_) => onSendMessage(),
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'Type your message or use the mic...',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send),
+            onPressed: isEnabled ? onSendMessage : null,
+          ),
+          IconButton(
+            icon: Icon(
+              isWebSocketConnected ? Icons.mic_off : Icons.mic,
+              color: theme.colorScheme.primary,
+            ),
+            onPressed: onToggleVoice,
+          ),
+        ],
+      ),
+    );
+  }
 }
