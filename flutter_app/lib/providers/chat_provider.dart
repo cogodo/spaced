@@ -111,8 +111,8 @@ class ChatProvider extends ChangeNotifier {
   String get backendUrl => _api.baseUrl;
 
   void addVoiceMessage(String transcript, String aiResponse) {
-    _addUserMessage('You said: "$transcript"');
-    _addAIMessage(aiResponse);
+    _addUserMessage(transcript, isVoice: true);
+    _addAIMessage(aiResponse, isVoice: true);
     _updateCurrentSession();
     _autoSaveSession(); // Persist the new messages
 
@@ -209,7 +209,9 @@ class ChatProvider extends ChangeNotifier {
         name: 'New Session - ${_formatTimestamp(DateTime.now())}',
         topicId: response.topicId,
       );
-      _currentSession = session;
+
+      // Update session to active state since we're starting with topics
+      _currentSession = session.copyWith(state: SessionState.active);
 
       _addAIMessage(response.message);
 
@@ -219,10 +221,10 @@ class ChatProvider extends ChangeNotifier {
       // }
 
       if (_userId != null) {
-        await _sessionService.saveSession(_userId!, session);
+        await _sessionService.saveSession(_userId!, _currentSession!);
         loadSessionHistory();
       }
-      _router?.go('/app/chat/${session.token}');
+      _router?.go('/app/chat/${_currentSession!.token}');
     } catch (e) {
       _logger.severe('Error starting new session: $e');
       if (e is ApiException) {
@@ -244,14 +246,110 @@ class ChatProvider extends ChangeNotifier {
   Future<void> handleTopicsInput(List<String> topics) async {
     if (topics.isEmpty) return;
 
-    // Start a new session with the selected topics
-    await startNewSession(topics);
+    // If we already have a current session, continue with it instead of creating new one
+    if (_currentSessionId != null && _sessionState != SessionState.initial) {
+      _logger.info(
+        'Continuing existing session $_currentSessionId with topics: $topics',
+      );
+
+      // Get the initial AI question for this topic using the existing session
+      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+
+      try {
+        // Use startChat with existing session ID to get the proper initial message
+        final response = await _api.startChat(topics, _currentSessionId);
+
+        // Transition to active state
+        _sessionState = SessionState.active;
+
+        // Add the AI's initial question (not a user message)
+        _addAIMessage(response.message);
+
+        // Update session metadata with new topics if needed
+        if (_currentSession != null) {
+          _currentSession = _currentSession!.copyWith(
+            topics: [..._currentSession!.topics, ...topics],
+            state: SessionState.active,
+            updatedAt: DateTime.now(),
+          );
+
+          // Save the updated session
+          if (_userId != null) {
+            await _sessionService.saveSession(_userId!, _currentSession!);
+          }
+        }
+      } catch (e) {
+        _logger.severe('Error adding topics to session: $e');
+        if (e is ApiException) {
+          _addAIMessage('Error: ${e.message}');
+        } else {
+          _addAIMessage(
+            'An error occurred while preparing your questions. Please try again.',
+          );
+        }
+      } finally {
+        _setLoadingWithTyping(false, typingMessage: null);
+      }
+
+      notifyListeners();
+    } else {
+      // Start a new session with the selected topics
+      await startNewSession(topics);
+    }
   }
 
   /// Start session with a popular topic
   Future<void> startSessionWithPopularTopic(Topic topic) async {
-    // Start a new session with the popular topic
-    await startNewSession([topic.name]);
+    // If we already have a current session, continue with it instead of creating new one
+    if (_currentSessionId != null && _sessionState != SessionState.initial) {
+      _logger.info(
+        'Continuing existing session $_currentSessionId with popular topic: ${topic.name}',
+      );
+
+      // Get the initial AI question for this topic using the existing session
+      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+
+      try {
+        // Use startChat with existing session ID to get the proper initial message
+        final response = await _api.startChat([topic.name], _currentSessionId);
+
+        // Transition to active state
+        _sessionState = SessionState.active;
+
+        // Add the AI's initial question (not a user message)
+        _addAIMessage(response.message);
+
+        // Update session metadata with new topic if needed
+        if (_currentSession != null) {
+          _currentSession = _currentSession!.copyWith(
+            topics: [..._currentSession!.topics, topic.name],
+            state: SessionState.active,
+            updatedAt: DateTime.now(),
+          );
+
+          // Save the updated session
+          if (_userId != null) {
+            await _sessionService.saveSession(_userId!, _currentSession!);
+          }
+        }
+      } catch (e) {
+        _logger.severe('Error adding topic to session: $e');
+        if (e is ApiException) {
+          _addAIMessage('Error: ${e.message}');
+        } else {
+          _addAIMessage(
+            'An error occurred while preparing your questions. Please try again.',
+          );
+        }
+      } finally {
+        _setLoadingWithTyping(false, typingMessage: null);
+      }
+
+      notifyListeners();
+    } else {
+      // Start a new session with the popular topic
+      await startNewSession([topic.name]);
+    }
   }
 
   /// Load an existing session from Firebase
@@ -502,8 +600,15 @@ class ChatProvider extends ChangeNotifier {
   }
 
   // Public method to add AI messages (used by voice service)
-  void addAIMessage(String message) {
-    _addAIMessage(message);
+  void addAIMessage(String message, {bool isVoice = false}) {
+    _addAIMessage(message, isVoice: isVoice);
+    notifyListeners();
+  }
+
+  // Public method to add user messages (used by voice service)
+  void addUserMessage(String message, {bool isVoice = false}) {
+    _addUserMessage(message, isVoice: isVoice);
+    notifyListeners();
   }
 
   // Firebase integration methods
@@ -679,11 +784,12 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Add user message
-  void _addUserMessage(String text) {
+  void _addUserMessage(String text, {bool isVoice = false}) {
     final message = ChatMessage(
       text: text,
       isUser: true,
       timestamp: DateTime.now(),
+      isVoice: isVoice,
     );
     _messages.add(message);
 
@@ -695,11 +801,12 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Add AI message
-  void _addAIMessage(String text) {
+  void _addAIMessage(String text, {bool isVoice = false}) {
     final message = ChatMessage(
       text: text,
       isUser: false,
       timestamp: DateTime.now(),
+      isVoice: isVoice,
     );
     _messages.add(message);
 

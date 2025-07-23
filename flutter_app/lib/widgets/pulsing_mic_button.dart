@@ -4,15 +4,17 @@ class PulsingMicButton extends StatefulWidget {
   final bool isConnecting;
   final bool isVoiceConnected;
   final bool isSpeaking;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final double size;
 
   const PulsingMicButton({
-    super.key,
+    Key? key,
     required this.isConnecting,
     required this.isVoiceConnected,
     required this.isSpeaking,
-    required this.onTap,
-  });
+    this.onTap,
+    this.size = 80.0,
+  }) : super(key: key);
 
   @override
   State<PulsingMicButton> createState() => _PulsingMicButtonState();
@@ -97,8 +99,8 @@ class _PulsingMicButtonState extends State<PulsingMicButton>
             ScaleTransition(
               scale: _scaleAnimation,
               child: Container(
-                width: 80,
-                height: 80,
+                width: widget.size,
+                height: widget.size,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: theme.colorScheme.primary.withOpacity(0.2),
@@ -106,8 +108,8 @@ class _PulsingMicButtonState extends State<PulsingMicButton>
               ),
             ),
           Container(
-            width: 80,
-            height: 80,
+            width: widget.size,
+            height: widget.size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: backgroundColor,
@@ -121,8 +123,12 @@ class _PulsingMicButtonState extends State<PulsingMicButton>
             ),
             child:
                 widget.isConnecting
-                    ? const CircularProgressIndicator()
-                    : Icon(iconData, color: iconColor, size: 40),
+                    ? SizedBox(
+                      width: widget.size * 0.5,
+                      height: widget.size * 0.5,
+                      child: const CircularProgressIndicator(),
+                    )
+                    : Icon(iconData, color: iconColor, size: widget.size * 0.5),
           ),
         ],
       ),

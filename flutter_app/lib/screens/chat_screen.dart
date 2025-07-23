@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/pulsing_mic_button.dart';
 import '../services/audio_player_service.dart';
@@ -94,22 +92,55 @@ class _ChatScreenState extends State<ChatScreen> {
         _currentTranscript = transcript;
       });
       _logger.info('Transcript received: $transcript');
+
+      // Show streaming transcript in the text field as user speaks
+      if (transcript.isNotEmpty && mounted) {
+        _messageController.text = transcript;
+      }
     };
 
     _voiceService!.onFinalTranscriptReceived = (transcript) {
       _logger.info('Final transcript: $transcript');
-      // Send the transcript as a text message to the chat
+
+      // Clear the streaming transcript from text field
+      _currentTranscript = null;
+      _messageController.clear();
+
+      // Add the final transcript as a user message in the chat
       if (transcript.isNotEmpty && mounted) {
-        _messageController.text = transcript;
-        _sendMessage();
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        chatProvider.addUserMessage(transcript, isVoice: true);
+
+        // Auto-scroll to bottom to show new message
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       }
     };
 
     _voiceService!.onAgentResponse = (response) {
       _logger.info('Agent response: $response');
-      if (mounted) {
+      if (mounted && response.isNotEmpty) {
+        // Add the AI response to the chat immediately when received
         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        chatProvider.addAIMessage(response);
+        chatProvider.addAIMessage(response, isVoice: true);
+
+        // Auto-scroll to bottom to show new message
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       }
     };
 
@@ -478,18 +509,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ],
                   ),
-                  // Voice button floating above input area
-                  if (chatProvider.sessionState == SessionState.active)
-                    Positioned(
-                      bottom: 100,
-                      right: 20,
-                      child: PulsingMicButton(
-                        isConnecting: _isVoiceConnecting,
-                        isVoiceConnected: _isVoiceConnected,
-                        isSpeaking: _isSpeaking,
-                        onTap: _toggleVoiceChat,
-                      ),
-                    ),
                 ],
               );
             },
@@ -1096,6 +1115,17 @@ class _ChatScreenState extends State<ChatScreen> {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // Mic button (only show when session is active)
+                if (chatProvider.sessionState == SessionState.active) ...[
+                  PulsingMicButton(
+                    isConnecting: _isVoiceConnecting,
+                    isVoiceConnected: _isVoiceConnected,
+                    isSpeaking: _isSpeaking,
+                    onTap: _toggleVoiceChat,
+                    size: 56.0, // Match the send button size
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: TextField(
                     controller: _messageController,
@@ -1245,7 +1275,7 @@ class _ChatScreenState extends State<ChatScreen> {
       case SessionState.collectingTopics:
         return 'Enter topics to study (e.g., "Flutter, Dart")...';
       case SessionState.active:
-        return 'Type your answer...';
+        return 'Type your answer or use voice...';
       case SessionState.completed:
         return 'Session completed';
       case SessionState.error:
@@ -1274,11 +1304,13 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final bool isSystem;
+  final bool isVoice;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.isSystem = false,
+    this.isVoice = false,
   });
 }
