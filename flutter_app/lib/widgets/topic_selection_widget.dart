@@ -4,9 +4,14 @@ import '../providers/chat_provider.dart';
 import '../services/session_api.dart'; // Keep for Topic model
 
 class TopicSelectionWidget extends StatefulWidget {
-  final Function(List<String> topics) onTopicsSelected;
+  final Function(List<String>) onTopicsSelected;
+  final Function(Topic)? onPopularTopicSelected;
 
-  const TopicSelectionWidget({super.key, required this.onTopicsSelected});
+  const TopicSelectionWidget({
+    super.key,
+    required this.onTopicsSelected,
+    this.onPopularTopicSelected,
+  });
 
   @override
   State<TopicSelectionWidget> createState() => _TopicSelectionWidgetState();
@@ -98,7 +103,12 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
             title: Text(topic.name),
             subtitle: Text(topic.description),
             onTap: () {
-              widget.onTopicsSelected([topic.name]);
+              // Use the popular topic selection callback if available
+              if (widget.onPopularTopicSelected != null) {
+                widget.onPopularTopicSelected!(topic);
+              } else {
+                widget.onTopicsSelected([topic.name]);
+              }
             },
           ),
         );

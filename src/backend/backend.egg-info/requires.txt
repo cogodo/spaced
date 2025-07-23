@@ -12,3 +12,7 @@ psutil
 python-multipart
 soundfile
 numpy
+cartesia
+livekit-agents[cartesia,deepgram,openai,silero,turn-detector]~=1.0
+livekit-plugins-noise-cancellation~=0.2
+python-dotenv

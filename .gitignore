@@ -83,3 +83,4 @@ vendor/bundle/
 
 # --- Caching ---
 .uv_cache/
+*.wav

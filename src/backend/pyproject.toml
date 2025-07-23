@@ -18,8 +18,9 @@ dependencies = [
     "pre-commit",
     "psutil",
     "python-multipart",
-    "soundfile",
-    "numpy",
+    "livekit-agents[deepgram,openai,cartesia,silero,turn-detector]~=1.0",
+    "livekit-plugins-noise-cancellation~=0.2",
+    "python-dotenv",
 ]
 
 [project.scripts]
@@ -52,6 +53,8 @@ openai = "^0.28.1"
 python-dotenv = "^1.0.1"
 redis = "^5.0.4"
 python-multipart = "^0.0.9"
+livekit-agents = {extras = ["deepgram", "openai", "cartesia", "silero", "turn-detector"], version = "^1.0"}
+livekit-plugins-noise-cancellation = "^0.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"

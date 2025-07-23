@@ -45,10 +45,8 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_markdown: ^0.7.4+1
 
-  # Voice chat dependencies
-  flutter_sound: ^9.5.0
-  just_audio: ^0.9.36
-  web_socket_channel: ^2.4.0
+  # Voice chat dependencies - LiveKit
+  livekit_client: ^2.2.6
   permission_handler: ^11.0.1 # For microphone permissions
 
 dev_dependencies:

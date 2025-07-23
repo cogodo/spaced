@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/chat_session.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
@@ -8,29 +7,10 @@ import '../widgets/topic_selection_widget.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import '../widgets/chat_bubble.dart';
-import '../services/session_api.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:async';
-import 'dart:typed_data';
-import 'dart:developer' as developer;
-import 'package:logging/logging.dart';
-
-// Centralize the WebSocket URL
-const String _kWebSocketUrl = 'ws://127.0.0.1:8000/api/v1/voice/ws/voice';
-
-/// A simple DTO for parsing WebSocket messages from the server.
-class VoiceWsMessage {
-  final String type;
-  final String? text;
-
-  VoiceWsMessage.fromJson(Map<String, dynamic> json)
-    : type = json['type'],
-      text = json['text'];
-}
+import '../widgets/pulsing_mic_button.dart';
+import '../services/audio_player_service.dart';
+import '../services/auth_service.dart';
+import '../services/logger_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -55,64 +35,256 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
+  final _logger = getLogger('ChatScreen');
 
-  // For due topics selection
-  Set<ChatSessionSummary> _selectedSessions = {};
+  // For due topics selection (kept for backwards compatibility)
+  List<dynamic> _dueTasks = []; // Changed from List<Task> to List<dynamic>
+  Set<String> _selectedTopics = {};
+  bool _isLoadingDueTasks = false;
 
   // Prevent duplicate sends
   bool _isSending = false;
 
-  // For WebSocket streaming
-  WebSocketChannel? _channel;
-  bool _isWebSocketConnected = false;
-  StreamSubscription? _wsSubscription;
-
-  // Map to store self-evaluation scores for each message
-  final Map<int, int> _selfEvaluationScores = {};
-
   // Sidebar collapse state
   bool _isSidebarCollapsed = false;
 
-  late final ChatProvider _chatProvider;
-  FlutterSoundRecorder? _recorder;
-  StreamController<Uint8List>? _recordingDataController;
-  StreamSubscription? _recorderSubscription;
-
-  String _transcript = ''; // To hold the live transcript
-  Timer? _speechTimer; // To detect end of speech
+  // Voice chat state
+  LiveKitVoiceService? _voiceService;
+  bool _isVoiceConnecting = false;
+  bool _isVoiceConnected = false;
+  bool _isSpeaking = false;
+  String? _currentTranscript;
 
   @override
   void initState() {
     super.initState();
-    _chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    _recorder = FlutterSoundRecorder();
+
+    // Initialize voice service
+    _initializeVoiceService();
+
+    // Load session based on token, but don't auto-start new sessions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+      if (widget.sessionToken != null) {
+        // Load specific session by token
+        _loadSessionByToken(widget.sessionToken!);
+      } else {
+        // Check if there's an active session and redirect to its token URL
+        final currentToken = chatProvider.currentSessionToken;
+        if (currentToken != null) {
+          // Redirect to the active session's token URL
+          context.go('/app/chat/$currentToken');
+        } else {
+          // No session token and no active session - reset to initial state for session selection
+          chatProvider.resetToInitialState();
+        }
+      }
+      // Don't auto-start new sessions - wait for user input
+    });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // This is a better place for this logic than initState/didUpdateWidget.
-    // It runs when the widget's dependencies change, like when navigating.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.sessionToken != null) {
-        if (_chatProvider.currentSession?.token != widget.sessionToken) {
-          _chatProvider.loadSessionByToken(widget.sessionToken!);
-        }
-      } else if (!_chatProvider.hasActiveSession) {
-        _chatProvider.setSessionState(SessionState.initial);
+  void _initializeVoiceService() {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    _voiceService = LiveKitVoiceService(baseUrl: chatProvider.backendUrl);
+
+    // Set up voice event callbacks
+    _voiceService!.onTranscriptReceived = (transcript) {
+      setState(() {
+        _currentTranscript = transcript;
+      });
+      _logger.info('Transcript received: $transcript');
+    };
+
+    _voiceService!.onFinalTranscriptReceived = (transcript) {
+      _logger.info('Final transcript: $transcript');
+      // Send the transcript as a text message to the chat
+      if (transcript.isNotEmpty && mounted) {
+        _messageController.text = transcript;
+        _sendMessage();
       }
-    });
+    };
+
+    _voiceService!.onAgentResponse = (response) {
+      _logger.info('Agent response: $response');
+      if (mounted) {
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        chatProvider.addAIMessage(response);
+      }
+    };
+
+    _voiceService!.onConnected = () {
+      _logger.info('Voice connected');
+      if (mounted) {
+        setState(() {
+          _isVoiceConnected = true;
+          _isVoiceConnecting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Voice chat connected! You can now speak.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    };
+
+    _voiceService!.onDisconnected = () {
+      _logger.info('Voice disconnected');
+      if (mounted) {
+        setState(() {
+          _isVoiceConnected = false;
+          _isSpeaking = false;
+        });
+      }
+    };
+
+    _voiceService!.onError = (error) {
+      _logger.severe('Voice error: $error');
+      if (mounted) {
+        setState(() {
+          _isVoiceConnecting = false;
+          _isVoiceConnected = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Voice error: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    };
+
+    _voiceService!.onLocalSpeakingChanged = (isSpeaking) {
+      if (mounted) {
+        setState(() {
+          _isSpeaking = isSpeaking;
+        });
+        _logger.info('Speaking status changed: $isSpeaking');
+      }
+    };
+  }
+
+  Future<void> _toggleVoiceChat() async {
+    if (_isVoiceConnecting) return;
+
+    if (_isVoiceConnected) {
+      // Disconnect voice
+      await _voiceService?.disconnect();
+      setState(() {
+        _isVoiceConnected = false;
+        _isSpeaking = false;
+      });
+    } else {
+      // Connect to voice
+      setState(() {
+        _isVoiceConnecting = true;
+      });
+
+      try {
+        // Get user ID
+        final authService = AuthService();
+        final user = authService.currentUser;
+        if (user == null) {
+          throw Exception('User not authenticated');
+        }
+
+        // Request microphone permission
+        final hasMicPermission =
+            await _voiceService!.requestMicrophonePermission();
+        if (!hasMicPermission) {
+          throw Exception('Microphone permission denied');
+        }
+
+        // Get current topics from the session if available
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        String? topic;
+        if (chatProvider.currentSession != null &&
+            chatProvider.currentSession!.topics.isNotEmpty) {
+          topic = chatProvider.currentSession!.topics.join(', ');
+        }
+
+        // Start voice session
+        await _voiceService!.startVoiceSession(user.uid, topic: topic);
+
+        // Unlock audio playback on web after user gesture
+        if (mounted) {
+          await _voiceService!.startAudioPlayback();
+        }
+      } catch (e) {
+        _logger.severe('Failed to start voice chat: $e');
+        if (mounted) {
+          setState(() {
+            _isVoiceConnecting = false;
+            _isVoiceConnected = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to start voice chat: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // The logic is now primarily handled in didChangeDependencies,
-    // but we can keep this as a secondary check if needed, though it's
-    // often redundant if the provider handles state correctly.
+
+    // Handle token changes when navigating between sessions
     if (widget.sessionToken != oldWidget.sessionToken) {
-      // This logic is now in didChangeDependencies and can likely be removed
-      // to avoid redundant loads, but keeping it for safety for now.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.sessionToken != null) {
+          _loadSessionByToken(widget.sessionToken!);
+        }
+      });
+    }
+  }
+
+  Future<void> _loadSessionByToken(String token) async {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    try {
+      await chatProvider.loadSessionByToken(token);
+    } catch (e) {
+      // Handle session not found or error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Session not found: $token'),
+            action: SnackBarAction(
+              label: 'Start New',
+              onPressed: () => chatProvider.startNewSession(['General']),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadDueTasks() async {
+    setState(() {
+      _isLoadingDueTasks = true;
+    });
+
+    try {
+      // Since we removed the old task system, just set empty tasks
+      setState(() {
+        _dueTasks = [];
+        _selectedTopics.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading due tasks: $e')));
+      }
+    } finally {
+      setState(() {
+        _isLoadingDueTasks = false;
+      });
     }
   }
 
@@ -122,24 +294,23 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _startPastReviewsSession() {
+    _loadDueTasks();
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     chatProvider.setSessionState(SessionState.selectingDueTopics);
   }
 
   void _startDueTopicsSession() {
-    if (_selectedSessions.isEmpty) {
+    if (_selectedTopics.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one session to review'),
+          content: Text('Please select at least one topic to review'),
         ),
       );
       return;
     }
 
-    final topics =
-        _selectedSessions.expand<String>((s) => s.topics).toSet().toList();
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.startNewSession(topics);
+    chatProvider.startNewSession(_selectedTopics.toList());
   }
 
   @override
@@ -147,12 +318,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
-    _speechTimer?.cancel();
-    _disconnectWebSocket();
-    _recorder?.closeRecorder();
-    _recorder = null;
-    _recordingDataController?.close();
-    _recorderSubscription?.cancel();
+    _voiceService?.dispose();
     super.dispose();
   }
 
@@ -163,182 +329,59 @@ class _ChatScreenState extends State<ChatScreen> {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     if (chatProvider.isLoading) return;
 
+    // Set sending state to prevent duplicates
     setState(() {
       _isSending = true;
-      _transcript = ''; // Clear transcript on send
     });
 
     try {
-      chatProvider.sendMessage(text).whenComplete(() {
-        if (mounted) {
-          setState(() {
-            _isSending = false;
-          });
-        }
-      });
+      // If no active session exists, start a new one first
+      if (!chatProvider.hasActiveSession) {
+        // Get topics from the message or use a default
+        final topics =
+            text.contains(',')
+                ? text
+                    .split(',')
+                    .map((t) => t.trim())
+                    .where((t) => t.isNotEmpty)
+                    .toList()
+                : [text];
+
+        chatProvider
+            .startNewSession(topics)
+            .then((_) {
+              // Don't send the message again since topics were used to start session
+            })
+            .whenComplete(() {
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+            });
+      } else {
+        chatProvider.sendMessage(text).whenComplete(() {
+          if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+        });
+      }
+
       _messageController.clear();
+
+      // Keep focus on text field for better UX
       if (!_textFieldFocusNode.hasFocus) {
         _textFieldFocusNode.requestFocus();
       }
     } catch (e) {
+      // Reset sending state on error
       if (mounted) {
         setState(() {
           _isSending = false;
         });
       }
-    }
-  }
-
-  Future<void> _startRecording() async {
-    if (_recorder == null) return;
-    try {
-      await _recorder!.openRecorder();
-      _recordingDataController = StreamController<Uint8List>();
-      _recorderSubscription = _recordingDataController!.stream.listen((
-        pcmChunk,
-      ) {
-        if (_channel != null && _isWebSocketConnected) {
-          _channel!.sink.add(pcmChunk);
-        }
-      });
-      await _recorder!.startRecorder(
-        toStream: _recordingDataController!.sink,
-        codec: Codec.pcm16,
-        sampleRate: 16000,
-        numChannels: 1,
-      );
-      developer.log("Recording started.", name: 'VoiceChat');
-    } catch (e) {
-      developer.log("Failed to start recorder:", name: 'VoiceChat', error: e);
-    }
-  }
-
-  Future<void> _stopRecording() async {
-    if (_recorder == null) return;
-    try {
-      await _recorder!.stopRecorder();
-      await _recorderSubscription?.cancel();
-      _recorderSubscription = null;
-      await _recordingDataController?.close();
-      _recordingDataController = null;
-      developer.log("Recording stopped.", name: 'VoiceChat');
-    } catch (e) {
-      developer.log("Failed to stop recorder:", name: 'VoiceChat', error: e);
-    }
-  }
-
-  void _handleServerMessage(dynamic message) {
-    try {
-      final wsMessage = VoiceWsMessage.fromJson(json.decode(message));
-      if (wsMessage.type == 'transcript' && wsMessage.text != null) {
-        setState(() {
-          _transcript += " ${wsMessage.text!}"; // Append transcript
-          _messageController.text = _transcript.trim();
-          _messageController.selection = TextSelection.fromPosition(
-            TextPosition(offset: _messageController.text.length),
-          );
-        });
-        _resetSpeechTimer(); // Reset timer on new transcript
-        developer.log('Transcript: "${wsMessage.text}"', name: 'VoiceChat');
-      } else if (wsMessage.type == 'chat_response') {
-        if (wsMessage.text != null) {
-          final chatProvider = Provider.of<ChatProvider>(
-            context,
-            listen: false,
-          );
-          // Use the provider to add the user's transcript and the AI's response to the chat
-          chatProvider.addVoiceMessage(_transcript, wsMessage.text!);
-
-          // Clear the transcript and the input field
-          setState(() {
-            _transcript = '';
-            _messageController.clear();
-          });
-        }
-      }
-    } catch (e) {
-      developer.log('Received non-JSON message: $message', name: 'VoiceChat');
-    }
-  }
-
-  void _handleSocketError(Object error, StackTrace stackTrace) {
-    developer.log(
-      'WebSocket error: $error',
-      name: 'VoiceChat',
-      stackTrace: stackTrace,
-    );
-    _disconnectWebSocket(); // Disconnect on error
-  }
-
-  Future<void> _connectWebSocket() async {
-    developer.log("Connecting to WebSocket...", name: 'VoiceChat');
-
-    // The browser will prompt for permission automatically on startRecorder.
-    // No need to call a manual request here.
-
-    try {
-      final wsUrl = Uri.parse(_kWebSocketUrl);
-      _channel = WebSocketChannel.connect(wsUrl);
-
-      _wsSubscription = _channel!.stream.listen(
-        _handleServerMessage,
-        onError: _handleSocketError,
-        onDone: () {
-          developer.log(
-            'WebSocket connection done (code=${_channel?.closeCode})',
-            name: 'VoiceChat',
-          );
-          _disconnectWebSocket();
-        },
-        cancelOnError: true,
-      );
-
-      setState(() {
-        _isWebSocketConnected = true;
-        _transcript = ''; // Clear previous transcript
-      });
-      _startRecording();
-      _resetSpeechTimer(); // Start timer
-      developer.log("WebSocket connected.", name: 'VoiceChat');
-    } catch (e) {
-      developer.log("Failed to connect to WebSocket: $e", name: 'VoiceChat');
-    }
-  }
-
-  Future<void> _disconnectWebSocket() async {
-    if (!_isWebSocketConnected) return;
-
-    developer.log("Disconnecting WebSocket...", name: 'VoiceChat');
-    _speechTimer?.cancel(); // Cancel timer on disconnect
-    await _stopRecording();
-
-    // Defensive cleanup
-    try {
-      await _wsSubscription?.cancel();
-    } catch (_) {}
-    try {
-      await _channel?.sink.close();
-    } catch (_) {}
-
-    _wsSubscription = null;
-    _channel = null;
-
-    if (mounted) {
-      setState(() => _isWebSocketConnected = false);
-    }
-  }
-
-  Future<void> _toggleWebSocketConnection() async {
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    if (chatProvider.isLoading) {
-      developer.log("Chat is busy, ignoring voice input.", name: 'VoiceChat');
-      return;
-    }
-
-    if (_isWebSocketConnected) {
-      await _disconnectWebSocket();
-    } else {
-      await _connectWebSocket();
     }
   }
 
@@ -350,22 +393,6 @@ class _ChatScreenState extends State<ChatScreen> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
-      }
-    });
-  }
-
-  void _resetSpeechTimer() {
-    _speechTimer?.cancel();
-    _speechTimer = Timer(const Duration(milliseconds: 1500), () {
-      developer.log("End of speech detected.", name: 'VoiceChat');
-      if (_isWebSocketConnected) {
-        _toggleWebSocketConnection();
-        // A short delay to ensure the UI updates before sending.
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (_messageController.text.isNotEmpty) {
-            _sendMessage();
-          }
-        });
       }
     });
   }
@@ -404,52 +431,65 @@ class _ChatScreenState extends State<ChatScreen> {
               // Show due topics selection
               if (chatProvider.sessionState ==
                   SessionState.selectingDueTopics) {
-                return _buildDueTopicsSelection(chatProvider);
+                return _buildDueTopicsSelection();
               }
 
               // Show normal chat interface
-              return Column(
+              return Stack(
                 children: [
-                  // Messages list
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                  Column(
+                    children: [
+                      // Messages list
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          itemCount:
+                              chatProvider.messages.length +
+                              (chatProvider.isTyping ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == chatProvider.messages.length &&
+                                chatProvider.isTyping) {
+                              return SmartTypingIndicator(
+                                sessionState:
+                                    chatProvider.sessionState.toString(),
+                                isGeneratingQuestions:
+                                    chatProvider.isGeneratingQuestions,
+                                isProcessingAnswer:
+                                    chatProvider.isProcessingAnswer,
+                              );
+                            }
+                            return _buildMessageBubble(
+                              chatProvider.messages[index],
+                            );
+                          },
+                        ),
                       ),
-                      itemCount:
-                          chatProvider.messages.length +
-                          (chatProvider.isTyping ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == chatProvider.messages.length &&
-                            chatProvider.isTyping) {
-                          return SmartTypingIndicator(
-                            sessionState: chatProvider.sessionState.toString(),
-                            isGeneratingQuestions:
-                                chatProvider.isGeneratingQuestions,
-                            isProcessingAnswer: chatProvider.isProcessingAnswer,
-                          );
-                        }
-                        return _buildMessageBubble(
-                          chatProvider.messages[index],
-                          index,
-                        );
-                      },
-                    ),
+                      // Action buttons for active sessions
+                      if (chatProvider.sessionState == SessionState.active)
+                        _buildActionButtons(),
+                      // Input area - with bottom margin to move it up a bit
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 24),
+                        child: _buildInputArea(),
+                      ),
+                    ],
                   ),
-                  // Action buttons for active sessions
+                  // Voice button floating above input area
                   if (chatProvider.sessionState == SessionState.active)
-                    _buildActionButtons(),
-                  // Input area - with bottom margin to move it up a bit
-                  Container(
-                    margin: const EdgeInsets.only(
-                      bottom: 24,
-                      left: 16,
-                      right: 16,
+                    Positioned(
+                      bottom: 100,
+                      right: 20,
+                      child: PulsingMicButton(
+                        isConnecting: _isVoiceConnecting,
+                        isVoiceConnected: _isVoiceConnected,
+                        isSpeaking: _isSpeaking,
+                        onTap: _toggleVoiceChat,
+                      ),
                     ),
-                    child: _buildInputArea(),
-                  ),
                 ],
               );
             },
@@ -626,7 +666,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   context,
                   listen: false,
                 );
-                await chatProvider.startNewSession(topics);
+                // Use existing session and handle topics input instead of creating new session
+                await chatProvider.handleTopicsInput(topics);
+              },
+              onPopularTopicSelected: (topic) async {
+                final chatProvider = Provider.of<ChatProvider>(
+                  context,
+                  listen: false,
+                );
+                // Use the proper method that handles state transitions
+                await chatProvider.startSessionWithPopularTopic(topic);
               },
             ),
           ),
@@ -635,7 +684,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildDueTopicsSelection(ChatProvider chatProvider) {
+  Widget _buildDueTopicsSelection() {
     final theme = Theme.of(context);
 
     return Column(
@@ -647,7 +696,7 @@ class _ChatScreenState extends State<ChatScreen> {
             color: theme.colorScheme.surface,
             border: Border(
               bottom: BorderSide(
-                color: theme.colorScheme.outline.withOpacity(0.2),
+                color: theme.colorScheme.outline.withValues(alpha: 0.2),
               ),
             ),
           ),
@@ -679,9 +728,11 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Choose which past sessions you\'d like to review topics from',
+                          'Choose which topics you\'d like to review today',
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.7),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
                       ],
@@ -696,35 +747,35 @@ class _ChatScreenState extends State<ChatScreen> {
         // Content
         Expanded(
           child:
-              chatProvider.isLoadingHistory
+              _isLoadingDueTasks
                   ? const Center(child: CircularProgressIndicator())
-                  : chatProvider.sessionHistory.isEmpty
-                  ? _buildNoSessionsMessage()
-                  : _buildSessionsList(chatProvider.sessionHistory),
+                  : _dueTasks.isEmpty
+                  ? _buildNoDueTasksMessage()
+                  : _buildDueTasksList(),
         ),
 
         // Bottom action bar
-        if (chatProvider.sessionHistory.isNotEmpty)
+        if (_dueTasks.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               border: Border(
                 top: BorderSide(
-                  color: theme.colorScheme.outline.withOpacity(0.2),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
             ),
             child: Row(
               children: [
                 Text(
-                  '${_selectedSessions.length} session${_selectedSessions.length == 1 ? '' : 's'} selected',
+                  '${_selectedTopics.length} topic${_selectedTopics.length == 1 ? '' : 's'} selected',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const Spacer(),
                 ElevatedButton(
                   onPressed:
-                      _selectedSessions.isEmpty ? null : _startDueTopicsSession,
+                      _selectedTopics.isEmpty ? null : _startDueTopicsSession,
                   child: const Text('Start Review Session'),
                 ),
               ],
@@ -734,7 +785,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildNoSessionsMessage() {
+  Widget _buildNoDueTasksMessage() {
     final theme = Theme.of(context);
 
     return Center(
@@ -745,13 +796,13 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.history_toggle_off,
+              Icons.check_circle_outline,
               size: 80,
               color: theme.colorScheme.primary,
             ),
             const SizedBox(height: 24),
             Text(
-              'No Past Sessions',
+              'All Caught Up!',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.onSurface,
@@ -760,9 +811,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'You don\'t have any past sessions to review. Complete a session first!',
+              'You don\'t have any topics due for review right now. Great job staying on top of your learning!',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -777,15 +828,19 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildSessionsList(List<ChatSessionSummary> sessions) {
+  Widget _buildDueTasksList() {
     final theme = Theme.of(context);
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: sessions.length,
+      itemCount: _dueTasks.length,
       itemBuilder: (context, index) {
-        final session = sessions[index];
-        final isSelected = _selectedSessions.contains(session);
+        final task = _dueTasks[index];
+        // Since we no longer have the old Task model, we'll need to handle this differently
+        // For now, treat tasks as simple strings or maps
+        final taskName =
+            task is String ? task : (task['name'] ?? 'Unknown Task');
+        final isSelected = _selectedTopics.contains(taskName);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -794,29 +849,77 @@ class _ChatScreenState extends State<ChatScreen> {
             onChanged: (bool? value) {
               setState(() {
                 if (value == true) {
-                  _selectedSessions.add(session);
+                  _selectedTopics.add(taskName);
                 } else {
-                  _selectedSessions.remove(session);
+                  _selectedTopics.remove(taskName);
                 }
               });
             },
             title: Text(
-              session.displayName,
+              taskName,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
-            subtitle: Text(
-              'Topics: ${session.topics.join(', ')}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _buildTaskChip(
+                      'No difficulty data',
+                      theme.colorScheme.secondary,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildTaskChip(
+                      'No repetition data',
+                      theme.colorScheme.tertiary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _getTaskDueText(task),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _getTaskDueColor(task, theme),
+                  ),
+                ),
+              ],
             ),
             controlAffinity: ListTileControlAffinity.trailing,
           ),
         );
       },
     );
+  }
+
+  Widget _buildTaskChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  String _getTaskDueText(dynamic task) {
+    // Since we no longer have the Task model, return empty or placeholder text
+    return 'No due date available';
+  }
+
+  Color _getTaskDueColor(dynamic task, ThemeData theme) {
+    // Since we no longer have the Task model, return default color
+    return theme.colorScheme.onSurface.withValues(alpha: 0.6);
   }
 
   Widget _buildMessagesArea() {
@@ -854,10 +957,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         isProcessingAnswer: chatProvider.isProcessingAnswer,
                       );
                     }
-                    return _buildMessageBubble(
-                      chatProvider.messages[index],
-                      index,
-                    );
+                    return _buildMessageBubble(chatProvider.messages[index]);
                   },
                 ),
               ),
@@ -868,38 +968,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message, int messageIndex) {
-    // Add a Key for better performance
-    return ChatBubble(
-      key: ValueKey(messageIndex),
-      message: message,
-      formatTimestamp: _formatTimestamp,
-    );
-  }
-
-  Widget _buildSelfEvaluationButtons(int messageIndex) {
-    return Container(); // Disabled for now
-  }
-
-  Color _getScoreColor(int score) {
-    switch (score) {
-      case 1:
-        return Colors.red;
-      case 2:
-        return Colors.orangeAccent;
-      case 3:
-        return Colors.yellow;
-      case 4:
-        return Colors.lightGreen;
-      case 5:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Future<void> _submitSelfEvaluation(int messageIndex, int score) async {
-    // Disabled
+  Widget _buildMessageBubble(ChatMessage message) {
+    return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
   }
 
   Widget _buildActionButtons() {
@@ -1014,15 +1084,156 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-
-    return _ChatInputBar(
-      messageController: _messageController,
-      focusNode: _textFieldFocusNode,
-      onSendMessage: _sendMessage,
-      onToggleVoice: _toggleWebSocketConnection,
-      isWebSocketConnected: _isWebSocketConnected,
-      isLoading: chatProvider.isLoading,
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(
+        horizontal: 20,
+      ), // Add horizontal margins to make it narrower
+      child: SafeArea(
+        child: Consumer<ChatProvider>(
+          builder: (context, chatProvider, child) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    enabled:
+                        !chatProvider.isLoading &&
+                        !chatProvider.isTyping &&
+                        !_isSending &&
+                        chatProvider.sessionState != SessionState.error &&
+                        chatProvider.sessionState != SessionState.completed,
+                    focusNode: _textFieldFocusNode,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.4,
+                      letterSpacing: 0.2,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: _getInputHint(chatProvider.sessionState),
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.6,
+                        ),
+                        letterSpacing: 0.2,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: theme.scaffoldBackgroundColor,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      // Add focus border for better visual feedback
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      isDense: false,
+                      // Show typing indicator in input when AI is thinking
+                      suffixIcon:
+                          chatProvider.isTyping
+                              ? Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: CompactTypingIndicator(),
+                              )
+                              : _currentTranscript != null
+                              ? Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  Icons.mic,
+                                  color: theme.colorScheme.primary,
+                                  size: 20,
+                                ),
+                              )
+                              : null,
+                    ),
+                    maxLines: 5,
+                    minLines: 1,
+                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) {
+                      if (!chatProvider.isLoading &&
+                          !chatProvider.isTyping &&
+                          !_isSending &&
+                          chatProvider.sessionState != SessionState.error &&
+                          chatProvider.sessionState != SessionState.completed) {
+                        _sendMessage();
+                      }
+                    },
+                    // Auto-focus on certain states for better UX
+                    autofocus:
+                        chatProvider.sessionState ==
+                        SessionState.collectingTopics,
+                    // Ensure text field captures all tap events
+                    onTap: () {
+                      if (!_textFieldFocusNode.hasFocus) {
+                        _textFieldFocusNode.requestFocus();
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Send button
+                IconButton(
+                  onPressed:
+                      (chatProvider.isLoading ||
+                              chatProvider.isTyping ||
+                              _isSending ||
+                              chatProvider.sessionState == SessionState.error ||
+                              chatProvider.sessionState ==
+                                  SessionState.completed)
+                          ? null
+                          : _sendMessage,
+                  style: IconButton.styleFrom(
+                    backgroundColor:
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
+                            ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                            : theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    disabledBackgroundColor: theme.colorScheme.primary
+                        .withValues(alpha: 0.5),
+                    disabledForegroundColor: theme.colorScheme.onPrimary
+                        .withValues(alpha: 0.7),
+                    fixedSize: const Size(56, 56), // Consistent size
+                    shape: const CircleBorder(),
+                    elevation:
+                        (chatProvider.isLoading ||
+                                chatProvider.isTyping ||
+                                _isSending)
+                            ? 0
+                            : 2,
+                    shadowColor: theme.colorScheme.primary.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                  icon:
+                      _isSending
+                          ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: theme.colorScheme.onPrimary,
+                            ),
+                          )
+                          : const Icon(Icons.arrow_upward, size: 24),
+                  tooltip: _isSending ? 'Sending...' : 'Send message',
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -1063,83 +1274,11 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final bool isSystem;
-  int? evaluation;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.isSystem = false,
-    this.evaluation,
   });
-}
-
-/// A dedicated widget for the chat input text field and action buttons.
-class _ChatInputBar extends StatelessWidget {
-  const _ChatInputBar({
-    super.key,
-    required this.messageController,
-    required this.focusNode,
-    required this.onSendMessage,
-    required this.onToggleVoice,
-    required this.isWebSocketConnected,
-    required this.isLoading,
-  });
-
-  final TextEditingController messageController;
-  final FocusNode focusNode;
-  final VoidCallback onSendMessage;
-  final VoidCallback onToggleVoice;
-  final bool isWebSocketConnected;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bool isEnabled = !isLoading;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.05),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: messageController,
-              focusNode: focusNode,
-              enabled: isEnabled,
-              onSubmitted: (_) => onSendMessage(),
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Type your message or use the mic...',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.send),
-            onPressed: isEnabled ? onSendMessage : null,
-          ),
-          IconButton(
-            icon: Icon(
-              isWebSocketConnected ? Icons.mic_off : Icons.mic,
-              color: theme.colorScheme.primary,
-            ),
-            onPressed: onToggleVoice,
-          ),
-        ],
-      ),
-    );
-  }
 }

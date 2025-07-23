@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../services/session_api.dart';
 import '../utils/time_provider.dart';
 
 class AllReviewItemsScreen extends StatefulWidget {
