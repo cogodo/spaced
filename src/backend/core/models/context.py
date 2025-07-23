@@ -46,11 +46,7 @@ class Context(BaseModel):
     def touch(self):
         self.updatedAt = datetime.utcnow()
 
-    class Config:
-        """Pydantic configuration."""
-
-        # This allows the model to be created from ORM objects
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
     @classmethod
     def model_validate_dict(cls, data: dict, doc_id: str = None, user_uid: str = None):

@@ -145,14 +145,18 @@ class DueTopics {
 }
 
 class ApiService {
-  final String baseUrl;
+  final String _baseUrl;
+  final String _apiPrefix = '/api/v1';
   final Duration timeout;
   late final CircuitBreaker _breaker;
 
+  // Expose baseUrl as a getter
+  String get baseUrl => _baseUrl;
+
   ApiService({
-    required this.baseUrl,
+    required String baseUrl,
     this.timeout = const Duration(seconds: 60),
-  }) {
+  }) : _baseUrl = baseUrl {
     _breaker = ServiceCircuitBreakers.getBreaker('api_service');
   }
 
@@ -191,7 +195,7 @@ class ApiService {
     List<String> topics, [
     String? chatId,
   ]) async {
-    final url = Uri.parse('$baseUrl/api/v1/chat/start');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/chat/start');
     final body = jsonEncode({'topics': topics, 'chat_id': chatId});
 
     final response = await _breaker.execute(
@@ -209,7 +213,7 @@ class ApiService {
   }
 
   Future<String> handleTurn(String chatId, String userInput) async {
-    final url = Uri.parse('$baseUrl/api/v1/chat/$chatId/messages');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/chat/$chatId/messages');
     final body = jsonEncode({'user_input': userInput});
 
     final response = await _breaker.execute(
@@ -242,7 +246,7 @@ class ApiService {
 
   Future<List<Topic>> getTopics({String? view}) async {
     final queryParams = view != null ? '?view=$view' : '';
-    final url = Uri.parse('$baseUrl/api/v1/topics$queryParams');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics$queryParams');
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
@@ -264,7 +268,7 @@ class ApiService {
     final queryParams = {'topic_id': topicId, 'view': view}
       ..removeWhere((_, v) => v == null);
     final url = Uri.parse(
-      '$baseUrl/topics',
+      '$_baseUrl$_apiPrefix/topics',
     ).replace(queryParameters: queryParams);
 
     final response = await _breaker.execute(
@@ -285,7 +289,7 @@ class ApiService {
     TopicAction action, {
     String? idempotencyKey,
   }) async {
-    final url = Uri.parse('$baseUrl/topics/$topicId');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId');
     final headers = await _getHeaders();
     if (idempotencyKey != null) {
       headers['Idempotency-Key'] = idempotencyKey;
@@ -302,7 +306,7 @@ class ApiService {
   }
 
   Future<void> deleteTopic(String topicId) async {
-    final url = Uri.parse('$baseUrl/api/v1/topics/$topicId');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId');
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
@@ -316,7 +320,7 @@ class ApiService {
   }
 
   Future<DueTopics> getDueTopics() async {
-    final url = Uri.parse('$baseUrl/api/v1/topics/?view=due');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/?view=due');
 
     final response = await _breaker.execute(
       () async => http.get(url, headers: await _getHeaders()).timeout(timeout),
@@ -333,7 +337,7 @@ class ApiService {
   Future<List<Topic>> getPopularTopics({int limit = 10}) async {
     final queryParams = {'limit': limit.toString()};
     final url = Uri.parse(
-      '$baseUrl/topics/popular',
+      '$_baseUrl$_apiPrefix/topics/popular',
     ).replace(queryParameters: queryParams);
 
     final response = await _breaker.execute(
@@ -353,7 +357,9 @@ class ApiService {
   }
 
   Future<void> generateQuestions(String topicId) async {
-    final url = Uri.parse('$baseUrl/api/v1/topics/$topicId/generate-questions');
+    final url = Uri.parse(
+      '$_baseUrl$_apiPrefix/topics/$topicId/generate-questions',
+    );
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
         (headers) => http.post(url, headers: headers).timeout(timeout),

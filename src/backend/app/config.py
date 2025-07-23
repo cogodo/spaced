@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     # OpenAI API Key
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
 
+    # Cartesia API Key for TTS
+    cartesia_api_key: Optional[str] = Field(None, env="CARTESIA_API_KEY")
+
+    # LiveKit Configuration
+    livekit_api_key: Optional[str] = Field(None, env="LIVEKIT_API_KEY")
+    livekit_api_secret: Optional[str] = Field(None, env="LIVEKIT_API_SECRET")
+    livekit_server_url: str = Field("wss://your-livekit-server.livekit.cloud", env="LIVEKIT_SERVER_URL")
+
+    # Deepgram API Key for STT (alternative to OpenAI Whisper)
+    deepgram_api_key: Optional[str] = Field(None, env="DEEPGRAM_API_KEY")
+
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
 
@@ -73,5 +84,4 @@ settings = Settings()
 
 def get_settings() -> Settings:
     """Get the application settings"""
-    return settings
     return settings

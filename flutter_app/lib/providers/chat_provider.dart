@@ -1,16 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
 import 'package:go_router/go_router.dart';
 import '../models/chat_session.dart';
 import '../screens/chat_screen.dart'; // For SessionState and ChatMessage
 import '../services/session_api.dart';
 import '../services/chat_session_service.dart';
 import '../services/logger_service.dart';
-import 'package:flutter/material.dart';
+// Note: Voice functionality now handled by LiveKit in chat screen
+// import '../services/audio_player_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   final _logger = getLogger('ChatProvider');
-  final _uuid = const Uuid();
 
   // Current session state
   ChatSession? _currentSession;
@@ -28,10 +27,8 @@ class ChatProvider extends ChangeNotifier {
   // Services
   late final ApiService _api;
   late final ChatSessionService _sessionService;
-
-  // Session configuration
-  final int _maxTopics = 3;
-  final int _maxQuestions = 5;
+  // Voice functionality moved to LiveKit in chat screen
+  // late final AudioPlayerService _audioPlayerService;
 
   // User ID for Firebase operations
   String? _userId;
@@ -80,6 +77,8 @@ class ChatProvider extends ChangeNotifier {
 
     _api = ApiService(baseUrl: backendUrl);
     _sessionService = ChatSessionService();
+    // Voice functionality moved to LiveKit in chat screen
+    // _audioPlayerService = AudioPlayerService(baseUrl: backendUrl);
   }
 
   // Getters
@@ -108,14 +107,31 @@ class ChatProvider extends ChangeNotifier {
   bool get isProcessingAnswer => _isProcessingAnswer;
   bool get isStartingSession => _isStartingSession;
 
+  // Backend URL getter for voice service
+  String get backendUrl => _api.baseUrl;
+
+  void addVoiceMessage(String transcript, String aiResponse) {
+    _addUserMessage('You said: "$transcript"');
+    _addAIMessage(aiResponse);
+    _updateCurrentSession();
+    _autoSaveSession(); // Persist the new messages
+
+    // Play the AI's response - moved to LiveKit voice system in chat screen
+    // _audioPlayerService.playFromText(aiResponse);
+
+    notifyListeners();
+  }
+
   void setRouter(GoRouter router) {
     _router = router;
   }
 
   void setUserId(String? userId) {
+    if (_userId == userId) return; // No change
     _userId = userId;
     if (userId != null) {
       loadSessionHistory();
+      fetchDueTopics(); // Also fetch due topics on user set
     } else {
       clear();
     }
@@ -166,6 +182,11 @@ class ChatProvider extends ChangeNotifier {
     _logger.info('Reset session state for new chat flow.');
   }
 
+  /// Reset to initial state (alias for startNewChatFlow)
+  void resetToInitialState() {
+    startNewChatFlow();
+  }
+
   /// Initialize a new chat session
   Future<void> startNewSession(List<String> topics) async {
     _logger.info('Starting new chat session with topics: $topics');
@@ -192,6 +213,11 @@ class ChatProvider extends ChangeNotifier {
 
       _addAIMessage(response.message);
 
+      // Play the initial message as audio - moved to LiveKit voice system
+      // if (response.message.isNotEmpty) {
+      //   _audioPlayerService.playFromText(response.message);
+      // }
+
       if (_userId != null) {
         await _sessionService.saveSession(_userId!, session);
         loadSessionHistory();
@@ -212,6 +238,20 @@ class ChatProvider extends ChangeNotifier {
       _isStartingSession = false;
       notifyListeners();
     }
+  }
+
+  /// Handle topic input from the topic selection widget
+  Future<void> handleTopicsInput(List<String> topics) async {
+    if (topics.isEmpty) return;
+
+    // Start a new session with the selected topics
+    await startNewSession(topics);
+  }
+
+  /// Start session with a popular topic
+  Future<void> startSessionWithPopularTopic(Topic topic) async {
+    // Start a new session with the popular topic
+    await startNewSession([topic.name]);
   }
 
   /// Load an existing session from Firebase
@@ -450,14 +490,20 @@ class ChatProvider extends ChangeNotifier {
     _messages = [];
     _currentSessionId = null;
     _currentTopicId = null;
-    _isLoading = false;
     _finalScores = null;
     _sessionHistory = [];
-    _isLoadingHistory = false;
-    _userId = null;
-    _popularTopics = [];
+    _isTyping = false;
+    _typingMessage = null;
+    _isGeneratingQuestions = false;
+    _isProcessingAnswer = false;
+    _recentlyReviewedTopicIds.clear();
     notifyListeners();
     _logger.info('Chat provider cleared');
+  }
+
+  // Public method to add AI messages (used by voice service)
+  void addAIMessage(String message) {
+    _addAIMessage(message);
   }
 
   // Firebase integration methods
@@ -480,11 +526,7 @@ class ChatProvider extends ChangeNotifier {
 
   /// Load session history from Firebase
   Future<void> loadSessionHistory() async {
-    if (_userId == null) {
-      _logger.warning('Cannot load session history: No user authenticated');
-      return;
-    }
-
+    if (_isLoadingHistory || _userId == null) return; // Guard
     _isLoadingHistory = true;
     notifyListeners();
 
@@ -716,8 +758,10 @@ class ChatProvider extends ChangeNotifier {
 
         if (_userId != null) {
           await _sessionService.saveSession(_userId!, updatedSession);
-          await fetchDueTopics(); // Refresh due topics after session ends
-          loadSessionHistory();
+          // No need to call these here, as the UI will react to the state change
+          // and the data will be loaded when needed.
+          // await fetchDueTopics();
+          // loadSessionHistory();
         }
       }
     } catch (e) {
@@ -729,7 +773,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> fetchDueTopics() async {
-    if (isLoadingDueTopics) return;
+    if (_isLoadingDueTopics || _userId == null) return; // Guard
     _isLoadingDueTopics = true;
     notifyListeners();
 
@@ -779,5 +823,12 @@ class ChatProvider extends ChangeNotifier {
       _logger.severe('Error deleting topic $topicId: $e');
       // Optionally, re-throw or show an error to the user
     }
+  }
+
+  @override
+  void dispose() {
+    // Audio service disposal moved to LiveKit voice system
+    // _audioPlayerService.dispose();
+    super.dispose();
   }
 }

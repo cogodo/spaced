@@ -29,10 +29,18 @@ A modern spaced repetition learning application built with Flutter frontend and 
 ### Frontend (Flutter App)
 ```bash
 cd flutter_app
-flutter pub get
-flutter run -d chrome
+API_PORT=8000
+flutter run -d web-server \
+  --web-port 8080 \
+  --web-hostname localhost \
+  --web-tls-cert-path certs/cert.pem \
+  --web-tls-cert-key-path certs/key.pem
 ```
-
+### Backend
+```
+cd src/backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
+```
 ### Deployment
 The app automatically deploys to [getspaced.app](https://getspaced.app) via GitHub Actions when changes are pushed to the main branch.
 
