@@ -11,7 +11,7 @@ security = HTTPBearer()
 
 settings = get_settings()
 DEV_TEST_TOKEN = "dev-test-token"
-DEV_USER_UID = "dev-user-123"
+DEV_USER_UID = "lycY23OzE7ea00yjksGmnEc8GqJ3"
 
 
 async def get_current_user(

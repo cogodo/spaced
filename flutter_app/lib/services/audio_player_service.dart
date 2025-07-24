@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:convert' as convert;
+import 'dart:typed_data';
 import 'dart:async';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LiveKitVoiceService {
   Room? _room;
@@ -31,6 +33,39 @@ class LiveKitVoiceService {
     debugPrint('[LiveKitVoiceService] Initialized with baseUrl: $_baseUrl');
   }
 
+  /// Get authenticated headers for API requests
+  Future<Map<String, String>> _getHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+    final idToken = await user.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $idToken',
+    };
+  }
+
+  /// Make authenticated HTTP request with retry on 401
+  Future<http.Response> _makeAuthenticatedRequest(
+    Future<http.Response> Function(Map<String, String> headers) requestFunction,
+  ) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await requestFunction(headers);
+
+      if (response.statusCode == 401) {
+        // Token might be expired, get a fresh one
+        debugPrint('[LiveKitVoiceService] Token expired, refreshing...');
+        final refreshedHeaders = await _getHeaders();
+        return await requestFunction(refreshedHeaders);
+      }
+      return response;
+    } catch (e) {
+      throw Exception('Authentication error: $e');
+    }
+  }
+
   /// Unlock audio playback. Must be called after a user gesture.
   Future<void> startAudioPlayback() async {
     if (_room == null) return;
@@ -51,33 +86,38 @@ class LiveKitVoiceService {
   Future<Map<String, dynamic>> createVoiceRoom(
     String userId, {
     String? topic,
+    required String sessionId,
   }) async {
     try {
       debugPrint('[LiveKitVoiceService] Creating room for user: $userId');
       debugPrint('[LiveKitVoiceService] Backend URL: $_baseUrl');
       debugPrint('[LiveKitVoiceService] Topic: $topic');
+      debugPrint('[LiveKitVoiceService] Session ID: $sessionId');
 
       final url = '$_baseUrl/api/v1/voice/create-room';
       debugPrint('[LiveKitVoiceService] POST URL: $url');
 
       final requestBody = {
         'user_id': userId,
+        'session_id': sessionId,
         if (topic != null) 'topic': topic,
       };
       debugPrint('[LiveKitVoiceService] Request body: $requestBody');
 
-      final response = await http
-          .post(
-            Uri.parse(url),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(requestBody),
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw TimeoutException('Request timed out after 10 seconds');
-            },
-          );
+      final response = await _makeAuthenticatedRequest(
+        (headers) => http
+            .post(
+              Uri.parse(url),
+              headers: headers,
+              body: convert.json.encode(requestBody),
+            )
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw TimeoutException('Request timed out after 10 seconds');
+              },
+            ),
+      );
 
       debugPrint(
         '[LiveKitVoiceService] Response status: ${response.statusCode}',
@@ -85,7 +125,7 @@ class LiveKitVoiceService {
       debugPrint('[LiveKitVoiceService] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = convert.json.decode(response.body);
         debugPrint(
           '[LiveKitVoiceService] Room created successfully: ${data['room_name']}',
         );
@@ -194,7 +234,7 @@ class LiveKitVoiceService {
       ..on<DataReceivedEvent>((event) {
         try {
           final dataString = String.fromCharCodes(event.data);
-          final data = json.decode(dataString);
+          final data = convert.json.decode(dataString);
           debugPrint('[LiveKitVoiceService] Data received: $data');
 
           final messageType = data['type'] as String?;
@@ -356,7 +396,7 @@ class LiveKitVoiceService {
   /// Send a text message to the agent (alternative to voice)
   Future<void> sendTextMessage(String message) async {
     try {
-      final data = json.encode({
+      final data = convert.json.encode({
         'type': 'text_message',
         'message': message,
         'user_id': _currentUserId,
@@ -364,7 +404,7 @@ class LiveKitVoiceService {
       });
 
       await _room?.localParticipant?.publishData(
-        utf8.encode(data),
+        convert.utf8.encode(data),
         reliable: true,
       );
 
@@ -416,14 +456,22 @@ class LiveKitVoiceService {
       _room?.connectionState ?? ConnectionState.disconnected;
 
   /// Start a complete voice session (create room + connect + start agent)
-  Future<void> startVoiceSession(String userId, {String? topic}) async {
+  Future<void> startVoiceSession(
+    String userId, {
+    String? topic,
+    required String sessionId,
+  }) async {
     try {
       debugPrint(
         '[LiveKitVoiceService] Starting voice session for user: $userId',
       );
 
       // Step 1: Create room
-      final roomData = await createVoiceRoom(userId, topic: topic);
+      final roomData = await createVoiceRoom(
+        userId,
+        topic: topic,
+        sessionId: sessionId,
+      );
 
       // Step 2: Connect to room
       await connectToRoom(
@@ -441,6 +489,55 @@ class LiveKitVoiceService {
       rethrow;
     }
   }
+
+  /// Send context update to voice agent via data channel
+  Future<void> updateAgentContext({
+    required String sessionId,
+    String? currentTopic,
+    String? currentQuestion,
+    List<String>? conversationHistory,
+  }) async {
+    if (_room == null || _room!.connectionState != ConnectionState.connected) {
+      debugPrint(
+        '[LiveKitVoiceService] Cannot update context: Not connected to room',
+      );
+      return;
+    }
+
+    try {
+      final contextUpdate = {
+        'type': 'context_update',
+        'session_id': sessionId,
+        'current_topic': currentTopic,
+        'current_question': currentQuestion,
+        'conversation_history': conversationHistory ?? [],
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      debugPrint(
+        '[LiveKitVoiceService] 📡 Sending context update - Topic: $currentTopic, Question length: ${currentQuestion?.length ?? 0}',
+      );
+
+      // Send context update via data channel to voice agent
+      await _room!.localParticipant?.publishData(
+        convert.utf8.encode(convert.json.encode(contextUpdate)),
+        reliable: true,
+        destinationIdentities: [], // Send to all participants (voice agent)
+      );
+
+      debugPrint('[LiveKitVoiceService] ✅ Context update sent successfully');
+    } catch (e) {
+      debugPrint('[LiveKitVoiceService] ❌ Error sending context update: $e');
+      onError?.call('Failed to update voice agent context: $e');
+
+      // Don't rethrow - context updates are non-critical
+      // The voice agent will continue working with stale context
+    }
+  }
+
+  /// Check if voice agent can receive context updates
+  bool get canUpdateContext =>
+      _room != null && _room!.connectionState == ConnectionState.connected;
 
   /// Dispose of resources
   void dispose() {

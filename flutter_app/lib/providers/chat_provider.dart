@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
 import '../models/chat_session.dart';
 import '../screens/chat_screen.dart'; // For SessionState and ChatMessage
 import '../services/session_api.dart';
@@ -53,6 +56,9 @@ class ChatProvider extends ChangeNotifier {
   bool _isGeneratingQuestions = false;
   bool _isProcessingAnswer = false;
   bool _isStartingSession = false;
+
+  // Voice context update callback (set by chat screen)
+  Future<void> Function()? _voiceContextUpdateCallback;
 
   ChatProvider() {
     String backendUrl;
@@ -109,6 +115,58 @@ class ChatProvider extends ChangeNotifier {
 
   // Backend URL getter for voice service
   String get backendUrl => _api.baseUrl;
+
+  // Helper method for authenticated API calls
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+    final idToken = await user.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $idToken',
+    };
+  }
+
+  /// Update voice agent context when session state changes
+  Future<void> _updateVoiceAgentContext() async {
+    try {
+      // Only update if we have an active session and a connected voice service
+      if (_currentSessionId == null || _currentSession == null) return;
+
+      // Check if voice service is available and connected (from chat screen)
+      // We'll access this through a global reference or callback
+      _logger.info(
+        'Triggering voice agent context update for session $_currentSessionId',
+      );
+
+      // Extract recent conversation for context
+      final recentMessages =
+          _messages.length > 10
+              ? _messages.sublist(_messages.length - 10)
+              : _messages;
+
+      final conversationHistory =
+          recentMessages
+              .map((msg) => '${msg.isUser ? "User" : "AI"}: ${msg.text}')
+              .toList();
+
+      // Get current topic from session
+      final currentTopic =
+          _currentSession?.topics.isNotEmpty == true
+              ? _currentSession!.topics.join(', ')
+              : null;
+
+      // We'll need a way to access the voice service from here
+      // This will be implemented via a callback or global reference
+      _logger.info(
+        'Voice context update prepared - topic: $currentTopic, messages: ${conversationHistory.length}',
+      );
+    } catch (e) {
+      _logger.warning('Failed to update voice agent context: $e');
+    }
+  }
 
   void addVoiceMessage(String transcript, String aiResponse) {
     _addUserMessage(transcript, isVoice: true);
@@ -461,6 +519,75 @@ class ChatProvider extends ChangeNotifier {
         _addAIMessage('Error: ${e.message}');
       } else {
         _addAIMessage('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      _setLoadingWithTyping(
+        false,
+        typingMessage: null,
+        processingAnswer: false,
+      );
+    }
+  }
+
+  /// Send a voice message through the backend (same as sendMessage but for voice)
+  Future<void> sendVoiceMessage(String transcript) async {
+    if (_currentSessionId == null) {
+      _logger.warning('Cannot send voice message: No active session');
+      return;
+    }
+
+    _logger.info('Sending voice message: $transcript');
+    _addUserMessage(transcript, isVoice: true);
+    _setLoadingWithTyping(
+      true,
+      typingMessage: "Processing voice input...",
+      processingAnswer: true,
+    );
+
+    try {
+      // Use the voice-specific backend endpoint that maintains session context
+      final response = await http.post(
+        Uri.parse('${_api.baseUrl}/api/v1/voice/turn'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({
+          'session_id': _currentSessionId!,
+          'transcript': transcript,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final botResponse = data['bot_response'] as String;
+
+        _addAIMessage(botResponse, isVoice: true);
+
+        // Update session context if provided
+        if (data['updated_context'] != null) {
+          _logger.info('Voice interaction updated session context');
+        }
+      } else {
+        throw Exception(
+          'Voice API error: ${response.statusCode} - ${response.body}',
+        );
+      }
+
+      // Save the updated session state to Firebase after each turn
+      if (_currentSession != null && _userId != null) {
+        final sessionToSave = _currentSession!.copyWith(
+          messages: _messages,
+          updatedAt: DateTime.now(),
+        );
+        _currentSession = sessionToSave;
+        await _sessionService.saveSession(_userId!, sessionToSave);
+      }
+    } catch (e) {
+      _logger.severe('Error handling voice message: $e');
+      if (e.toString().contains('ApiException')) {
+        _addAIMessage('Error processing voice input: ${e.toString()}');
+      } else {
+        _addAIMessage(
+          'An error occurred processing your voice input. Please try again.',
+        );
       }
     } finally {
       _setLoadingWithTyping(

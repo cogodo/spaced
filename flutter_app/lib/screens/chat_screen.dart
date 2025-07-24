@@ -53,6 +53,60 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSpeaking = false;
   String? _currentTranscript;
 
+  /// Update voice agent with current session context
+  Future<void> _updateVoiceAgentContext() async {
+    if (_voiceService == null || !_isVoiceConnected) {
+      return; // Voice not connected, skip update
+    }
+
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    if (chatProvider.currentSessionId == null) {
+      return; // No active session
+    }
+
+    try {
+      // Get current session info
+      final session = chatProvider.currentSession;
+      final currentTopic =
+          session?.topics.isNotEmpty == true
+              ? session!.topics.join(', ')
+              : null;
+
+      // Get recent conversation history
+      final recentMessages =
+          chatProvider.messages.length > 10
+              ? chatProvider.messages.sublist(chatProvider.messages.length - 10)
+              : chatProvider.messages;
+
+      final conversationHistory =
+          recentMessages
+              .map((msg) => '${msg.isUser ? "User" : "AI"}: ${msg.text}')
+              .toList();
+
+      // Extract current question from latest AI message
+      final latestAIMessage =
+          chatProvider.messages.where((msg) => !msg.isUser).lastOrNull;
+
+      final currentQuestion = latestAIMessage?.text;
+
+      _logger.info(
+        'Updating voice agent context - Topic: $currentTopic, Question: $currentQuestion',
+      );
+
+      // Send context update to voice agent
+      await _voiceService!.updateAgentContext(
+        sessionId: chatProvider.currentSessionId!,
+        currentTopic: currentTopic,
+        currentQuestion: currentQuestion,
+        conversationHistory: conversationHistory,
+      );
+
+      _logger.info('Voice agent context updated successfully');
+    } catch (e) {
+      _logger.warning('Failed to update voice agent context: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -106,10 +160,17 @@ class _ChatScreenState extends State<ChatScreen> {
       _currentTranscript = null;
       _messageController.clear();
 
-      // Add the final transcript as a user message in the chat
+      // Send the transcript through the backend (same as text chat)
       if (transcript.isNotEmpty && mounted) {
         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        chatProvider.addUserMessage(transcript, isVoice: true);
+
+        // Send voice message and update context after response
+        chatProvider.sendVoiceMessage(transcript).then((_) {
+          // Update voice agent context after backend processes the message
+          if (mounted) {
+            _updateVoiceAgentContext();
+          }
+        }); // Uses backend instead of direct UI
 
         // Auto-scroll to bottom to show new message
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -125,23 +186,11 @@ class _ChatScreenState extends State<ChatScreen> {
     };
 
     _voiceService!.onAgentResponse = (response) {
-      _logger.info('Agent response: $response');
-      if (mounted && response.isNotEmpty) {
-        // Add the AI response to the chat immediately when received
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        chatProvider.addAIMessage(response, isVoice: true);
-
-        // Auto-scroll to bottom to show new message
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
-        });
-      }
+      _logger.info('Agent response received: $response');
+      // Note: We no longer add AI messages directly here.
+      // The backend now handles responses through sendVoiceMessage()
+      // and the agent response is handled by the normal chat flow.
+      // This callback is mainly for logging/debugging the voice agent.
     };
 
     _voiceService!.onConnected = () {
@@ -227,16 +276,29 @@ class _ChatScreenState extends State<ChatScreen> {
           throw Exception('Microphone permission denied');
         }
 
-        // Get current topics from the session if available
+        // Get current topics and session ID from the session if available
         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
         String? topic;
+        String? sessionId = chatProvider.currentSessionId;
+
         if (chatProvider.currentSession != null &&
             chatProvider.currentSession!.topics.isNotEmpty) {
           topic = chatProvider.currentSession!.topics.join(', ');
         }
 
-        // Start voice session
-        await _voiceService!.startVoiceSession(user.uid, topic: topic);
+        // Require a valid session ID for voice
+        if (sessionId == null || sessionId.isEmpty) {
+          throw Exception(
+            'No active session found. Please start a chat session first.',
+          );
+        }
+
+        // Start voice session with session context
+        await _voiceService!.startVoiceSession(
+          user.uid,
+          topic: topic,
+          sessionId: sessionId,
+        );
 
         // Unlock audio playback on web after user gesture
         if (mounted) {
@@ -353,61 +415,40 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    if (chatProvider.isLoading) return;
-
-    // Set sending state to prevent duplicates
     setState(() {
       _isSending = true;
     });
 
+    _messageController.clear();
+    FocusScope.of(context).unfocus();
+
     try {
-      // If no active session exists, start a new one first
-      if (!chatProvider.hasActiveSession) {
-        // Get topics from the message or use a default
-        final topics =
-            text.contains(',')
-                ? text
-                    .split(',')
-                    .map((t) => t.trim())
-                    .where((t) => t.isNotEmpty)
-                    .toList()
-                : [text];
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      await chatProvider.sendMessage(text);
 
-        chatProvider
-            .startNewSession(topics)
-            .then((_) {
-              // Don't send the message again since topics were used to start session
-            })
-            .whenComplete(() {
-              if (mounted) {
-                setState(() {
-                  _isSending = false;
-                });
-              }
-            });
-      } else {
-        chatProvider.sendMessage(text).whenComplete(() {
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-        });
+      // Update voice agent context after sending text message
+      if (_isVoiceConnected) {
+        await _updateVoiceAgentContext();
       }
 
-      _messageController.clear();
-
-      // Keep focus on text field for better UX
-      if (!_textFieldFocusNode.hasFocus) {
-        _textFieldFocusNode.requestFocus();
-      }
+      // Auto-scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients && mounted) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     } catch (e) {
-      // Reset sending state on error
+      _logger.severe('Error sending message: $e');
+      // Handle error (maybe show a snackbar)
+    } finally {
       if (mounted) {
         setState(() {
           _isSending = false;
