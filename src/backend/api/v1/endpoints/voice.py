@@ -34,11 +34,18 @@ async def create_voice_room(
     The voice agent will handle STT -> backend chat API -> TTS flow.
     """
     try:
+        import json
         import uuid
 
         from livekit import api
 
         user_uid = current_user["uid"]
+
+        # Lightweight metadata - chat_id only (authentication will be handled differently)
+        room_metadata = {
+            "chat_id": request.chat_id,
+            "user_id": user_uid,
+        }
 
         # Generate unique room name with chat ID for easier debugging
         room_name = f"voice-chat-{request.chat_id}-{uuid.uuid4().hex[:8]}"
@@ -58,6 +65,11 @@ async def create_voice_room(
             url=livekit_server_url,
             api_key=settings.livekit_api_key,
             api_secret=settings.livekit_api_secret,
+        )
+
+        # Create room with chat_id in metadata
+        room_info = await lkapi.room.create_room(
+            api.CreateRoomRequest(name=room_name, metadata=json.dumps(room_metadata))
         )
 
         # Close the API client

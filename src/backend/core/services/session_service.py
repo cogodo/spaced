@@ -42,9 +42,7 @@ class SessionService:
             session_id = session_id or str(uuid.uuid4())
             session = Session(
                 id=session_id,
-                chatId=session_id,
                 userUid=user_uid,
-                token=session_id,
                 name=name or f"Session - {session_id[:8]}",
                 topics=topics or [],
                 topicId=topic_id,

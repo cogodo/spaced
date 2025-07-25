@@ -1,3 +1,4 @@
+from .message import Message
 from .question import Question
 from .session import Session, SessionState, TurnState
 from .topic import FSRSParams, Topic

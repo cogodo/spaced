@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional
 
+from anyio import to_thread
 from google.cloud.firestore_v1 import DocumentSnapshot
 
 from core.models.session import Session
@@ -32,12 +33,12 @@ class SessionRepository:
         doc_ref.set(session.dict())
         return session
 
-    def update(self, session_id: str, user_uid: str, data: dict) -> None:
-        """Update an existing session document."""
+    async def update(self, session_id: str, user_uid: str, data: dict) -> None:
+        """Update an existing session document asynchronously."""
         logger.info(f"Updating session {session_id} for user {user_uid}")
         doc_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
         try:
-            doc_ref.update(data)
+            await to_thread.run_sync(doc_ref.update, data)
             logger.info(f"Successfully updated session {session_id}")
         except Exception as e:
             logger.error(f"Failed to update session {session_id}: {e}", exc_info=True)
@@ -83,6 +84,47 @@ class SessionRepository:
 
         return sessions
 
+    async def save_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+        """Save a list of Message objects to the messages subcollection for a session."""
+        messages_ref = (
+            self.db.collection("users")
+            .document(user_uid)
+            .collection("sessions")
+            .document(session_id)
+            .collection("messages")
+        )
+        batch = self.db.batch()
+        # Delete existing messages
+        for doc in messages_ref.stream():
+            batch.delete(doc.reference)
+        # Add new messages
+        for i, message in enumerate(messages):
+            msg_data = message.dict()
+            msg_data["messageIndex"] = i
+            msg_ref = messages_ref.document(f"msg_{i}")
+            batch.set(msg_ref, msg_data)
+        batch.commit()
+
+    async def append_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+        """Append new Message objects to the messages subcollection for a session."""
+        messages_ref = (
+            self.db.collection("users")
+            .document(user_uid)
+            .collection("sessions")
+            .document(session_id)
+            .collection("messages")
+        )
+        # Get the current count to set messageIndex
+        existing = list(messages_ref.stream())
+        start_idx = len(existing)
+        batch = self.db.batch()
+        for i, message in enumerate(messages):
+            msg_data = message.dict()
+            msg_data["messageIndex"] = start_idx + i
+            msg_ref = messages_ref.document(f"msg_{start_idx + i}")
+            batch.set(msg_ref, msg_data)
+        batch.commit()
+
     def _ensure_session_fields(self, data: dict, session_id: str, user_uid: str) -> None:
         """Ensure session data has all required fields for backward compatibility."""
         from datetime import datetime
@@ -90,12 +132,8 @@ class SessionRepository:
         # Core identification
         if "id" not in data:
             data["id"] = session_id
-        if "chatId" not in data:
-            data["chatId"] = session_id
         if "userUid" not in data:
             data["userUid"] = user_uid
-        if "token" not in data:
-            data["token"] = session_id
 
         # UI metadata
         if "name" not in data:

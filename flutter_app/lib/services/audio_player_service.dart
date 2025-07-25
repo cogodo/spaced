@@ -83,25 +83,15 @@ class LiveKitVoiceService {
   }
 
   /// Create a voice room and return connection details
-  Future<Map<String, dynamic>> createVoiceRoom(
-    String userId, {
-    String? topic,
-    required String sessionId,
-  }) async {
+  Future<Map<String, dynamic>> createVoiceRoom(String chatId) async {
     try {
-      debugPrint('[LiveKitVoiceService] Creating room for user: $userId');
+      debugPrint('[LiveKitVoiceService] Creating room for chat: $chatId');
       debugPrint('[LiveKitVoiceService] Backend URL: $_baseUrl');
-      debugPrint('[LiveKitVoiceService] Topic: $topic');
-      debugPrint('[LiveKitVoiceService] Session ID: $sessionId');
 
       final url = '$_baseUrl/api/v1/voice/create-room';
       debugPrint('[LiveKitVoiceService] POST URL: $url');
 
-      final requestBody = {
-        'user_id': userId,
-        'session_id': sessionId,
-        if (topic != null) 'topic': topic,
-      };
+      final requestBody = {'chat_id': chatId};
       debugPrint('[LiveKitVoiceService] Request body: $requestBody');
 
       final response = await _makeAuthenticatedRequest(
@@ -249,6 +239,17 @@ class LiveKitVoiceService {
               '[LiveKitVoiceService] Received final transcript: "$text"',
             );
             onFinalTranscriptReceived?.call(text);
+          } else if (messageType == 'voice_error') {
+            final errorMessage =
+                data['message'] as String? ?? 'Unknown voice error';
+            debugPrint(
+              '[LiveKitVoiceService] Received voice error: $errorMessage',
+            );
+            onError?.call(errorMessage);
+          } else {
+            debugPrint(
+              '[LiveKitVoiceService] Unknown data type: ${data['type']}',
+            );
           }
         } catch (e) {
           debugPrint('[LiveKitVoiceService] Error parsing data: $e');
@@ -455,23 +456,15 @@ class LiveKitVoiceService {
   ConnectionState get connectionState =>
       _room?.connectionState ?? ConnectionState.disconnected;
 
-  /// Start a complete voice session (create room + connect + start agent)
-  Future<void> startVoiceSession(
-    String userId, {
-    String? topic,
-    required String sessionId,
-  }) async {
+  /// Start a complete voice session (create room + connect)
+  Future<void> startVoiceSession(String chatId, String userId) async {
     try {
       debugPrint(
-        '[LiveKitVoiceService] Starting voice session for user: $userId',
+        '[LiveKitVoiceService] Starting voice session for chat: $chatId',
       );
 
       // Step 1: Create room
-      final roomData = await createVoiceRoom(
-        userId,
-        topic: topic,
-        sessionId: sessionId,
-      );
+      final roomData = await createVoiceRoom(chatId);
 
       // Step 2: Connect to room
       await connectToRoom(
@@ -481,7 +474,7 @@ class LiveKitVoiceService {
         userId: userId,
       );
 
-      // Step 3: Agent should automatically join and start
+      // Voice agent should automatically join and handle STT -> Backend -> TTS
       debugPrint('[LiveKitVoiceService] Voice session started successfully');
     } catch (e) {
       debugPrint('[LiveKitVoiceService] Failed to start voice session: $e');
@@ -489,55 +482,6 @@ class LiveKitVoiceService {
       rethrow;
     }
   }
-
-  /// Send context update to voice agent via data channel
-  Future<void> updateAgentContext({
-    required String sessionId,
-    String? currentTopic,
-    String? currentQuestion,
-    List<String>? conversationHistory,
-  }) async {
-    if (_room == null || _room!.connectionState != ConnectionState.connected) {
-      debugPrint(
-        '[LiveKitVoiceService] Cannot update context: Not connected to room',
-      );
-      return;
-    }
-
-    try {
-      final contextUpdate = {
-        'type': 'context_update',
-        'session_id': sessionId,
-        'current_topic': currentTopic,
-        'current_question': currentQuestion,
-        'conversation_history': conversationHistory ?? [],
-        'timestamp': DateTime.now().toIso8601String(),
-      };
-
-      debugPrint(
-        '[LiveKitVoiceService] 📡 Sending context update - Topic: $currentTopic, Question length: ${currentQuestion?.length ?? 0}',
-      );
-
-      // Send context update via data channel to voice agent
-      await _room!.localParticipant?.publishData(
-        convert.utf8.encode(convert.json.encode(contextUpdate)),
-        reliable: true,
-        destinationIdentities: [], // Send to all participants (voice agent)
-      );
-
-      debugPrint('[LiveKitVoiceService] ✅ Context update sent successfully');
-    } catch (e) {
-      debugPrint('[LiveKitVoiceService] ❌ Error sending context update: $e');
-      onError?.call('Failed to update voice agent context: $e');
-
-      // Don't rethrow - context updates are non-critical
-      // The voice agent will continue working with stale context
-    }
-  }
-
-  /// Check if voice agent can receive context updates
-  bool get canUpdateContext =>
-      _room != null && _room!.connectionState == ConnectionState.connected;
 
   /// Dispose of resources
   void dispose() {

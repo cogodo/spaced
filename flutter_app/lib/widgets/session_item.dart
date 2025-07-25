@@ -384,18 +384,6 @@ class _SessionItemState extends State<SessionItem> {
                     ),
                   ],
                 ),
-
-                // Message count
-                if (widget.session.messageCount > 0) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${widget.session.messageCount} messages',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.onSurface.withOpacity(0.5),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

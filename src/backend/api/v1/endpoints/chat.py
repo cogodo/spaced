@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.v1.dependencies import get_current_user
+from core.models import Message
 from core.monitoring.logger import get_logger
 from core.services.conversation_service import ConversationService
 from core.services.question_service import QuestionGenerationError, QuestionService
@@ -110,6 +111,23 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=500, detail="An unexpected internal error occurred.")
 
 
+async def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response):
+    from datetime import datetime
+
+    logger.info(
+        f"_write_user_and_bot_messages: user={user_uid}, session={chat_id}, user_message={user_message}, bot_message={bot_response}"
+    )
+    user_msg = Message(text=user_message, isUser=True, isSystem=False, timestamp=datetime.utcnow(), isVoice=True)
+    bot_msg = Message(
+        text=bot_response,
+        isUser=False,
+        isSystem=True,  # Set isSystem true for bot messages
+        timestamp=datetime.utcnow(),
+        isVoice=True,
+    )
+    await session_service.repository.append_messages(chat_id, user_uid, [user_msg, bot_msg])
+
+
 # Keep backward compatibility with old endpoint
 @router.post("/chat/{chat_id}/messages", response_model=TurnResponse)
 async def handle_turn(
@@ -118,8 +136,11 @@ async def handle_turn(
     """Handles a single turn in the conversation."""
     try:
         conversation_service = ConversationService()
+        session_service = SessionService()
         user_uid = current_user["uid"]
-        bot_response = await conversation_service.process_turn(chat_id, user_uid, request.user_input)
+        user_message = request.user_input
+        bot_response = await conversation_service.process_turn(chat_id, user_uid, user_message)
+        await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
         return TurnResponse(bot_response=bot_response)
     except Exception as e:
         logger.error(f"Unexpected error handling turn for chat {chat_id}: {e}", exc_info=True)
@@ -209,17 +230,19 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
         # Process the conversation turn
         logger.info(f"Calling process_turn with chat_id={chat_id}, user_uid={user_uid}")
         try:
-            response = await conversation_service.process_turn(
+            user_message = user_message  # already extracted
+            bot_response = await conversation_service.process_turn(
                 chat_id=chat_id, user_uid=user_uid, user_input=user_message
             )
-            logger.info(f"Got response from conversation service: '{response[:100]}...'")
+            logger.info(f"Got response from conversation service: '{bot_response[:100]}...'")
+            await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
         except Exception as e:
             logger.error(f"Failed to process conversation turn: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Conversation processing error: {str(e)}")
 
         # Calculate token usage (rough estimation)
         prompt_tokens = len(user_message.split())
-        completion_tokens = len(response.split())
+        completion_tokens = len(bot_response.split())
         total_tokens = prompt_tokens + completion_tokens
 
         logger.info(f"Token usage: prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}")
@@ -241,7 +264,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                         "created": int(datetime.now().timestamp()),
                         "model": "backend-voice",
                         "choices": [
-                            {"index": 0, "delta": {"role": "assistant", "content": response}, "finish_reason": None}
+                            {"index": 0, "delta": {"role": "assistant", "content": bot_response}, "finish_reason": None}
                         ],
                     }
                     logger.info("Yielding first chunk...")
@@ -282,7 +305,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                 "created": int(datetime.now().timestamp()),
                 "model": "backend-voice",
                 "choices": [
-                    {"index": 0, "message": {"role": "assistant", "content": response}, "finish_reason": "stop"}
+                    {"index": 0, "message": {"role": "assistant", "content": bot_response}, "finish_reason": "stop"}
                 ],
                 "usage": {
                     "prompt_tokens": prompt_tokens,
