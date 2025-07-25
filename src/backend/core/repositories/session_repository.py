@@ -1,0 +1,184 @@
+import logging
+from typing import List, Optional
+
+from anyio import to_thread
+from google.cloud.firestore_v1 import DocumentSnapshot
+
+from core.models.session import Session
+from infrastructure.firebase import get_firestore_client
+
+logger = logging.getLogger(__name__)
+
+
+class SessionRepository:
+    """Handles database operations for unified learning sessions"""
+
+    def __init__(self):
+        self.db = get_firestore_client()
+
+    async def get(self, session_id: str, user_uid: str) -> Optional[Session]:
+        """Get a session by ID from the user's sessions subcollection."""
+        doc_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
+        snapshot: DocumentSnapshot = doc_ref.get()
+        if snapshot.exists:
+            data = snapshot.to_dict()
+            # Ensure backward compatibility - add missing fields
+            self._ensure_session_fields(data, session_id, user_uid)
+            return Session(**data)
+        return None
+
+    async def create(self, session: Session) -> Session:
+        """Create or overwrite a session document."""
+        doc_ref = self.db.collection("users").document(session.userUid).collection("sessions").document(session.id)
+        doc_ref.set(session.dict())
+        return session
+
+    async def update(self, session_id: str, user_uid: str, data: dict) -> None:
+        """Update an existing session document asynchronously."""
+        logger.info(f"Updating session {session_id} for user {user_uid}")
+        doc_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
+        try:
+            await to_thread.run_sync(doc_ref.update, data)
+            logger.info(f"Successfully updated session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to update session {session_id}: {e}", exc_info=True)
+            raise
+
+    async def delete(self, session_id: str, user_uid: str) -> None:
+        """Delete a session document and its messages subcollection."""
+        batch = self.db.batch()
+
+        # Delete all messages in the subcollection
+        messages_ref = (
+            self.db.collection("users")
+            .document(user_uid)
+            .collection("sessions")
+            .document(session_id)
+            .collection("messages")
+        )
+        messages = messages_ref.stream()
+        for message_doc in messages:
+            batch.delete(message_doc.reference)
+
+        # Delete the session document
+        session_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
+        batch.delete(session_ref)
+
+        batch.commit()
+
+    async def list_by_user(self, user_uid: str) -> List[Session]:
+        """List all sessions for a given user."""
+        collection_ref = self.db.collection("users").document(user_uid).collection("sessions")
+        snapshots = collection_ref.stream()
+        sessions = []
+
+        for doc in snapshots:
+            try:
+                data = doc.to_dict()
+                self._ensure_session_fields(data, doc.id, user_uid)
+                sessions.append(Session(**data))
+            except Exception as e:
+                logger.warning(f"Error parsing session {doc.id} for user {user_uid}: {e}")
+                # Skip malformed sessions
+                continue
+
+        return sessions
+
+    async def save_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+        """Save a list of Message objects to the messages subcollection for a session."""
+        messages_ref = (
+            self.db.collection("users")
+            .document(user_uid)
+            .collection("sessions")
+            .document(session_id)
+            .collection("messages")
+        )
+        batch = self.db.batch()
+        # Delete existing messages
+        for doc in messages_ref.stream():
+            batch.delete(doc.reference)
+        # Add new messages
+        for i, message in enumerate(messages):
+            msg_data = message.dict()
+            msg_data["messageIndex"] = i
+            msg_ref = messages_ref.document(f"msg_{i}")
+            batch.set(msg_ref, msg_data)
+        batch.commit()
+
+    async def append_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+        """Append new Message objects to the messages subcollection for a session."""
+        messages_ref = (
+            self.db.collection("users")
+            .document(user_uid)
+            .collection("sessions")
+            .document(session_id)
+            .collection("messages")
+        )
+        # Get the current count to set messageIndex
+        existing = list(messages_ref.stream())
+        start_idx = len(existing)
+        batch = self.db.batch()
+        for i, message in enumerate(messages):
+            msg_data = message.dict()
+            msg_data["messageIndex"] = start_idx + i
+            msg_ref = messages_ref.document(f"msg_{start_idx + i}")
+            batch.set(msg_ref, msg_data)
+        batch.commit()
+
+    def _ensure_session_fields(self, data: dict, session_id: str, user_uid: str) -> None:
+        """Ensure session data has all required fields for backward compatibility."""
+        from datetime import datetime
+
+        # Core identification
+        if "id" not in data:
+            data["id"] = session_id
+        if "userUid" not in data:
+            data["userUid"] = user_uid
+
+        # UI metadata
+        if "name" not in data:
+            data["name"] = f"Session {session_id[:8]}"
+        if "autoGeneratedName" not in data:
+            data["autoGeneratedName"] = None
+
+        # Learning content
+        if "topics" not in data:
+            data["topics"] = []
+        if "topicId" not in data and data.get("topics"):
+            # Try to infer topicId from topics if missing
+            data["topicId"] = data["topics"][0] if data["topics"] else ""
+        if "questionIds" not in data:
+            data["questionIds"] = []
+        if "questionIdx" not in data:
+            data["questionIdx"] = 0
+        if "scores" not in data:
+            data["scores"] = {}
+
+        # Session state management
+        if "state" not in data:
+            data["state"] = "active" if data.get("messageCount", 0) > 0 else "initial"
+        if "turnState" not in data:
+            data["turnState"] = "AWAITING_INITIAL_ANSWER"
+        if "initialScore" not in data:
+            data["initialScore"] = None
+
+        # Completion and analytics
+        if "isCompleted" not in data:
+            data["isCompleted"] = False
+        if "finalScores" not in data:
+            data["finalScores"] = None
+        if "messageCount" not in data:
+            data["messageCount"] = 0
+
+        # Timestamps
+        now = datetime.utcnow()
+        if "startedAt" not in data:
+            data["startedAt"] = data.get("createdAt", now)
+        if "createdAt" not in data:
+            data["createdAt"] = data.get("startedAt", now)
+        if "updatedAt" not in data:
+            data["updatedAt"] = data.get("lastMessageAt", now)
+        if "endedAt" not in data:
+            data["endedAt"] = None
+        if "lastMessageAt" not in data:
+            data["lastMessageAt"] = None

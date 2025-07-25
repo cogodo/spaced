@@ -67,7 +67,7 @@ class FeedbackService:
 
 CONTEXT:
 Question: {question.text}
-Topic: {getattr(question, 'topic', 'General')}
+Topic: {getattr(question, "topic", "General")}
 Difficulty: {question.difficulty}/5
 
 STUDENT'S ANSWER:

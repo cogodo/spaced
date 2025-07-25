@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
 import '../models/chat_session.dart';
 import '../screens/chat_screen.dart'; // For SessionState and ChatMessage
 import '../services/session_api.dart';
@@ -7,6 +10,8 @@ import '../services/chat_session_service.dart';
 import '../services/logger_service.dart';
 // Note: Voice functionality now handled by LiveKit in chat screen
 // import '../services/audio_player_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 
 class ChatProvider extends ChangeNotifier {
   final _logger = getLogger('ChatProvider');
@@ -53,6 +58,14 @@ class ChatProvider extends ChangeNotifier {
   bool _isGeneratingQuestions = false;
   bool _isProcessingAnswer = false;
   bool _isStartingSession = false;
+
+  // Voice context update callback (set by chat screen)
+  Future<void> Function()? _voiceContextUpdateCallback;
+
+  // Auto-scroll callback (set by chat screen)
+  VoidCallback? _autoScrollCallback;
+
+  StreamSubscription<QuerySnapshot>? _messagesSubscription;
 
   ChatProvider() {
     String backendUrl;
@@ -110,9 +123,61 @@ class ChatProvider extends ChangeNotifier {
   // Backend URL getter for voice service
   String get backendUrl => _api.baseUrl;
 
+  // Helper method for authenticated API calls
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
+    final idToken = await user.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $idToken',
+    };
+  }
+
+  /// Update voice agent context when session state changes
+  Future<void> _updateVoiceAgentContext() async {
+    try {
+      // Only update if we have an active session and a connected voice service
+      if (_currentSessionId == null || _currentSession == null) return;
+
+      // Check if voice service is available and connected (from chat screen)
+      // We'll access this through a global reference or callback
+      _logger.info(
+        'Triggering voice agent context update for session $_currentSessionId',
+      );
+
+      // Extract recent conversation for context
+      final recentMessages =
+          _messages.length > 10
+              ? _messages.sublist(_messages.length - 10)
+              : _messages;
+
+      final conversationHistory =
+          recentMessages
+              .map((msg) => '${msg.isUser ? "User" : "AI"}: ${msg.text}')
+              .toList();
+
+      // Get current topic from session
+      final currentTopic =
+          _currentSession?.topics.isNotEmpty == true
+              ? _currentSession!.topics.join(', ')
+              : null;
+
+      // We'll need a way to access the voice service from here
+      // This will be implemented via a callback or global reference
+      _logger.info(
+        'Voice context update prepared - topic: $currentTopic, messages: ${conversationHistory.length}',
+      );
+    } catch (e) {
+      _logger.warning('Failed to update voice agent context: $e');
+    }
+  }
+
   void addVoiceMessage(String transcript, String aiResponse) {
-    _addUserMessage('You said: "$transcript"');
-    _addAIMessage(aiResponse);
+    _addUserMessage(transcript, isVoice: true);
+    _addAIMessage(aiResponse, isVoice: true);
     _updateCurrentSession();
     _autoSaveSession(); // Persist the new messages
 
@@ -189,6 +254,9 @@ class ChatProvider extends ChangeNotifier {
 
   /// Initialize a new chat session
   Future<void> startNewSession(List<String> topics) async {
+    print(
+      'startNewSession: userId=$_userId, currentSessionId=$_currentSessionId',
+    );
     _logger.info('Starting new chat session with topics: $topics');
     _setLoadingWithTyping(
       true,
@@ -209,7 +277,9 @@ class ChatProvider extends ChangeNotifier {
         name: 'New Session - ${_formatTimestamp(DateTime.now())}',
         topicId: response.topicId,
       );
-      _currentSession = session;
+
+      // Update session to active state since we're starting with topics
+      _currentSession = session.copyWith(state: SessionState.active);
 
       _addAIMessage(response.message);
 
@@ -219,10 +289,15 @@ class ChatProvider extends ChangeNotifier {
       // }
 
       if (_userId != null) {
-        await _sessionService.saveSession(_userId!, session);
+        await _sessionService.saveSession(_userId!, _currentSession!);
         loadSessionHistory();
+        // Start listening to messages for the new session
+        _listenToMessages(_userId!, _currentSessionId!);
       }
-      _router?.go('/app/chat/${session.token}');
+      _router?.go('/app/chat/${_currentSession!.token}');
+
+      // Auto-scroll to show the initial message
+      _autoScrollCallback?.call();
     } catch (e) {
       _logger.severe('Error starting new session: $e');
       if (e is ApiException) {
@@ -244,18 +319,115 @@ class ChatProvider extends ChangeNotifier {
   Future<void> handleTopicsInput(List<String> topics) async {
     if (topics.isEmpty) return;
 
-    // Start a new session with the selected topics
-    await startNewSession(topics);
+    // If we already have a current session, continue with it instead of creating new one
+    if (_currentSessionId != null && _sessionState != SessionState.initial) {
+      _logger.info(
+        'Continuing existing session $_currentSessionId with topics: $topics',
+      );
+
+      // Get the initial AI question for this topic using the existing session
+      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+
+      try {
+        // Use startChat with existing session ID to get the proper initial message
+        final response = await _api.startChat(topics, _currentSessionId);
+
+        // Transition to active state
+        _sessionState = SessionState.active;
+
+        // Add the AI's initial question (not a user message)
+        _addAIMessage(response.message);
+
+        // Update session metadata with new topics if needed
+        if (_currentSession != null) {
+          _currentSession = _currentSession!.copyWith(
+            topics: [..._currentSession!.topics, ...topics],
+            state: SessionState.active,
+            updatedAt: DateTime.now(),
+          );
+
+          // Save the updated session
+          if (_userId != null) {
+            await _sessionService.saveSession(_userId!, _currentSession!);
+          }
+        }
+      } catch (e) {
+        _logger.severe('Error adding topics to session: $e');
+        if (e is ApiException) {
+          _addAIMessage('Error: ${e.message}');
+        } else {
+          _addAIMessage(
+            'An error occurred while preparing your questions. Please try again.',
+          );
+        }
+      } finally {
+        _setLoadingWithTyping(false, typingMessage: null);
+      }
+
+      notifyListeners();
+    } else {
+      // Start a new session with the selected topics
+      await startNewSession(topics);
+    }
   }
 
   /// Start session with a popular topic
   Future<void> startSessionWithPopularTopic(Topic topic) async {
-    // Start a new session with the popular topic
-    await startNewSession([topic.name]);
+    // If we already have a current session, continue with it instead of creating new one
+    if (_currentSessionId != null && _sessionState != SessionState.initial) {
+      _logger.info(
+        'Continuing existing session $_currentSessionId with popular topic: ${topic.name}',
+      );
+
+      // Get the initial AI question for this topic using the existing session
+      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+
+      try {
+        // Use startChat with existing session ID to get the proper initial message
+        final response = await _api.startChat([topic.name], _currentSessionId);
+
+        // Transition to active state
+        _sessionState = SessionState.active;
+
+        // Add the AI's initial question (not a user message)
+        _addAIMessage(response.message);
+
+        // Update session metadata with new topic if needed
+        if (_currentSession != null) {
+          _currentSession = _currentSession!.copyWith(
+            topics: [..._currentSession!.topics, topic.name],
+            state: SessionState.active,
+            updatedAt: DateTime.now(),
+          );
+
+          // Save the updated session
+          if (_userId != null) {
+            await _sessionService.saveSession(_userId!, _currentSession!);
+          }
+        }
+      } catch (e) {
+        _logger.severe('Error adding topic to session: $e');
+        if (e is ApiException) {
+          _addAIMessage('Error: ${e.message}');
+        } else {
+          _addAIMessage(
+            'An error occurred while preparing your questions. Please try again.',
+          );
+        }
+      } finally {
+        _setLoadingWithTyping(false, typingMessage: null);
+      }
+
+      notifyListeners();
+    } else {
+      // Start a new session with the popular topic
+      await startNewSession([topic.name]);
+    }
   }
 
   /// Load an existing session from Firebase
   Future<void> loadSession(String sessionId) async {
+    print('loadSession: userId=$_userId, sessionId=$sessionId');
     if (_userId == null) {
       _logger.warning('Cannot load session: No user authenticated');
       return;
@@ -280,8 +452,14 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
+      // Start listening to messages
+      _listenToMessages(_userId!, sessionId);
+
       notifyListeners();
       _logger.info('Successfully loaded session $sessionId');
+
+      // Auto-scroll to show the loaded messages
+      _autoScrollCallback?.call();
     } catch (e) {
       _logger.severe('Error loading session $sessionId: $e');
       // TODO: Show error to user
@@ -320,9 +498,15 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
+      // Start listening to messages for the loaded session
+      _listenToMessages(_userId!, session.id);
+
       notifyListeners();
       _logger.info('Successfully loaded session by token $token');
       _logger.debug('Successfully loaded session ${session.id}');
+
+      // Auto-scroll to show the loaded messages
+      _autoScrollCallback?.call();
     } catch (e) {
       _logger.severe('Error loading session by token $token: $e');
       _logger.debug('Error in loadSessionByToken: $e');
@@ -371,6 +555,50 @@ class ChatProvider extends ChangeNotifier {
         processingAnswer: false,
       );
     }
+  }
+
+  /// Create a voice room for the current chat session
+  Future<Map<String, dynamic>?> createVoiceRoom() async {
+    if (_currentSessionId == null) {
+      _logger.warning('Cannot create voice room: No active session');
+      return null;
+    }
+
+    try {
+      _logger.info('Creating voice room for chat session: $_currentSessionId');
+
+      final response = await http.post(
+        Uri.parse('${_api.baseUrl}/api/v1/voice/create-room'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({'chat_id': _currentSessionId!}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _logger.info('Voice room created: ${data['room_name']}');
+        return data;
+      } else {
+        throw Exception(
+          'Voice room creation failed: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      _logger.severe('Error creating voice room: $e');
+      return null;
+    }
+  }
+
+  /// Handle voice transcript from LiveKit (sends to regular chat API)
+  Future<void> handleVoiceTranscript(String transcript) async {
+    if (_currentSessionId == null) {
+      _logger.warning('Cannot handle voice transcript: No active session');
+      return;
+    }
+
+    _logger.info('Processing voice transcript: $transcript');
+
+    // Just call sendMessage, let it handle optimistic update and Firestore listener
+    await sendMessage(transcript);
   }
 
   /// Handle user input based on current session state
@@ -502,8 +730,27 @@ class ChatProvider extends ChangeNotifier {
   }
 
   // Public method to add AI messages (used by voice service)
-  void addAIMessage(String message) {
-    _addAIMessage(message);
+  void addAIMessage(String message, {bool isVoice = false}) {
+    _addAIMessage(message, isVoice: isVoice);
+
+    // Auto-save to Firebase when voice messages are added
+    if (isVoice && _userId != null && _currentSession != null) {
+      _autoSaveSession();
+    }
+
+    notifyListeners();
+  }
+
+  // Public method to add user messages (used by voice service)
+  void addUserMessage(String message, {bool isVoice = false}) {
+    _addUserMessage(message, isVoice: isVoice);
+
+    // Auto-save to Firebase when voice messages are added
+    if (isVoice && _userId != null && _currentSession != null) {
+      _autoSaveSession();
+    }
+
+    notifyListeners();
   }
 
   // Firebase integration methods
@@ -661,29 +908,13 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Add system message
-  void _addSystemMessage(String text) {
-    final message = ChatMessage(
-      text: text,
-      isUser: false,
-      timestamp: DateTime.now(),
-      isSystem: true,
-    );
-    _messages.add(message);
-
-    // Remove immediate persistence to prevent duplicates
-    // Messages will be saved in batch during saveSession()
-
-    _updateCurrentSession();
-    notifyListeners();
-  }
-
   /// Add user message
-  void _addUserMessage(String text) {
+  void _addUserMessage(String text, {bool isVoice = false}) {
     final message = ChatMessage(
       text: text,
       isUser: true,
       timestamp: DateTime.now(),
+      isVoice: isVoice,
     );
     _messages.add(message);
 
@@ -695,11 +926,12 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Add AI message
-  void _addAIMessage(String text) {
+  void _addAIMessage(String text, {bool isVoice = false}) {
     final message = ChatMessage(
       text: text,
       isUser: false,
       timestamp: DateTime.now(),
+      isVoice: isVoice,
     );
     _messages.add(message);
 
@@ -825,10 +1057,114 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  void _listenToMessages(String userId, String sessionId) {
+    print('Setting up Firestore listener for user=$userId, session=$sessionId');
+    _messagesSubscription?.cancel();
+    final messagesRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('messages')
+        .orderBy('messageIndex');
+
+    _messagesSubscription = messagesRef.snapshots().listen((snapshot) {
+      print(
+        'Firestore listener received ${snapshot.docs.length} messages for user=$userId, session=$sessionId',
+      );
+      for (var doc in snapshot.docs) print(doc.data());
+      final firestoreMessages =
+          snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return ChatMessage(
+              text: data['text'] ?? '',
+              isUser: data['isUser'] ?? false,
+              timestamp: (data['timestamp'] as Timestamp).toDate(),
+              isSystem: data['isSystem'] ?? false,
+              isVoice: data['isVoice'] ?? false,
+            );
+          }).toList();
+
+      // Remove any pending user message that is not in Firestore
+      _messages.removeWhere(
+        (pending) =>
+            pending.isUser &&
+            pending.isVoice &&
+            !firestoreMessages.any(
+              (m) =>
+                  m.text == pending.text &&
+                  m.isUser == pending.isUser &&
+                  m.isVoice == pending.isVoice,
+            ),
+      );
+
+      // Replace with Firestore messages
+      _messages = List.from(firestoreMessages);
+      notifyListeners();
+      _autoScrollCallback?.call(); // Notify UI to auto-scroll
+    });
+  }
+
+  void _stopListeningToMessages() {
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+  }
+
+  // Call _listenToMessages(_userId, _currentSessionId) after loading/starting a session
+  // Call _stopListeningToMessages() when switching/ending session or on dispose
+
+  // Example integration:
+  // Future<void> loadSession(String sessionId) async {
+  //   if (_userId == null) {
+  //     _logger.warning('Cannot load session: No user authenticated');
+  //     return;
+  //   }
+
+  //   _logger.info('Loading session: $sessionId');
+  //   _setLoading(true);
+
+  //   try {
+  //     final session = await _sessionService.loadSession(_userId!, sessionId);
+
+  //     if (session == null) {
+  //       _logger.warning('Session $sessionId not found');
+  //       return;
+  //     }
+
+  //     // Set loaded session as current
+  //     _currentSession = session;
+  //     _currentSessionId = session.id;
+  //     _currentTopicId = session.topicId;
+  //     _sessionState = session.state; // Restore the session state
+  //     _messages = List.from(session.messages);
+  //     _finalScores = session.finalScores;
+
+  //     // Start listening to messages
+  //     _listenToMessages(_userId!, sessionId);
+
+  //     notifyListeners();
+  //     _logger.info('Successfully loaded session $sessionId');
+  //   } catch (e) {
+  //     _logger.severe('Error loading session $sessionId: $e');
+  //     // TODO: Show error to user
+  //   } finally {
+  //     _setLoading(false);
+  //   }
+  // }
+
+  // Clean up listener on dispose
   @override
   void dispose() {
-    // Audio service disposal moved to LiveKit voice system
-    // _audioPlayerService.dispose();
+    print('Disposing ChatProvider and stopping Firestore listener');
+    _stopListeningToMessages();
     super.dispose();
+  }
+
+  void setVoiceContextUpdateCallback(Future<void> Function() callback) {
+    _voiceContextUpdateCallback = callback;
+  }
+
+  void setAutoScrollCallback(VoidCallback callback) {
+    _autoScrollCallback = callback;
   }
 }

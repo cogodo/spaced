@@ -74,7 +74,7 @@ lower scores (3-4 range) when given after hints.
         return f"""You are an expert educational evaluator using the FSRS (Free Spaced Repetition Scheduler) scoring system.
 
 QUESTION CONTEXT:
-Topic: {getattr(question, 'topic', 'General')}
+Topic: {getattr(question, "topic", "General")}
 Difficulty: {question.difficulty}/5
 Question Type: {question.type}
 Question: {question.text}

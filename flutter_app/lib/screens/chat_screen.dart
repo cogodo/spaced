@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../widgets/chat_progress_widget.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/pulsing_mic_button.dart';
 import '../services/audio_player_service.dart';
@@ -66,6 +64,9 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
+      // Set up auto-scroll callback
+      chatProvider.setAutoScrollCallback(_scrollToBottomWithDelay);
+
       if (widget.sessionToken != null) {
         // Load specific session by token
         _loadSessionByToken(widget.sessionToken!);
@@ -90,28 +91,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Set up voice event callbacks
     _voiceService!.onTranscriptReceived = (transcript) {
+      _logger.info('Interim transcript: $transcript');
       setState(() {
         _currentTranscript = transcript;
+        _messageController.text = transcript;
       });
-      _logger.info('Transcript received: $transcript');
     };
 
     _voiceService!.onFinalTranscriptReceived = (transcript) {
       _logger.info('Final transcript: $transcript');
-      // Send the transcript as a text message to the chat
+      _currentTranscript = null;
+      _messageController.clear();
+
       if (transcript.isNotEmpty && mounted) {
-        _messageController.text = transcript;
-        _sendMessage();
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+        // Send transcript through regular chat flow (not voice-specific)
+        chatProvider.handleVoiceTranscript(transcript);
+
+        // Auto-scroll with delay for consistency
+        _scrollToBottomWithDelay();
+
+        _logger.info('Voice transcript sent to regular chat API');
       }
     };
 
-    _voiceService!.onAgentResponse = (response) {
-      _logger.info('Agent response: $response');
-      if (mounted) {
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        chatProvider.addAIMessage(response);
-      }
-    };
+    // Note: onAgentResponse may not be used in new flow since voice agent handles TTS directly
 
     _voiceService!.onConnected = () {
       _logger.info('Voice connected');
@@ -196,16 +201,19 @@ class _ChatScreenState extends State<ChatScreen> {
           throw Exception('Microphone permission denied');
         }
 
-        // Get current topics from the session if available
+        // Get current chat session ID
         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        String? topic;
-        if (chatProvider.currentSession != null &&
-            chatProvider.currentSession!.topics.isNotEmpty) {
-          topic = chatProvider.currentSession!.topics.join(', ');
+        String? chatId = chatProvider.currentSessionId;
+
+        // Require a valid chat ID for voice
+        if (chatId == null || chatId.isEmpty) {
+          throw Exception(
+            'No active session found. Please start a chat session first.',
+          );
         }
 
-        // Start voice session
-        await _voiceService!.startVoiceSession(user.uid, topic: topic);
+        // Start voice session with chat ID only
+        await _voiceService!.startVoiceSession(chatId, user.uid);
 
         // Unlock audio playback on web after user gesture
         if (mounted) {
@@ -322,61 +330,27 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    if (chatProvider.isLoading) return;
-
-    // Set sending state to prevent duplicates
     setState(() {
       _isSending = true;
     });
 
+    _messageController.clear();
+    FocusScope.of(context).unfocus();
+
     try {
-      // If no active session exists, start a new one first
-      if (!chatProvider.hasActiveSession) {
-        // Get topics from the message or use a default
-        final topics =
-            text.contains(',')
-                ? text
-                    .split(',')
-                    .map((t) => t.trim())
-                    .where((t) => t.isNotEmpty)
-                    .toList()
-                : [text];
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      await chatProvider.sendMessage(text);
 
-        chatProvider
-            .startNewSession(topics)
-            .then((_) {
-              // Don't send the message again since topics were used to start session
-            })
-            .whenComplete(() {
-              if (mounted) {
-                setState(() {
-                  _isSending = false;
-                });
-              }
-            });
-      } else {
-        chatProvider.sendMessage(text).whenComplete(() {
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-        });
-      }
-
-      _messageController.clear();
-
-      // Keep focus on text field for better UX
-      if (!_textFieldFocusNode.hasFocus) {
-        _textFieldFocusNode.requestFocus();
-      }
+      // Auto-scroll with delay for consistency
+      _scrollToBottomWithDelay();
     } catch (e) {
-      // Reset sending state on error
+      _logger.severe('Error sending message: $e');
+      // Handle error (maybe show a snackbar)
+    } finally {
       if (mounted) {
         setState(() {
           _isSending = false;
@@ -388,6 +362,18 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _scrollToBottomWithDelay() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && _scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -478,18 +464,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ],
                   ),
-                  // Voice button floating above input area
-                  if (chatProvider.sessionState == SessionState.active)
-                    Positioned(
-                      bottom: 100,
-                      right: 20,
-                      child: PulsingMicButton(
-                        isConnecting: _isVoiceConnecting,
-                        isVoiceConnected: _isVoiceConnected,
-                        isSpeaking: _isSpeaking,
-                        onTap: _toggleVoiceChat,
-                      ),
-                    ),
                 ],
               );
             },
@@ -1096,6 +1070,17 @@ class _ChatScreenState extends State<ChatScreen> {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // Mic button (only show when session is active)
+                if (chatProvider.sessionState == SessionState.active) ...[
+                  PulsingMicButton(
+                    isConnecting: _isVoiceConnecting,
+                    isVoiceConnected: _isVoiceConnected,
+                    isSpeaking: _isSpeaking,
+                    onTap: _toggleVoiceChat,
+                    size: 56.0, // Match the send button size
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: TextField(
                     controller: _messageController,
@@ -1245,7 +1230,7 @@ class _ChatScreenState extends State<ChatScreen> {
       case SessionState.collectingTopics:
         return 'Enter topics to study (e.g., "Flutter, Dart")...';
       case SessionState.active:
-        return 'Type your answer...';
+        return 'Type your answer or use voice...';
       case SessionState.completed:
         return 'Session completed';
       case SessionState.error:
@@ -1274,11 +1259,13 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final bool isSystem;
+  final bool isVoice;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.isSystem = false,
+    this.isVoice = false,
   });
 }
