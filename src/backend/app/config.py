@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # OpenAI API Key
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
 
+    # Voice-specific LLM configuration
+    voice_llm_model: str = Field("gpt-3.5-turbo", env="VOICE_LLM_MODEL")
+    voice_max_tokens: int = Field(512, env="VOICE_MAX_TOKENS")
+    voice_temperature: float = Field(0.1, env="VOICE_TEMPERATURE")
+
     # Cartesia API Key for TTS
     cartesia_api_key: Optional[str] = Field(None, env="CARTESIA_API_KEY")
 

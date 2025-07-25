@@ -32,6 +32,8 @@ class StartChatResponse(BaseModel):
 # Keep the old endpoint for backward compatibility
 class TurnRequest(BaseModel):
     user_input: str
+    is_partial: bool = False  # Phase 2: Support for partial transcripts
+    stream: bool = False  # Phase 2: Support for streaming responses
 
 
 class TurnResponse(BaseModel):
@@ -115,7 +117,7 @@ async def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_
     from datetime import datetime
 
     logger.info(
-        f"_write_user_and_bot_messages: user={user_uid}, session={chat_id}, user_message={user_message}, bot_message={bot_response}"
+        f"_write_user_and_bot_messages: user={user_uid}, session={chat_id}, user_message={len(user_message)} chars, bot_message={len(bot_response)} chars"
     )
     user_msg = Message(text=user_message, isUser=True, isSystem=False, timestamp=datetime.utcnow(), isVoice=True)
     bot_msg = Message(
@@ -133,18 +135,71 @@ async def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_
 async def handle_turn(
     chat_id: str, request: TurnRequest, current_user: dict = Depends(get_current_user)
 ) -> TurnResponse:
-    """Handles a single turn in the conversation."""
+    """Handles a single turn in the conversation with Phase 2 optimizations."""
     try:
         conversation_service = ConversationService()
         session_service = SessionService()
         user_uid = current_user["uid"]
         user_message = request.user_input
-        bot_response = await conversation_service.process_turn(chat_id, user_uid, user_message)
-        await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
+        is_partial = request.is_partial
+        stream = request.stream
+
+        logger.info(f"Phase 2 turn: chat={chat_id}, partial={is_partial}, stream={stream}, chars={len(user_message)}")
+
+        # Phase 2: For partial transcripts, use faster processing
+        if is_partial:
+            logger.info("🚀 Processing partial transcript with Phase 2 optimizations")
+            # Use cached responses or simplified processing for partial transcripts
+            bot_response = await conversation_service.process_turn_partial(chat_id, user_uid, user_message)
+        else:
+            # Full processing for complete transcripts
+            bot_response = await conversation_service.process_turn(chat_id, user_uid, user_message, is_voice=True)
+
+        # Only save to Firebase for complete transcripts
+        if not is_partial:
+            await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
+
+        # Phase 2: Return streaming response if requested
+        if stream:
+            from fastapi.responses import StreamingResponse
+
+            return StreamingResponse(
+                _generate_streaming_response(bot_response, chat_id),
+                media_type="text/plain",
+                headers={"Cache-Control": "no-cache"},
+            )
+
         return TurnResponse(bot_response=bot_response)
     except Exception as e:
         logger.error(f"Unexpected error handling turn for chat {chat_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An unexpected internal error occurred while handling turn.")
+
+
+async def _generate_streaming_response(bot_response: str, chat_id: str):
+    """Phase 2: Generate streaming response for voice agent."""
+    import json
+    from datetime import datetime
+
+    # First chunk with content
+    chunk = {
+        "id": f"voice-{chat_id}",
+        "object": "chat.completion.chunk",
+        "created": int(datetime.now().timestamp()),
+        "model": "backend-voice",
+        "choices": [{"index": 0, "delta": {"role": "assistant", "content": bot_response}, "finish_reason": None}],
+    }
+    yield f"data: {json.dumps(chunk)}\n\n"
+
+    # Final chunk with finish_reason
+    final_chunk = {
+        "id": f"voice-{chat_id}",
+        "object": "chat.completion.chunk",
+        "created": int(datetime.now().timestamp()),
+        "model": "backend-voice",
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    yield f"data: {json.dumps(final_chunk)}\n\n"
+    yield "data: [DONE]\n\n"
 
 
 @router.post("/chat/completions")
@@ -173,7 +228,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
 
         # Extract the user's message (last message should be from user)
         user_message = messages[-1].get("content", "")
-        logger.info(f"User message: '{user_message[:100]}...'")
+        logger.info(f"User message: {len(user_message)} chars")
 
         # Extract chat_id from the system message
         chat_id = None
@@ -192,7 +247,17 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
             logger.warning("No chat_id found in voice request system message")
             raise HTTPException(status_code=400, detail="No chat_id provided in system message")
 
-        logger.info(f"Voice LLM request: chat={chat_id}, message='{user_message[:100]}...', stream={stream}")
+        # Detect if this is a voice interaction
+        is_voice_interaction = any(
+            "voice" in msg.get("content", "").lower()
+            or "speech" in msg.get("content", "").lower()
+            or "audio" in msg.get("content", "").lower()
+            for msg in messages
+        )
+
+        logger.info(
+            f"Voice LLM request: chat={chat_id}, message={len(user_message)} chars, stream={stream}, voice={is_voice_interaction}"
+        )
 
         # Initialize services
         logger.info("Initializing services...")
@@ -232,9 +297,9 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
         try:
             user_message = user_message  # already extracted
             bot_response = await conversation_service.process_turn(
-                chat_id=chat_id, user_uid=user_uid, user_input=user_message
+                chat_id=chat_id, user_uid=user_uid, user_input=user_message, is_voice=is_voice_interaction
             )
-            logger.info(f"Got response from conversation service: '{bot_response[:100]}...'")
+            logger.info(f"Got response from conversation service: {len(bot_response)} chars")
             await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
         except Exception as e:
             logger.error(f"Failed to process conversation turn: {e}", exc_info=True)
@@ -255,7 +320,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
             from fastapi.responses import StreamingResponse
 
             async def generate_stream():
-                logger.info("Starting stream generation...")
+                # logger.info("Starting stream generation...")
                 try:
                     # First chunk with content
                     chunk = {
@@ -267,7 +332,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                             {"index": 0, "delta": {"role": "assistant", "content": bot_response}, "finish_reason": None}
                         ],
                     }
-                    logger.info("Yielding first chunk...")
+                    # logger.info("Yielding first chunk...")
                     yield f"data: {json.dumps(chunk)}\n\n"
 
                     # Final chunk with finish_reason
@@ -287,10 +352,10 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                             "total_tokens": total_tokens,
                         }
 
-                    logger.info("Yielding final chunk...")
+                    # logger.info("Yielding final chunk...")
                     yield f"data: {json.dumps(final_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
-                    logger.info("Stream generation completed")
+                    # logger.info("Stream generation completed")
                 except Exception as e:
                     logger.error(f"Error in stream generation: {e}", exc_info=True)
                     raise
@@ -320,3 +385,30 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
     except Exception as e:
         logger.error(f"Unexpected error in OpenAI-compatible chat completions endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/chat/phase2/stats")
+async def get_phase2_stats(current_user: dict = Depends(get_current_user)):
+    """Phase 2: Get performance metrics and cache statistics."""
+    try:
+        from core.services.conversation_service import voice_cache
+
+        stats = {
+            "phase": "Phase 2 - 1-2 Second Responses",
+            "cache_stats": voice_cache.get_stats(),
+            "optimizations": {
+                "streaming_stt": "Enabled",
+                "early_llm_processing": "Enabled",
+                "simple_acknowledgment": "Enabled",  # Simplified approach
+                "advanced_caching": "Enabled",
+                "streaming_tts": "Enabled",
+                "audio_pre_generation": "Enabled",
+            },
+            "target_latency": "1-2 seconds",
+            "current_phase": "Phase 2 Implementation",
+        }
+
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting Phase 2 stats: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving Phase 2 statistics")

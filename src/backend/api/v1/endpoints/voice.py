@@ -41,9 +41,9 @@ async def create_voice_room(
 
         user_uid = current_user["uid"]
 
-        # Lightweight metadata - chat_id only (authentication will be handled differently)
+        # Lightweight metadata - id only (authentication will be handled differently)
         room_metadata = {
-            "chat_id": request.chat_id,
+            "id": request.chat_id,
             "user_id": user_uid,
         }
 

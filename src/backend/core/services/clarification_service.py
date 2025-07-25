@@ -39,7 +39,7 @@ class ClarificationService:
         Raises:
             ValueError: If either LLM call fails or returns invalid data
         """
-        logger.info(f"Handling clarification request: '{user_clarification_request[:50]}...'")
+        logger.info(f"Handling clarification request: {len(user_clarification_request)} chars")
 
         try:
             # First LLM call: Generate the clarification answer
@@ -52,7 +52,7 @@ class ClarificationService:
                 original_question, user_clarification_request, clarification_answer
             )
 
-            logger.info(f"Generated clarification answer: {clarification_answer[:100]}...")
+            logger.info(f"Generated clarification answer: {len(clarification_answer)} chars")
             logger.info(f"Impact assessment: score {impact.adjusted_score}")
 
             return clarification_answer, impact

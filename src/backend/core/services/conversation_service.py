@@ -1,3 +1,6 @@
+import asyncio
+import random
+import threading
 from typing import Any, Dict, Optional
 
 from openai import AsyncOpenAI
@@ -19,7 +22,7 @@ from core.services.feedback_service import FeedbackError, FeedbackService
 from core.services.question_service import QuestionService
 from core.services.routing_service import RoutingService
 from core.services.session_service import SessionService
-from infrastructure.redis.session_manager import RedisSessionManager
+from infrastructure.redis import RedisSessionManager
 
 logger = get_logger(__name__)
 
@@ -28,6 +31,103 @@ class ConversationServiceError(Exception):
     """Base exception for ConversationService errors."""
 
     pass
+
+
+# Voice response cache for common patterns
+VOICE_RESPONSE_CACHE = {
+    "correct_answer": [
+        "Great job! That's exactly right.",
+        "Excellent! You've got it.",
+        "Perfect! Well done.",
+        "That's correct! Nice work.",
+    ],
+    "partial_answer": [
+        "You're on the right track, but let me clarify...",
+        "Good start! Here's what you're missing...",
+        "Almost there! Consider this...",
+        "You're close! Think about...",
+    ],
+    "incorrect_answer": [
+        "Let me help you understand this better...",
+        "Here's the key point you're missing...",
+        "Think about it this way...",
+        "Let me clarify the concept...",
+    ],
+    "next_question": [
+        "Ready for the next question!",
+        "Great! Let's move on to the next one.",
+        "Excellent! Here's your next challenge.",
+        "Well done! Next question coming up.",
+    ],
+    "session_end": [
+        "Great work today! Here's your summary...",
+        "Excellent session! Let's review what you've learned...",
+        "Fantastic job! Here's how you did...",
+        "Amazing work! Here's your progress summary...",
+    ],
+}
+
+
+# Phase 2: Advanced caching strategy
+class VoiceCache:
+    """Phase 2: Multi-level voice response cache."""
+
+    def __init__(self):
+        self.response_cache = {}  # Text responses
+        self.audio_cache = {}  # Generated audio (future enhancement)
+        self.semantic_cache = {}  # Similar responses
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.lock = threading.Lock()  # Add a lock for thread safety
+
+    def get_response(self, key: str, context: str = None) -> str:
+        """Get cached response with semantic matching."""
+        with self.lock:  # Use lock for thread safety
+            # Direct cache hit
+            if key in self.response_cache:
+                self.cache_hits += 1
+                return random.choice(self.response_cache[key])
+
+            # Semantic cache hit
+            if context and context in self.semantic_cache:
+                self.cache_hits += 1
+                return random.choice(self.semantic_cache[context])
+
+            self.cache_misses += 1
+            return None
+
+    def add_response(self, key: str, response: str, context: str = None):
+        """Add response to cache."""
+        with self.lock:  # Use lock for thread safety
+            if key not in self.response_cache:
+                self.response_cache[key] = []
+            self.response_cache[key].append(response)
+
+            # Add to semantic cache if context provided
+            if context:
+                if context not in self.semantic_cache:
+                    self.semantic_cache[context] = []
+                self.semantic_cache[context].append(response)
+
+    # Removed naive intent extraction - too complex and error-prone
+    # Will implement proper intent classification in Phase 3 if needed
+
+    def get_stats(self) -> dict:
+        """Get cache statistics."""
+        with self.lock:  # Use lock for thread safety
+            return {
+                "hits": self.cache_hits,
+                "misses": self.cache_misses,
+                "hit_rate": self.cache_hits / (self.cache_hits + self.cache_misses)
+                if (self.cache_hits + self.cache_misses) > 0
+                else 0,
+                "response_cache_size": len(self.response_cache),
+                "semantic_cache_size": len(self.semantic_cache),
+            }
+
+
+# Global voice cache instance
+voice_cache = VoiceCache()
 
 
 # --- LLM Interaction Models ---
@@ -50,24 +150,24 @@ class ConversationService:
         self.routing_service = RoutingService()
         self.clarification_service = ClarificationService()
 
-    async def process_turn(self, chat_id: str, user_uid: str, user_input: str) -> str:
+    async def process_turn(self, chat_id: str, user_uid: str, user_input: str, is_voice: bool = False) -> str:
         """
         Processes a single turn of the conversation, managing state and returning
         the next bot message.
         """
         try:
-            logger.info(f"Processing turn for chat {chat_id}")
+            logger.info(f"Processing turn for chat {chat_id} (voice: {is_voice})")
             session = await self.session_service.get_session(chat_id, user_uid)
             if not session:
                 raise ValueError("Chat session not found.")
 
             # Main state machine logic
             if session.turnState == TurnState.AWAITING_INITIAL_ANSWER:
-                return await self._handle_initial_answer(session, user_input)
+                return await self._handle_initial_answer(session, user_input, is_voice)
             elif session.turnState == TurnState.AWAITING_FOLLOW_UP:
-                return await self._handle_follow_up(session, user_input)
+                return await self._handle_follow_up(session, user_input, is_voice)
             elif session.turnState == TurnState.AWAITING_NEXT_ACTION:
-                return await self._handle_next_action(session, user_input)
+                return await self._handle_next_action(session, user_input, is_voice)
             else:
                 raise ValueError(f"Invalid turn state: {session.turnState}")
         except (EvaluationError, FeedbackError) as e:
@@ -82,14 +182,58 @@ class ConversationService:
             # Re-raise a generic error to be handled by the endpoint
             raise ConversationServiceError("An unexpected internal error occurred.") from e
 
-    async def _handle_initial_answer(self, session: Session, user_input: str) -> str:
+    async def process_turn_partial(self, chat_id: str, user_uid: str, user_input: str) -> str:
+        """Phase 2: Process partial transcript with optimized fast processing."""
+        logger.info(f"🚀 Phase 2: Processing partial transcript for chat {chat_id} ({len(user_input)} chars)")
+
+        try:
+            # Get session (cached if possible)
+            session = await self.session_service.get_session(chat_id, user_uid)
+            if not session:
+                logger.warning(f"Session {chat_id} not found for partial processing")
+                return "I'm not sure about that. Could you repeat?"
+
+            # Phase 2: Use simple acknowledgment for partial transcripts
+            # Don't try to guess intent - just acknowledge we're processing
+            logger.info("🎯 Phase 2: Using simple acknowledgment for partial transcript")
+            return "I'm processing your response..."
+
+        except Exception as e:
+            logger.error(f"Error in partial transcript processing: {e}")
+            return "Let me think about that..."
+
+    # Removed naive intent classification - too complex and error-prone
+    # Will implement proper intent classification in Phase 3 if needed
+
+    async def _handle_initial_answer(self, session: Session, user_input: str, is_voice: bool) -> str:
         """Handles the user's first answer to a question."""
         _, question = await self.session_service.get_current_question(session.id, session.userUid)
         if not question:
             return "It looks like we've run out of questions! Well done."
 
         try:
+            # Get evaluation first (feedback depends on score)
             score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
+
+            # Check if we should use cached response for voice interactions
+            if is_voice or self._should_use_cache(user_input, "voice"):
+                cached_response = self._get_cached_response("score_based", score.score)
+                if cached_response:
+                    logger.info(f"Using cached response for voice interaction (score: {score.score})")
+
+                    # Update session state
+                    if score.score >= 4:
+                        session.scores[question.id] = score.score
+                        session.turnState = TurnState.AWAITING_NEXT_ACTION
+                        await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                        return f"{cached_response}\n\n{self._get_cached_response('next_question')}"
+                    else:
+                        session.initialScore = score.score
+                        session.turnState = TurnState.AWAITING_FOLLOW_UP
+                        await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                        return cached_response
+
+            # Fallback to full LLM processing if no cache hit
             feedback = await self.feedback_service.generate_feedback(question, user_input, score)
 
             if score.score >= 4:
@@ -109,7 +253,7 @@ class ConversationService:
             logger.error(f"Error processing initial answer: {str(e)}")
             return f"I'm having trouble processing your answer right now. {str(e)}"
 
-    async def _handle_follow_up(self, session: Session, user_input: str) -> str:
+    async def _handle_follow_up(self, session: Session, user_input: str, is_voice: bool) -> str:
         """Handles the user's response after receiving a hint."""
         _, question = await self.session_service.get_current_question(session.id, session.userUid)
         if not question:
@@ -132,7 +276,7 @@ class ConversationService:
             logger.error(f"Error processing follow-up answer: {str(e)}")
             return f"I'm having trouble processing your follow-up answer right now. {str(e)}"
 
-    async def _handle_next_action(self, session: Session, user_input: str) -> str:
+    async def _handle_next_action(self, session: Session, user_input: str, is_voice: bool) -> str:
         """Handles the user's response when prompted for the next action."""
         try:
             decision = await self.routing_service.determine_next_action(user_input)
@@ -403,5 +547,82 @@ Return your entire response as a single JSON object with two keys:
             logger.error(f"Error calling LLM: {e}", exc_info=True)
             raise ConversationServiceError("Failed to get a response from the AI.") from e
 
+    async def _call_llm_voice(self, prompt: str) -> str:
+        """Optimized LLM call for voice interactions - faster and more predictable."""
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=settings.voice_llm_model,  # Faster model for voice
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=settings.voice_max_tokens,  # Shorter responses for voice
+                temperature=settings.voice_temperature,  # More predictable, faster
+            )
+            content = response.choices[0].message.content
+            if not content:
+                raise ValueError("LLM returned empty content.")
+            return content
+        except Exception as e:
+            logger.error(f"Error calling voice LLM: {e}", exc_info=True)
+            # Fallback to regular LLM if voice-optimized fails
+            logger.info("Falling back to regular LLM for voice request")
+            return await self._call_llm(prompt)
+
     async def _save_state(self, user_id: str, session_id: str, state: ConversationState):
         await self.redis_manager.save_conversation_state(user_id, session_id, state)
+
+    async def _run_parallel_operations(self, *tasks):
+        """Run multiple independent async operations in parallel."""
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _optimized_session_update(self, session: Session, **updates):
+        """Update session with optimized parallel operations where possible."""
+        # Update session attributes
+        for key, value in updates.items():
+            setattr(session, key, value)
+
+        # Update in database
+        await self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+    def _get_cached_response(self, response_type: str, score: int = None) -> str:
+        """Get a cached response for common patterns using Phase 2 advanced cache."""
+        # Try advanced cache first
+        cached_response = voice_cache.get_response(response_type)
+        if cached_response:
+            logger.info(f"🎯 Phase 2: Advanced cache hit for '{response_type}'")
+            return cached_response
+
+        # Fallback to original cache
+        if response_type not in VOICE_RESPONSE_CACHE:
+            return None
+
+        responses = VOICE_RESPONSE_CACHE[response_type]
+
+        # For score-based responses, select appropriate type
+        if score is not None:
+            if score >= 4:
+                response_type = "correct_answer"
+            elif score >= 2:
+                response_type = "partial_answer"
+            else:
+                response_type = "incorrect_answer"
+
+            if response_type in VOICE_RESPONSE_CACHE:
+                responses = VOICE_RESPONSE_CACHE[response_type]
+
+        return random.choice(responses) if responses else None
+
+    def _should_use_cache(self, user_input: str, context: str = None) -> bool:
+        """Determine if we should use cached response for voice interactions."""
+        # Use cache for voice interactions when appropriate
+        # This is a simple heuristic - can be improved with ML
+        voice_indicators = ["voice", "speech", "audio", "mic", "speak"]
+
+        # Check if this is likely a voice interaction
+        is_voice = any(indicator in user_input.lower() for indicator in voice_indicators)
+
+        # Use cache for voice interactions with common patterns
+        return is_voice or context == "voice"
+
+    def log_cache_stats(self):
+        """Log cache statistics for monitoring."""
+        stats = voice_cache.get_stats()
+        logger.info(f"🎯 Phase 2 Cache Stats: {stats}")

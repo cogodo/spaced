@@ -254,9 +254,6 @@ class ChatProvider extends ChangeNotifier {
 
   /// Initialize a new chat session
   Future<void> startNewSession(List<String> topics) async {
-    print(
-      'startNewSession: userId=$_userId, currentSessionId=$_currentSessionId',
-    );
     _logger.info('Starting new chat session with topics: $topics');
     _setLoadingWithTyping(
       true,
@@ -427,7 +424,6 @@ class ChatProvider extends ChangeNotifier {
 
   /// Load an existing session from Firebase
   Future<void> loadSession(String sessionId) async {
-    print('loadSession: userId=$_userId, sessionId=$sessionId');
     if (_userId == null) {
       _logger.warning('Cannot load session: No user authenticated');
       return;
@@ -1058,7 +1054,6 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _listenToMessages(String userId, String sessionId) {
-    print('Setting up Firestore listener for user=$userId, session=$sessionId');
     _messagesSubscription?.cancel();
     final messagesRef = FirebaseFirestore.instance
         .collection('users')
@@ -1069,10 +1064,6 @@ class ChatProvider extends ChangeNotifier {
         .orderBy('messageIndex');
 
     _messagesSubscription = messagesRef.snapshots().listen((snapshot) {
-      print(
-        'Firestore listener received ${snapshot.docs.length} messages for user=$userId, session=$sessionId',
-      );
-      for (var doc in snapshot.docs) print(doc.data());
       final firestoreMessages =
           snapshot.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -1155,7 +1146,6 @@ class ChatProvider extends ChangeNotifier {
   // Clean up listener on dispose
   @override
   void dispose() {
-    print('Disposing ChatProvider and stopping Firestore listener');
     _stopListeningToMessages();
     super.dispose();
   }

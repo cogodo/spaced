@@ -64,7 +64,7 @@ class SessionRepository:
         session_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
         batch.delete(session_ref)
 
-        batch.commit()
+        await to_thread.run_sync(batch.commit)
 
     async def list_by_user(self, user_uid: str) -> List[Session]:
         """List all sessions for a given user."""
@@ -103,7 +103,7 @@ class SessionRepository:
             msg_data["messageIndex"] = i
             msg_ref = messages_ref.document(f"msg_{i}")
             batch.set(msg_ref, msg_data)
-        batch.commit()
+        await to_thread.run_sync(batch.commit)
 
     async def append_messages(self, session_id: str, user_uid: str, messages: list) -> None:
         """Append new Message objects to the messages subcollection for a session."""
@@ -123,7 +123,7 @@ class SessionRepository:
             msg_data["messageIndex"] = start_idx + i
             msg_ref = messages_ref.document(f"msg_{start_idx + i}")
             batch.set(msg_ref, msg_data)
-        batch.commit()
+        await to_thread.run_sync(batch.commit)
 
     def _ensure_session_fields(self, data: dict, session_id: str, user_uid: str) -> None:
         """Ensure session data has all required fields for backward compatibility."""

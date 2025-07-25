@@ -31,7 +31,7 @@ class RoutingService:
         Raises:
             ValueError: If the LLM call fails or returns invalid data
         """
-        logger.info(f"Determining next action for response: '{user_response[:50]}...'")
+        logger.info(f"Determining next action for response: {len(user_response)} chars")
 
         prompt = self._build_routing_prompt(user_response)
 

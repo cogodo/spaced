@@ -39,24 +39,43 @@ class EvaluationService:
         Raises:
             ValueError: If the LLM call fails or returns invalid data
         """
-        logger.info(f"Scoring answer for question: {question.text[:50]}...")
+        logger.info(f"Scoring answer for question: {len(question.text)} chars")
 
         prompt = self._build_scoring_prompt(question, answer, after_hint)
 
         try:
-            response = await self._call_openai_for_scoring(prompt)
-            score_data = self._parse_scoring_response(response)
+            # Use voice-optimized settings if available, otherwise fallback to standard
+            model = getattr(settings, "voice_llm_model", "gpt-4o-mini")
+            max_tokens = getattr(settings, "voice_max_tokens", 1024)
+            temperature = getattr(settings, "voice_temperature", 0.1)
 
-            # Validate and create FSRSScore object
-            fsrs_score = FSRSScore(**score_data)
+            response = await self.openai_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert educational evaluator. Always respond with valid JSON containing 'score' and 'reasoning' fields.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format={"type": "json_object"},
+            )
 
-            logger.info(f"Scored answer: {fsrs_score.score}/5 - {fsrs_score.reasoning[:100]}...")
-            return fsrs_score
+            content = response.choices[0].message.content
+            if not content:
+                raise ValueError("OpenAI returned empty response")
+
+            # Parse the response into structured format
+            parsed_response = self._parse_scoring_response(content)
+
+            # Create and return FSRSScore object
+            return FSRSScore(score=parsed_response["score"], reasoning=parsed_response["reasoning"])
 
         except Exception as e:
-            error_msg = f"Failed to score answer: {str(e)}. Please try again or contact support if the issue persists."
-            logger.error(f"Error scoring answer: {str(e)}")
-            raise ValueError(error_msg) from e
+            logger.error(f"OpenAI API call failed: {str(e)}")
+            raise ValueError(f"Unable to score answer due to AI service error: {str(e)}") from e
 
     def _build_scoring_prompt(self, question: Question, answer: str, after_hint: bool) -> str:
         """Creates a detailed scoring prompt based on FSRS criteria."""
@@ -107,8 +126,13 @@ Provide your evaluation as a JSON object with exactly these fields:
     async def _call_openai_for_scoring(self, prompt: str) -> str:
         """Makes the OpenAI API call for scoring with proper error handling."""
         try:
+            # Use voice-optimized settings if available, otherwise fallback to standard
+            model = getattr(settings, "voice_llm_model", "gpt-4o-mini")
+            max_tokens = getattr(settings, "voice_max_tokens", 300)
+            temperature = getattr(settings, "voice_temperature", 0.2)
+
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using cheaper model for testing
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -116,8 +140,8 @@ Provide your evaluation as a JSON object with exactly these fields:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=300,
-                temperature=0.2,  # Low temperature for consistent scoring
+                max_tokens=max_tokens,
+                temperature=temperature,  # Use voice-optimized temperature
                 response_format={"type": "json_object"},
             )
 

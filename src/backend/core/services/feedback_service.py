@@ -48,7 +48,7 @@ class FeedbackService:
             response = await self._call_openai_for_feedback(prompt)
             feedback = self._parse_feedback_response(response)
 
-            logger.info(f"Generated feedback: {feedback[:100]}...")
+            logger.info(f"Generated feedback: {len(feedback)} chars")
             return feedback
 
         except Exception as e:
