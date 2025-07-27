@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.4.0
+  http_parser: ^4.0.2
   uuid: ^3.0.7
   provider: ^6.1.1
   shared_preferences: ^2.0.0
@@ -48,6 +49,8 @@ dependencies:
   # Voice chat dependencies - LiveKit
   livekit_client: ^2.2.6
   permission_handler: ^11.0.1 # For microphone permissions
+  record: ^5.0.4 # For audio recording
+  path_provider: ^2.1.1 # For file paths
 
 dev_dependencies:
   flutter_test:

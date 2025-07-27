@@ -10,6 +10,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'themes/theme_data.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/settings_provider.dart';
 import 'routing/app_router.dart';
 import 'services/logger_service.dart';
 import 'firebase_options.dart';
@@ -78,6 +79,9 @@ class MyAppProvider extends StatelessWidget {
             return chatProvider!;
           },
         ),
+
+        // Settings provider
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: const MyApp(),
     );
