@@ -37,13 +37,123 @@
   <title>Spaced</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Material Design Icons with better fallback handling -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Primary Material Icons - load synchronously for immediate availability -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
+  <!-- Additional variants can load asynchronously -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Sharp&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Two+Tone&display=swap" rel="stylesheet">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'ChironSungHK', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Ensure Material Icons load properly with comprehensive fallbacks */
+    .material-icons {
+      font-family: 'Material Icons', 'Material Icons Fallback', 'MaterialIcons-Regular', serif !important;
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      /* Ensure icons have a minimum size even if font fails */
+      min-width: 24px;
+      min-height: 24px;
+    }
+
+    /* Fallback for when Material Icons don't load */
+    .material-icons:empty::before {
+      content: "⚪";
+      font-family: system-ui, sans-serif;
+    }
+
+    /* Force Flutter to use Material Icons for icon fonts */
+    flt-material-icons {
+      font-family: 'Material Icons', 'MaterialIcons-Regular' !important;
+    }
+
+    /* Flutter web specific icon fixes */
+    flt-scene-host {
+      --material-icons-font-family: 'Material Icons';
+    }
+
+    /* Fix for Flutter web canvas rendering */
+    flt-glass-pane * {
+      font-family: 'Material Icons', 'MaterialIcons-Regular' !important;
+    }
+
+    /* Specific fix for Flutter Icon widgets */
+    flt-paragraph {
+      font-family: 'Material Icons', 'MaterialIcons-Regular' !important;
+    }
+
+    /* Global icon font enforcement */
+    [data-icon-font],
+    .icon,
+    .material-icons,
+    i.material-icons {
+      font-family: 'Material Icons', 'MaterialIcons-Regular', serif !important;
+    }
+
+    /* Ensure custom font loads properly */
+    .chiron-font {
+      font-family: 'ChironSungHK', serif;
+    }
+
+    /* Load ChironSungHK font for web */
+    @font-face {
+      font-family: 'ChironSungHK';
+      src: url('fonts/chiron_sung_hk/ChironSungHK-Light.ttf') format('truetype');
+      font-weight: 300;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'ChironSungHK';
+      src: url('fonts/chiron_sung_hk/ChironSungHK-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'ChironSungHK';
+      src: url('fonts/chiron_sung_hk/ChironSungHK-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'ChironSungHK';
+      src: url('fonts/chiron_sung_hk/ChironSungHK-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* Global font family with ChironSungHK as primary */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .loading-container {
@@ -111,6 +221,56 @@
   <script>
     // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
+  </script>
+
+  <!-- Font loading diagnostic and fallback -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      console.log('🔍 Checking font and asset loading...');
+
+      // Check if Material Icons font is loading
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+          console.log('✅ All fonts loaded successfully');
+          // Force Material Icons font check
+          document.fonts.load('24px "Material Icons"').then(function () {
+            console.log('✅ Material Icons font loaded successfully');
+          }).catch(function (error) {
+            console.warn('⚠️ Material Icons font failed to load:', error);
+            // Add a backup class to body for CSS fallbacks
+            document.body.classList.add('material-icons-fallback');
+          });
+        });
+      }
+
+      // Additional check for asset manifest
+      fetch('/assets/AssetManifest.json').then(function (response) {
+        if (response.ok) {
+          console.log('✅ AssetManifest.json loaded successfully');
+          return response.json();
+        } else {
+          console.warn('⚠️ AssetManifest.json failed to load:', response.status);
+          return null;
+        }
+      }).then(function (manifest) {
+        if (manifest) {
+          console.log('📦 Asset manifest contains', Object.keys(manifest).length, 'assets');
+        }
+      }).catch(function (error) {
+        console.error('❌ AssetManifest.json request failed:', error);
+      });
+
+      // Check for Material Icons font file specifically
+      fetch('/assets/fonts/MaterialIcons-Regular.otf').then(function (response) {
+        if (response.ok) {
+          console.log('✅ MaterialIcons-Regular.otf loaded successfully');
+        } else {
+          console.warn('⚠️ MaterialIcons-Regular.otf failed to load:', response.status);
+        }
+      }).catch(function (error) {
+        console.warn('⚠️ MaterialIcons-Regular.otf request failed:', error);
+      });
+    });
   </script>
 </head>
 

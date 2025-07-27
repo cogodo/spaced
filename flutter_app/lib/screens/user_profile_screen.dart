@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For FilteringTextInputFormatter
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../themes/theme_data.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/theme_toggle.dart';
 
 /// User profile screen showing account information and settings
@@ -66,6 +65,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   // Theme Settings Section
                   _buildThemeSettingsSection(context),
+
+                  const SizedBox(height: 32),
+
+                  // Voice Settings Section
+                  _buildVoiceSettingsSection(context),
+
+                  const SizedBox(height: 32),
+
+                  // STT Settings Section
+                  _buildSttSettingsSection(context),
 
                   const SizedBox(height: 32),
 
@@ -226,6 +235,126 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildVoiceSettingsSection(BuildContext context) {
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        return Card(
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Voice Settings',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.mic,
+                      size: 20,
+                      color: settingsProvider.voiceEnabled
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Voice-to-Voice Chat',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          Text(
+                            'Enable microphone button for voice conversations',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: settingsProvider.voiceEnabled,
+                      onChanged: (bool value) {
+                        settingsProvider.setVoiceEnabled(value);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSttSettingsSection(BuildContext context) {
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        return Card(
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Speech-to-Text Settings',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.keyboard_voice,
+                      size: 20,
+                      color: settingsProvider.sttEnabled
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Speech-to-Text',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          Text(
+                            'Enable STT button for voice input to text',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: settingsProvider.sttEnabled,
+                      onChanged: (bool value) {
+                        settingsProvider.setSttEnabled(value);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

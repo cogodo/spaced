@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/pulsing_mic_button.dart';
+import '../widgets/stt_button.dart';
 import '../services/audio_player_service.dart';
+import '../services/stt_service.dart';
 import '../services/auth_service.dart';
 import '../services/logger_service.dart';
 
@@ -53,12 +56,18 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSpeaking = false;
   String? _currentTranscript;
 
+  // STT service
+  SttService? _sttService;
+
   @override
   void initState() {
     super.initState();
 
     // Initialize voice service
     _initializeVoiceService();
+
+    // Initialize STT service
+    _initializeSttService();
 
     // Load session based on token, but don't auto-start new sessions
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,6 +177,19 @@ class _ChatScreenState extends State<ChatScreen> {
         _logger.info('Speaking status changed: $isSpeaking');
       }
     };
+  }
+
+  void _initializeSttService() {
+    _sttService = SttService();
+    _sttService!.initialize();
+    _logger.info('STT service initialized');
+  }
+
+  void _handleSttTranscript(String transcript) {
+    _logger.info('STT transcript received: $transcript');
+    setState(() {
+      _messageController.text = transcript;
+    });
   }
 
   Future<void> _toggleVoiceChat() async {
@@ -327,6 +349,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
     _voiceService?.dispose();
+    _sttService?.dispose();
     super.dispose();
   }
 
@@ -1067,154 +1090,175 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Consumer<ChatProvider>(
           builder: (context, chatProvider, child) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Mic button (only show when session is active)
-                if (chatProvider.sessionState == SessionState.active) ...[
-                  PulsingMicButton(
-                    isConnecting: _isVoiceConnecting,
-                    isVoiceConnected: _isVoiceConnected,
-                    isSpeaking: _isSpeaking,
-                    onTap: _toggleVoiceChat,
-                    size: 56.0, // Match the send button size
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    enabled:
-                        !chatProvider.isLoading &&
-                        !chatProvider.isTyping &&
-                        !_isSending &&
-                        chatProvider.sessionState != SessionState.error &&
-                        chatProvider.sessionState != SessionState.completed,
-                    focusNode: _textFieldFocusNode,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      height: 1.4,
-                      letterSpacing: 0.2,
+            return Consumer<SettingsProvider>(
+              builder: (context, settingsProvider, child) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Voice-to-voice button (only show when session is active AND voice is enabled)
+                    if (chatProvider.sessionState == SessionState.active &&
+                        settingsProvider.voiceEnabled) ...[
+                      PulsingMicButton(
+                        isConnecting: _isVoiceConnecting,
+                        isVoiceConnected: _isVoiceConnected,
+                        isSpeaking: _isSpeaking,
+                        onTap: _toggleVoiceChat,
+                        size: 56.0, // Match the send button size
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+
+                    // STT button (only show when session is active AND STT is enabled)
+                    if (chatProvider.sessionState == SessionState.active &&
+                        settingsProvider.sttEnabled &&
+                        _sttService != null &&
+                        _sttService!.isInitialized) ...[
+                      SttButton(
+                        sttService: _sttService!,
+                        onTranscriptReceived: _handleSttTranscript,
+                        size: 56.0, // Match the send button size
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        enabled:
+                            !chatProvider.isLoading &&
+                            !chatProvider.isTyping &&
+                            !_isSending &&
+                            chatProvider.sessionState != SessionState.error &&
+                            chatProvider.sessionState != SessionState.completed,
+                        focusNode: _textFieldFocusNode,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          height: 1.4,
+                          letterSpacing: 0.2,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: _getInputHint(chatProvider.sessionState),
+                          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withValues(alpha: 0.6),
+                            letterSpacing: 0.2,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: theme.scaffoldBackgroundColor,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          // Add focus border for better visual feedback
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.primary,
+                              width: 2,
+                            ),
+                          ),
+                          isDense: false,
+                          // Show typing indicator in input when AI is thinking
+                          suffixIcon:
+                              chatProvider.isTyping
+                                  ? Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: CompactTypingIndicator(),
+                                  )
+                                  : _currentTranscript != null
+                                  ? Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: Icon(
+                                      Icons.mic,
+                                      color: theme.colorScheme.primary,
+                                      size: 20,
+                                    ),
+                                  )
+                                  : null,
+                        ),
+                        maxLines: 5,
+                        minLines: 1,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) {
+                          if (!chatProvider.isLoading &&
+                              !chatProvider.isTyping &&
+                              !_isSending &&
+                              chatProvider.sessionState != SessionState.error &&
+                              chatProvider.sessionState !=
+                                  SessionState.completed) {
+                            _sendMessage();
+                          }
+                        },
+                        // Auto-focus on certain states for better UX
+                        autofocus:
+                            chatProvider.sessionState ==
+                            SessionState.collectingTopics,
+                        // Ensure text field captures all tap events
+                        onTap: () {
+                          if (!_textFieldFocusNode.hasFocus) {
+                            _textFieldFocusNode.requestFocus();
+                          }
+                        },
+                      ),
                     ),
-                    decoration: InputDecoration(
-                      hintText: _getInputHint(chatProvider.sessionState),
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color?.withValues(
-                          alpha: 0.6,
+                    const SizedBox(width: 12),
+                    // Send button
+                    IconButton(
+                      onPressed:
+                          (chatProvider.isLoading ||
+                                  chatProvider.isTyping ||
+                                  _isSending ||
+                                  chatProvider.sessionState ==
+                                      SessionState.error ||
+                                  chatProvider.sessionState ==
+                                      SessionState.completed)
+                              ? null
+                              : _sendMessage,
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            (chatProvider.isLoading ||
+                                    chatProvider.isTyping ||
+                                    _isSending)
+                                ? theme.colorScheme.primary.withValues(
+                                  alpha: 0.5,
+                                )
+                                : theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        disabledBackgroundColor: theme.colorScheme.primary
+                            .withValues(alpha: 0.5),
+                        disabledForegroundColor: theme.colorScheme.onPrimary
+                            .withValues(alpha: 0.7),
+                        fixedSize: const Size(56, 56), // Consistent size
+                        shape: const CircleBorder(),
+                        elevation:
+                            (chatProvider.isLoading ||
+                                    chatProvider.isTyping ||
+                                    _isSending)
+                                ? 0
+                                : 2,
+                        shadowColor: theme.colorScheme.primary.withValues(
+                          alpha: 0.3,
                         ),
-                        letterSpacing: 0.2,
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: theme.scaffoldBackgroundColor,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      // Add focus border for better visual feedback
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                      isDense: false,
-                      // Show typing indicator in input when AI is thinking
-                      suffixIcon:
-                          chatProvider.isTyping
-                              ? Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: CompactTypingIndicator(),
-                              )
-                              : _currentTranscript != null
-                              ? Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: Icon(
-                                  Icons.mic,
-                                  color: theme.colorScheme.primary,
-                                  size: 20,
+                      icon:
+                          _isSending
+                              ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.onPrimary,
                                 ),
                               )
-                              : null,
+                              : const Icon(Icons.arrow_upward, size: 24),
+                      tooltip: _isSending ? 'Sending...' : 'Send message',
                     ),
-                    maxLines: 5,
-                    minLines: 1,
-                    textCapitalization: TextCapitalization.sentences,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) {
-                      if (!chatProvider.isLoading &&
-                          !chatProvider.isTyping &&
-                          !_isSending &&
-                          chatProvider.sessionState != SessionState.error &&
-                          chatProvider.sessionState != SessionState.completed) {
-                        _sendMessage();
-                      }
-                    },
-                    // Auto-focus on certain states for better UX
-                    autofocus:
-                        chatProvider.sessionState ==
-                        SessionState.collectingTopics,
-                    // Ensure text field captures all tap events
-                    onTap: () {
-                      if (!_textFieldFocusNode.hasFocus) {
-                        _textFieldFocusNode.requestFocus();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Send button
-                IconButton(
-                  onPressed:
-                      (chatProvider.isLoading ||
-                              chatProvider.isTyping ||
-                              _isSending ||
-                              chatProvider.sessionState == SessionState.error ||
-                              chatProvider.sessionState ==
-                                  SessionState.completed)
-                          ? null
-                          : _sendMessage,
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        (chatProvider.isLoading ||
-                                chatProvider.isTyping ||
-                                _isSending)
-                            ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                            : theme.colorScheme.primary,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                    disabledBackgroundColor: theme.colorScheme.primary
-                        .withValues(alpha: 0.5),
-                    disabledForegroundColor: theme.colorScheme.onPrimary
-                        .withValues(alpha: 0.7),
-                    fixedSize: const Size(56, 56), // Consistent size
-                    shape: const CircleBorder(),
-                    elevation:
-                        (chatProvider.isLoading ||
-                                chatProvider.isTyping ||
-                                _isSending)
-                            ? 0
-                            : 2,
-                    shadowColor: theme.colorScheme.primary.withValues(
-                      alpha: 0.3,
-                    ),
-                  ),
-                  icon:
-                      _isSending
-                          ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.colorScheme.onPrimary,
-                            ),
-                          )
-                          : const Icon(Icons.arrow_upward, size: 24),
-                  tooltip: _isSending ? 'Sending...' : 'Send message',
-                ),
-              ],
+                  ],
+                );
+              },
             );
           },
         ),
