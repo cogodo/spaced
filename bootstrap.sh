@@ -2,13 +2,13 @@ set -e
 set -x
 
 # --- Configuration ---
-DOMAIN="staging.getspaced.app"
+DOMAIN="getspaced.app"
 APP_USER="appuser"
 APP_HOME="/home/$APP_USER"
 BACKEND_DIR="$APP_HOME/backend" # Simplified path
 SERVICE_ACCOUNT_JSON_PATH="$APP_HOME/firebase_service_account.json"
 GITHUB_REPO="cogodo/spaced" # Format for git archive
-GIT_BRANCH="staging"
+GIT_BRANCH="main"
 CERTBOT_EMAIL="cogo@umich.edu"
 
 # --- Voice-to-Voice Configuration ---
@@ -73,7 +73,7 @@ set -e
 APP_HOME="/home/appuser"
 BACKEND_DIR="\$APP_HOME/backend"
 GITHUB_REPO="cogodo/spaced"
-GIT_BRANCH="staging"
+GIT_BRANCH="main"
 
 # Remove old directories to ensure a clean deployment
 rm -rf "\$BACKEND_DIR"
