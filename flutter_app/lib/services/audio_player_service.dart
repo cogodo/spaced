@@ -487,4 +487,67 @@ class LiveKitVoiceService {
   void dispose() {
     disconnect();
   }
+
+  /// Check if voice service is healthy by calling the health endpoint
+  Future<bool> checkVoiceServiceHealth() async {
+    try {
+      debugPrint('[LiveKitVoiceService] Checking voice service health...');
+      
+      final response = await _makeAuthenticatedRequest(
+        (headers) => http.get(
+          Uri.parse('$_baseUrl/api/v1/voice/health'),
+          headers: headers,
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw TimeoutException('Health check timed out after 10 seconds');
+          },
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = convert.json.decode(response.body);
+        final isHealthy = data['status'] == 'healthy';
+        debugPrint('[LiveKitVoiceService] Voice service health: $isHealthy');
+        return isHealthy;
+      } else {
+        debugPrint('[LiveKitVoiceService] Voice service health check failed: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[LiveKitVoiceService] Error checking voice service health: $e');
+      return false;
+    }
+  }
+
+  /// Get voice service status details
+  Future<Map<String, dynamic>?> getVoiceServiceStatus() async {
+    try {
+      debugPrint('[LiveKitVoiceService] Getting voice service status...');
+      
+      final response = await _makeAuthenticatedRequest(
+        (headers) => http.get(
+          Uri.parse('$_baseUrl/api/v1/voice/health'),
+          headers: headers,
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw TimeoutException('Status check timed out after 10 seconds');
+          },
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = convert.json.decode(response.body);
+        debugPrint('[LiveKitVoiceService] Voice service status: $data');
+        return data;
+      } else {
+        debugPrint('[LiveKitVoiceService] Voice service status check failed: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('[LiveKitVoiceService] Error getting voice service status: $e');
+      return null;
+    }
+  }
 }

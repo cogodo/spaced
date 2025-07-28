@@ -10,9 +10,9 @@ class SettingsProvider with ChangeNotifier {
   static const String _voiceEnabledKey = 'voice_enabled';
   static const String _sttEnabledKey = 'stt_enabled';
 
-  // Default values
-  bool _voiceEnabled = false; // Default to disabled
-  bool _sttEnabled = true; // Default to enabled
+  // Default values - enable voice by default in production
+  bool _voiceEnabled = true; // Default to enabled for voice-to-voice
+  bool _sttEnabled = true; // Default to enabled for STT
 
   // Getters
   bool get voiceEnabled => _voiceEnabled;
@@ -26,8 +26,9 @@ class SettingsProvider with ChangeNotifier {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _voiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
-      _sttEnabled = prefs.getBool(_sttEnabledKey) ?? false;
+      _voiceEnabled =
+          prefs.getBool(_voiceEnabledKey) ?? true; // Default to true
+      _sttEnabled = prefs.getBool(_sttEnabledKey) ?? true; // Default to true
       _logger.info(
         'Settings loaded - voice enabled: $_voiceEnabled, stt enabled: $_sttEnabled',
       );
@@ -84,6 +85,19 @@ class SettingsProvider with ChangeNotifier {
       await _saveSettings();
       notifyListeners();
       _logger.info('STT feature set to: $_sttEnabled');
+    }
+  }
+
+  /// Check if voice service is healthy (for production monitoring)
+  Future<bool> checkVoiceServiceHealth() async {
+    try {
+      // This would typically check the voice health endpoint
+      // For now, we'll just return true if voice is enabled
+      // In a real implementation, you'd make an HTTP call to /api/v1/voice/health
+      return _voiceEnabled;
+    } catch (e) {
+      _logger.severe('Error checking voice service health: $e');
+      return false;
     }
   }
 }

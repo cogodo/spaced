@@ -21,6 +21,7 @@ Environment Variables Required:
     - OPENAI_API_KEY: OpenAI API key for STT (Whisper)
     - CARTESIA_API_KEY: Cartesia API key for TTS
     - DEEPGRAM_API_KEY: Deepgram API key for STT (optional, will use OpenAI if not provided)
+    - BACKEND_URL: Backend API URL (auto-detected if not provided)
 """
 
 import json
@@ -48,6 +49,57 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_backend_url() -> str:
+    """
+    Determine the correct backend URL based on environment.
+
+    Priority:
+    1. BACKEND_URL environment variable (explicitly set)
+    2. Environment detection based on other variables
+    3. Default to localhost for development
+    """
+    # If BACKEND_URL is explicitly set, use it
+    backend_url = os.getenv("BACKEND_URL")
+    if backend_url:
+        logger.info(f"Using explicit BACKEND_URL: {backend_url}")
+        return backend_url
+
+    # Detect environment based on other variables
+    environment = os.getenv("ENVIRONMENT", "").lower()
+    debug_mode = os.getenv("DEBUG", "True").lower() == "true"
+
+    # Check for staging indicators
+    is_staging = (
+        environment == "staging"
+        or "staging" in os.getenv("LIVEKIT_SERVER_URL", "").lower()
+        or "staging" in os.getenv("FIREBASE_PROJECT_ID", "").lower()
+    )
+
+    # Check for production indicators
+    is_production = (
+        environment == "production"
+        or not debug_mode
+        or (
+            "getspaced.app" in os.getenv("LIVEKIT_SERVER_URL", "")
+            and "staging" not in os.getenv("LIVEKIT_SERVER_URL", "")
+        )
+    )
+
+    # Determine backend URL
+    if is_staging:
+        backend_url = "https://api.staging.getspaced.app"
+        logger.info("Detected staging environment, using staging backend URL")
+    elif is_production:
+        backend_url = "https://api.getspaced.app"
+        logger.info("Detected production environment, using production backend URL")
+    else:
+        backend_url = "http://localhost:8000"
+        logger.info("Detected development environment, using localhost backend URL")
+
+    logger.info(f"Backend URL determined: {backend_url}")
+    return backend_url
+
+
 def validate_environment() -> dict[str, str]:
     """Validate and return required environment variables."""
     required_vars = {
@@ -60,6 +112,7 @@ def validate_environment() -> dict[str, str]:
 
     optional_vars = {
         "DEEPGRAM_API_KEY": "Deepgram API key for STT (will use OpenAI Whisper if not provided)",
+        "BACKEND_URL": "Backend API URL (auto-detected if not provided)",
     }
 
     env_vars = {}
@@ -112,7 +165,7 @@ async def send_error_to_frontend(room: rtc.Room, error_message: str):
 
 async def call_backend_chat_api(chat_id: str, transcript: str, user_id: str) -> str:
     """Call the backend chat API with the transcript."""
-    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    backend_url = get_backend_url()
 
     # Use development token for authentication (in production, use service-to-service auth)
     dev_token = "dev-test-token"
@@ -204,7 +257,7 @@ async def entrypoint(ctx: agents.JobContext):
         vad = silero.VAD.load()
 
         # Use OpenAI LLM plugin but point it to our backend
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        backend_url = get_backend_url()
         llm = openai.LLM(
             api_key="dev-test-token",  # Use our development token
             model="backend-voice",  # Can be any string, our backend ignores it
@@ -249,6 +302,7 @@ def main():
     os.environ["LIVEKIT_API_SECRET"] = env_vars["LIVEKIT_API_SECRET"]
 
     logger.info(f"🌐 Set LIVEKIT_URL to: {env_vars['LIVEKIT_SERVER_URL']}")
+    logger.info(f"🔗 Backend URL: {get_backend_url()}")
 
     # Use uvloop for better performance
     if sys.platform != "win32":
