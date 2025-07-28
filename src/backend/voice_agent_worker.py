@@ -334,9 +334,9 @@ async def entrypoint(ctx: agents.JobContext):
             base_url=f"{backend_url}/api/v1",  # Point to our backend
         )
 
-        # Create a simple agent with chat_id in instructions for backend routing
+        # Create a simple agent with chat_id and user_id in instructions for backend routing
         agent = agents.Agent(
-            instructions=f"You are a helpful AI tutor for spaced repetition learning.\nchat_id:{chat_id}",
+            instructions=f"You are a helpful AI tutor for spaced repetition learning.\nchat_id:{chat_id}\nuser_id:{user_id}",
         )
 
         # Create agent session with our custom LLM

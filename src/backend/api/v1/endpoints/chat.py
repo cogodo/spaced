@@ -206,7 +206,25 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
 
         # Get existing session from Firebase
         logger.info(f"Fetching session for chat_id={chat_id}")
+
+        # Handle voice agent requests - extract actual user ID from system message
         user_uid = current_user.get("uid", "anonymous")
+
+        # If this is a voice agent request, extract the actual user ID from the system message
+        if current_user.get("service") == "voice_agent":
+            logger.info("Voice agent request detected, extracting actual user ID from system message")
+            # Look for user_id in the system message
+            for msg in messages:
+                if msg.get("role") == "system" and "user_id:" in msg.get("content", ""):
+                    content = msg.get("content", "")
+                    for line in content.split("\n"):
+                        if line.startswith("user_id:"):
+                            user_uid = line.split(":", 1)[1].strip()
+                            logger.info(f"Extracted actual user ID from system message: {user_uid}")
+                            break
+                    break
+
+        logger.info(f"Using user UID: {user_uid}")
 
         session = await session_service.get_session(chat_id, user_uid)
 
