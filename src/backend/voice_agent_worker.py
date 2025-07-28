@@ -33,6 +33,7 @@ from datetime import datetime
 
 import aiohttp
 import firebase_admin
+import uvloop
 from dotenv import load_dotenv
 from firebase_admin import auth, credentials
 from livekit import agents, rtc
@@ -380,8 +381,35 @@ def main():
 
         logger.info("✅ Voice agent worker ready for development")
     else:
-        # Production mode - run with LiveKit agents
-        agents.run_app(entrypoint)
+        # Production mode - run with LiveKit agents CLI
+        logger.info("🚀 Starting Simplified LiveKit Voice Agent Worker")
+
+        # Validate environment first
+        env_vars = validate_environment()
+
+        # Set environment variables for LiveKit
+        os.environ["LIVEKIT_URL"] = env_vars["LIVEKIT_SERVER_URL"]
+        os.environ["LIVEKIT_API_KEY"] = env_vars["LIVEKIT_API_KEY"]
+        os.environ["LIVEKIT_API_SECRET"] = env_vars["LIVEKIT_API_SECRET"]
+
+        logger.info(f"🌐 Set LIVEKIT_URL to: {env_vars['LIVEKIT_SERVER_URL']}")
+        logger.info(f"🔗 Backend URL: {get_backend_url()}")
+
+        # Use uvloop for better performance
+        if sys.platform != "win32":
+            uvloop.install()
+
+        # Create worker options
+        worker_options = agents.WorkerOptions(entrypoint_fnc=entrypoint)
+
+        try:
+            logger.info("🎧 Starting LiveKit CLI-based worker...")
+            agents.cli.run_app(worker_options)
+        except KeyboardInterrupt:
+            logger.info("👋 Voice agent worker stopped by user")
+        except Exception as e:
+            logger.error(f"❌ Voice agent worker failed: {e}", exc_info=True)
+            sys.exit(1)
 
 
 if __name__ == "__main__":
