@@ -30,7 +30,7 @@ jobs:
 
       # 4) Build the web app with staging backend URL
       - name: Build Flutter web app for staging
-        run: flutter build web --release --dart-define=BACKEND_URL=https://api.getspaced.app
+        run: flutter build web --release --dart-define=BACKEND_URL=https://api.staging.getspaced.app --dart-define=STT_PROXY_URL=https://api.staging.getspaced.app/api/v1/transcribe
         working-directory: ./flutter_app
 
       # 5) Deploy the contents of build/web to spaced-staging gh-pages

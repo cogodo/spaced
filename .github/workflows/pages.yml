@@ -55,7 +55,7 @@ jobs:
         run: |
           cd flutter_app
           # Build with basic performance optimizations and production backend
-          flutter build web --release --tree-shake-icons --dart-define=BACKEND_URL=https://api.getspaced.app
+          flutter build web --release --tree-shake-icons --dart-define=BACKEND_URL=https://api.getspaced.app --dart-define=STT_PROXY_URL=https://api.getspaced.app/api/v1/transcribe
           
       - name: Verify build output
         run: |
