@@ -57,6 +57,19 @@ async def get_current_user(
             f"{decoded_token.get('uid')} ({decoded_token.get('email')})"
         )
         logger.info(f"AUTH DEBUG: Token audience: {decoded_token.get('aud')}")
+
+        # Check if this is a voice agent service token
+        if decoded_token.get("uid") == "voice-agent-service":
+            logger.info("AUTH DEBUG: Valid voice agent service token detected")
+            return {
+                "uid": "voice-agent-service",
+                "email": "voice-agent@spaced.app",
+                "name": "Voice Agent Service",
+                "email_verified": True,
+                "service": "voice_agent",
+                "permissions": ["chat_api_access"],
+            }
+
         return decoded_token
     except auth.InvalidIdTokenError as e:
         logger.error(f"AUTH DEBUG: Invalid ID token: {str(e)}")

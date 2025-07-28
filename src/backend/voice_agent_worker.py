@@ -22,6 +22,7 @@ Environment Variables Required:
     - CARTESIA_API_KEY: Cartesia API key for TTS
     - DEEPGRAM_API_KEY: Deepgram API key for STT (optional, will use OpenAI if not provided)
     - BACKEND_URL: Backend API URL (auto-detected if not provided)
+    - GOOGLE_APPLICATION_CREDENTIALS: Path to Firebase service account JSON file
 """
 
 import json
@@ -31,8 +32,9 @@ import sys
 from datetime import datetime
 
 import aiohttp
-import uvloop
+import firebase_admin
 from dotenv import load_dotenv
+from firebase_admin import auth, credentials
 from livekit import agents, rtc
 from livekit.plugins import cartesia, deepgram, openai, silero
 
@@ -47,6 +49,84 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Firebase app instance for token generation
+_firebase_app = None
+
+
+def initialize_firebase_for_voice_agent():
+    """Initialize Firebase Admin SDK for the voice agent to generate custom tokens."""
+    global _firebase_app
+
+    if _firebase_app:
+        return _firebase_app
+
+    try:
+        # Check if Firebase is already initialized
+        if firebase_admin._DEFAULT_APP_NAME in firebase_admin._apps:
+            _firebase_app = firebase_admin.get_app()
+            logger.info("Using existing Firebase app")
+            return _firebase_app
+
+        # Initialize Firebase with service account credentials
+        credential_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not credential_path or not os.path.exists(credential_path):
+            raise Exception(f"Firebase service account credentials not found at: {credential_path}")
+
+        logger.info(f"Initializing Firebase with credentials from: {credential_path}")
+        cred = credentials.Certificate(credential_path)
+        _firebase_app = firebase_admin.initialize_app(cred, name="voice_agent")
+        logger.info("Firebase initialized successfully for voice agent")
+        return _firebase_app
+
+    except Exception as e:
+        logger.error(f"Failed to initialize Firebase for voice agent: {e}")
+        raise
+
+
+def generate_service_token():
+    """Generate a Firebase custom token and exchange it for an ID token for service-to-service authentication."""
+    try:
+        if not _firebase_app:
+            initialize_firebase_for_voice_agent()
+
+        # Create a custom token for the voice agent service
+        # Use a special UID that identifies this as a service account
+        service_uid = "voice-agent-service"
+        custom_token = auth.create_custom_token(
+            service_uid,
+            {"service": "voice_agent", "permissions": ["chat_api_access"], "issued_at": datetime.utcnow().isoformat()},
+        )
+
+        logger.info("Generated custom token for voice agent")
+
+        # Exchange custom token for ID token
+        # We need to use Firebase Auth REST API to exchange the token
+        import requests
+
+        # Get the project ID from the service account
+        project_id = os.getenv("FIREBASE_PROJECT_ID", "spaced-b571d")
+
+        # Exchange custom token for ID token
+        exchange_url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken"
+        params = {
+            "key": os.getenv("FIREBASE_WEB_API_KEY"),  # We need the web API key
+            "token": custom_token.decode(),
+            "returnSecureToken": True,
+        }
+
+        response = requests.post(exchange_url, params=params)
+        if response.status_code == 200:
+            id_token = response.json()["idToken"]
+            logger.info("Successfully exchanged custom token for ID token")
+            return id_token
+        else:
+            logger.error(f"Failed to exchange custom token: {response.status_code} - {response.text}")
+            raise Exception(f"Token exchange failed: {response.status_code}")
+
+    except Exception as e:
+        logger.error(f"Failed to generate service token: {e}")
+        raise
 
 
 def get_backend_url() -> str:
@@ -101,64 +181,51 @@ def get_backend_url() -> str:
 
 
 def validate_environment() -> dict[str, str]:
-    """Validate and return required environment variables."""
+    """Validate that all required environment variables are set."""
     required_vars = {
-        "LIVEKIT_API_KEY": "LiveKit API key",
-        "LIVEKIT_API_SECRET": "LiveKit API secret",
-        "LIVEKIT_SERVER_URL": "LiveKit server URL",
-        "OPENAI_API_KEY": "OpenAI API key for STT",
-        "CARTESIA_API_KEY": "Cartesia API key for TTS",
+        "LIVEKIT_API_KEY": os.getenv("LIVEKIT_API_KEY"),
+        "LIVEKIT_API_SECRET": os.getenv("LIVEKIT_API_SECRET"),
+        "LIVEKIT_SERVER_URL": os.getenv("LIVEKIT_SERVER_URL"),
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+        "CARTESIA_API_KEY": os.getenv("CARTESIA_API_KEY"),
+        "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        "FIREBASE_WEB_API_KEY": os.getenv("FIREBASE_WEB_API_KEY"),
     }
 
-    optional_vars = {
-        "DEEPGRAM_API_KEY": "Deepgram API key for STT (will use OpenAI Whisper if not provided)",
-        "BACKEND_URL": "Backend API URL (auto-detected if not provided)",
-    }
-
-    env_vars = {}
-    missing_vars = []
-
-    # Check required variables
-    for var_name, description in required_vars.items():
-        value = os.getenv(var_name)
-        if not value:
-            missing_vars.append(f"{var_name} ({description})")
-        else:
-            env_vars[var_name] = value
-            logger.info(f"✓ {var_name}: {'*' * min(8, len(value))}... ({len(value)} chars)")
-
-    # Check optional variables
-    for var_name, description in optional_vars.items():
-        value = os.getenv(var_name)
-        if value:
-            env_vars[var_name] = value
-            logger.info(f"✓ {var_name}: {'*' * min(8, len(value))}... ({len(value)} chars)")
-        else:
-            logger.info(f"○ {var_name}: Not provided ({description})")
-
+    missing_vars = [var for var, value in required_vars.items() if not value]
     if missing_vars:
-        logger.error("❌ Missing required environment variables:")
-        for var in missing_vars:
-            logger.error(f"   - {var}")
-        sys.exit(1)
+        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-    logger.info("✅ All required environment variables are set")
-    return env_vars
+    # Log successful validation (without exposing secrets)
+    logger.info("✓ LIVEKIT_API_KEY: " + "*" * 15 + "...")
+    logger.info("✓ LIVEKIT_API_SECRET: " + "*" * 43 + "...")
+    logger.info("✓ LIVEKIT_SERVER_URL: " + "*" * 35 + "...")
+    logger.info("✓ OPENAI_API_KEY: " + "*" * 164 + "...")
+    logger.info("✓ CARTESIA_API_KEY: " + "*" * 29 + "...")
+    logger.info("✓ GOOGLE_APPLICATION_CREDENTIALS: " + "*" * 33 + "...")
+    logger.info("✓ FIREBASE_WEB_API_KEY: " + "*" * 39 + "...")
+
+    # Optional Deepgram API key
+    if os.getenv("DEEPGRAM_API_KEY"):
+        logger.info("✓ DEEPGRAM_API_KEY: " + "*" * 40 + "...")
+        required_vars["DEEPGRAM_API_KEY"] = os.getenv("DEEPGRAM_API_KEY")
+
+    return required_vars
 
 
 async def send_error_to_frontend(room: rtc.Room, error_message: str):
     """Send error message to frontend via data channel."""
     try:
-        error_data = json.dumps(
-            {"type": "voice_error", "message": error_message, "timestamp": datetime.now().isoformat()}
-        )
-
-        # Send to all participants
+        data = {
+            "type": "voice_error",
+            "message": error_message,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
         await room.local_participant.publish_data(
-            error_data.encode("utf-8"),
-            destination_identities=[],  # Empty list means send to all
+            json.dumps(data).encode(),
+            reliable=True,
         )
-        logger.info(f"Sent error to frontend: {error_message}")
+        logger.error(f"Sent error to frontend: {error_message}")
     except Exception as e:
         logger.error(f"Failed to send error to frontend: {e}")
 
@@ -167,14 +234,14 @@ async def call_backend_chat_api(chat_id: str, transcript: str, user_id: str) -> 
     """Call the backend chat API with the transcript."""
     backend_url = get_backend_url()
 
-    # Use development token for authentication (in production, use service-to-service auth)
-    dev_token = "dev-test-token"
+    # Generate a service token for authentication
+    service_token = generate_service_token()
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{backend_url}/api/v1/chat/{chat_id}/messages",
-                headers={"Authorization": f"Bearer {dev_token}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {service_token}", "Content-Type": "application/json"},
                 json={"user_input": transcript},
             ) as response:
                 if response.status == 200:
@@ -258,8 +325,9 @@ async def entrypoint(ctx: agents.JobContext):
 
         # Use OpenAI LLM plugin but point it to our backend
         backend_url = get_backend_url()
+        service_token = generate_service_token()
         llm = openai.LLM(
-            api_key="dev-test-token",  # Use our development token
+            api_key=service_token,  # Use our service token
             model="backend-voice",  # Can be any string, our backend ignores it
             base_url=f"{backend_url}/api/v1",  # Point to our backend
         )
@@ -291,34 +359,29 @@ async def entrypoint(ctx: agents.JobContext):
 
 def main():
     """Main entry point for the voice agent worker."""
-    logger.info("🚀 Starting Simplified LiveKit Voice Agent Worker")
+    if len(sys.argv) > 1 and sys.argv[1] == "dev":
+        # Development mode - run directly
+        logger.info("🚀 Starting Simplified LiveKit Voice Agent Worker")
 
-    # Validate environment first
-    env_vars = validate_environment()
+        # Validate environment
+        env_vars = validate_environment()
+        logger.info(f"✓ BACKEND_URL: {get_backend_url()}")
 
-    # Set environment variables for LiveKit
-    os.environ["LIVEKIT_URL"] = env_vars["LIVEKIT_SERVER_URL"]
-    os.environ["LIVEKIT_API_KEY"] = env_vars["LIVEKIT_API_KEY"]
-    os.environ["LIVEKIT_API_SECRET"] = env_vars["LIVEKIT_API_SECRET"]
+        # Initialize Firebase for token generation
+        initialize_firebase_for_voice_agent()
 
-    logger.info(f"🌐 Set LIVEKIT_URL to: {env_vars['LIVEKIT_SERVER_URL']}")
-    logger.info(f"🔗 Backend URL: {get_backend_url()}")
+        # Test token generation
+        try:
+            token = generate_service_token()
+            logger.info("✓ Service token generation test successful")
+        except Exception as e:
+            logger.error(f"✗ Service token generation test failed: {e}")
+            sys.exit(1)
 
-    # Use uvloop for better performance
-    if sys.platform != "win32":
-        uvloop.install()
-
-    # Create worker options
-    worker_options = agents.WorkerOptions(entrypoint_fnc=entrypoint)
-
-    try:
-        logger.info("🎧 Starting LiveKit CLI-based worker...")
-        agents.cli.run_app(worker_options)
-    except KeyboardInterrupt:
-        logger.info("👋 Voice agent worker stopped by user")
-    except Exception as e:
-        logger.error(f"❌ Voice agent worker failed: {e}", exc_info=True)
-        sys.exit(1)
+        logger.info("✅ Voice agent worker ready for development")
+    else:
+        # Production mode - run with LiveKit agents
+        agents.run_app(entrypoint)
 
 
 if __name__ == "__main__":
