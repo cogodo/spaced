@@ -117,22 +117,6 @@ else
     echo "Warning: $APP_HOME/env.backup not found. Skipping copy of .env file."
 fi
 
-# Add voice-to-voice configuration to .env file
-echo "Adding voice-to-voice configuration to .env file..."
-sudo -u "$APP_USER" tee -a "$ENV_FILE" > /dev/null << EOF
-
-# Environment Configuration
-ENVIRONMENT=$ENVIRONMENT
-BACKEND_URL=$BACKEND_URL
-
-# Voice-to-Voice Configuration
-LIVEKIT_API_KEY=$LIVEKIT_API_KEY
-LIVEKIT_API_SECRET=$LIVEKIT_API_SECRET
-LIVEKIT_SERVER_URL=$LIVEKIT_SERVER_URL
-CARTESIA_API_KEY=$CARTESIA_API_KEY
-DEEPGRAM_API_KEY=$DEEPGRAM_API_KEY
-EOF
-
 sudo chmod 600 "$ENV_FILE"
 sudo chown "$APP_USER:$APP_USER" "$ENV_FILE"
 
@@ -220,6 +204,9 @@ check_service() {
 
 echo "Spaced Services Health Check"
 echo "============================"
+set -a
+[ -f /home/appuser/.env ] && . /home/appuser/.env
+set +a
 
 check_service backend.service
 check_service voice-agent.service

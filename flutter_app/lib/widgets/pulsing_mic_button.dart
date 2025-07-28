@@ -83,11 +83,13 @@ class _PulsingMicButtonState extends State<PulsingMicButton>
     } else if (widget.isVoiceConnected) {
       iconColor = theme.colorScheme.onPrimary;
       backgroundColor = theme.colorScheme.primary;
-      iconData = Icons.mic;
+      iconData = Icons.headphones; // Use headphones icon for voice chat
     } else {
       iconColor = theme.colorScheme.onSurface;
       backgroundColor = theme.colorScheme.surfaceContainerHighest;
-      iconData = Icons.mic_off;
+      iconData =
+          Icons
+              .headphones_outlined; // Use outlined headphones when not connected
     }
 
     return GestureDetector(

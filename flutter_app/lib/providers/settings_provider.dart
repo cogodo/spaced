@@ -11,7 +11,7 @@ class SettingsProvider with ChangeNotifier {
   static const String _sttEnabledKey = 'stt_enabled';
 
   // Default values - enable voice by default in production
-  bool _voiceEnabled = true; // Default to enabled for voice-to-voice
+  bool _voiceEnabled = false; // Default to disabled for voice-to-voice
   bool _sttEnabled = true; // Default to enabled for STT
 
   // Getters
@@ -26,9 +26,9 @@ class SettingsProvider with ChangeNotifier {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _voiceEnabled =
-          prefs.getBool(_voiceEnabledKey) ?? true; // Default to true
-      _sttEnabled = prefs.getBool(_sttEnabledKey) ?? true; // Default to true
+          _voiceEnabled =
+        prefs.getBool(_voiceEnabledKey) ?? false; // Default to false
+    _sttEnabled = prefs.getBool(_sttEnabledKey) ?? true; // Default to true
       _logger.info(
         'Settings loaded - voice enabled: $_voiceEnabled, stt enabled: $_sttEnabled',
       );

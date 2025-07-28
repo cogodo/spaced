@@ -98,6 +98,7 @@ class _SttButtonState extends State<SttButton> {
               _isRecording
                   ? theme.colorScheme.error
                   : theme.colorScheme.surfaceContainerHighest,
+
           boxShadow: [
             BoxShadow(
               color: theme.shadowColor.withOpacity(0.1),
@@ -107,7 +108,7 @@ class _SttButtonState extends State<SttButton> {
           ],
         ),
         child: Icon(
-          _isRecording ? Icons.stop : Icons.mic,
+          _isRecording ? Icons.stop : Icons.keyboard_voice,
           color:
               _isRecording
                   ? theme.colorScheme.onError

@@ -250,19 +250,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               children: [
                 Text(
                   'Voice Settings',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
                     Icon(
-                      Icons.mic,
+                      Icons.headphones,
                       size: 20,
-                      color: settingsProvider.voiceEnabled
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      color:
+                          settingsProvider.voiceEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -275,8 +278,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           Text(
                             'Enable microphone button for voice conversations',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ],
@@ -310,9 +317,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               children: [
                 Text(
                   'Speech-to-Text Settings',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -320,9 +327,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Icon(
                       Icons.keyboard_voice,
                       size: 20,
-                      color: settingsProvider.sttEnabled
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      color:
+                          settingsProvider.sttEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -335,8 +345,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           Text(
                             'Enable STT button for voice input to text',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ],
