@@ -234,6 +234,12 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
+        // Check voice service health before starting
+        final isHealthy = await _voiceService!.checkVoiceServiceHealth();
+        if (!isHealthy) {
+          throw Exception('Voice service is not healthy. Please try again later.');
+        }
+        
         // Start voice session with chat ID only
         await _voiceService!.startVoiceSession(chatId, user.uid);
 

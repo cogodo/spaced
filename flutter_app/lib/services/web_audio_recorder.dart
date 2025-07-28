@@ -25,9 +25,31 @@ class WebAudioRecorder {
         'audio': true,
       });
 
+      // Check supported MIME types
+      final supportedTypes = html.MediaRecorder.isTypeSupported;
+      final webmOpus = 'audio/webm;codecs=opus';
+      final webm = 'audio/webm';
+      final mp4 = 'audio/mp4';
+
+      String mimeType = webmOpus;
+      if (!supportedTypes(webmOpus)) {
+        if (supportedTypes(webm)) {
+          mimeType = webm;
+          _logger.info('Using audio/webm (opus not supported)');
+        } else if (supportedTypes(mp4)) {
+          mimeType = mp4;
+          _logger.info('Using audio/mp4 (webm not supported)');
+        } else {
+          _logger.warning('No supported audio MIME types found');
+          mimeType = 'audio/webm'; // Fallback
+        }
+      } else {
+        _logger.info('Using audio/webm;codecs=opus');
+      }
+
       // Create MediaRecorder
       _mediaRecorder = html.MediaRecorder(_mediaStream!, {
-        'mimeType': 'audio/webm;codecs=opus',
+        'mimeType': mimeType,
       });
 
       // Clear previous chunks

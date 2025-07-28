@@ -145,6 +145,20 @@ class LiveKitVoiceService {
     }
   }
 
+  /// Check if microphone permission is granted
+  Future<bool> hasMicrophonePermission() async {
+    try {
+      final status = await Permission.microphone.status;
+      debugPrint('[LiveKitVoiceService] Microphone permission status: $status');
+      return status.isGranted;
+    } catch (e) {
+      debugPrint(
+        '[LiveKitVoiceService] Error checking microphone permission: $e',
+      );
+      return false;
+    }
+  }
+
   /// Request microphone permission
   Future<bool> requestMicrophonePermission() async {
     try {
@@ -190,8 +204,21 @@ class LiveKitVoiceService {
       );
       debugPrint('[LiveKitVoiceService] Connected to room: $roomName');
 
+      // Wait a moment for connection to stabilize
+      await Future.delayed(const Duration(milliseconds: 500));
+
       // Explicitly enable the microphone after connecting.
       await _enableMicrophone();
+
+      // Double-check microphone state after enabling
+      await Future.delayed(const Duration(milliseconds: 200));
+      final isEnabled = isMicrophoneEnabled;
+      debugPrint('[LiveKitVoiceService] Microphone enabled check: $isEnabled');
+
+      if (!isEnabled) {
+        debugPrint('[LiveKitVoiceService] Microphone not enabled, retrying...');
+        await _enableMicrophone();
+      }
 
       onConnected?.call();
     } catch (e) {
@@ -328,22 +355,57 @@ class LiveKitVoiceService {
   Future<void> _enableMicrophone() async {
     try {
       debugPrint('[LiveKitVoiceService] Attempting to enable microphone...');
-      // This is the recommended approach from the official LiveKit docs.
-      // It ensures that we enable the microphone on the local participant after
-      // the connection is fully established.
-      await _room?.localParticipant?.setMicrophoneEnabled(true);
+
+      // Check if room and local participant exist
+      if (_room == null) {
+        throw Exception('Room not connected');
+      }
+
+      final localParticipant = _room!.localParticipant;
+      if (localParticipant == null) {
+        throw Exception('Local participant not available');
+      }
+
+      // Check microphone permission first
+      final hasPermission = await hasMicrophonePermission();
+      if (!hasPermission) {
+        final granted = await requestMicrophonePermission();
+        if (!granted) {
+          throw Exception('Microphone permission not granted');
+        }
+      }
+
+      // Enable microphone
+      await localParticipant.setMicrophoneEnabled(true);
       debugPrint('[LiveKitVoiceService] Microphone enabled successfully.');
 
-      // Log the state of the audio track for debugging
-      final audioPublication =
-          _room?.localParticipant?.audioTrackPublications.firstOrNull;
-      if (audioPublication != null) {
+      // Wait a moment for the track to be published
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Log the state of all audio tracks for debugging
+      final audioPublications = localParticipant.audioTrackPublications;
+      debugPrint(
+        '[LiveKitVoiceService] Found ${audioPublications.length} audio track publications',
+      );
+
+      for (final pub in audioPublications) {
         debugPrint(
-          '[LiveKitVoiceService] Audio track state after enabling: sid=${audioPublication.sid}, muted=${audioPublication.muted}',
+          '[LiveKitVoiceService] Audio track: sid=${pub.sid}, muted=${pub.muted}, source=${pub.source}',
+        );
+      }
+
+      // Check if we have a microphone track
+      final micTrack =
+          audioPublications
+              .where((pub) => pub.source == TrackSource.microphone)
+              .firstOrNull;
+      if (micTrack != null) {
+        debugPrint(
+          '[LiveKitVoiceService] Microphone track found: sid=${micTrack.sid}, muted=${micTrack.muted}',
         );
       } else {
         debugPrint(
-          '[LiveKitVoiceService] Could not find audio track publication immediately after enabling.',
+          '[LiveKitVoiceService] No microphone track found in publications',
         );
       }
     } catch (e) {
@@ -492,17 +554,18 @@ class LiveKitVoiceService {
   Future<bool> checkVoiceServiceHealth() async {
     try {
       debugPrint('[LiveKitVoiceService] Checking voice service health...');
-      
+
       final response = await _makeAuthenticatedRequest(
-        (headers) => http.get(
-          Uri.parse('$_baseUrl/api/v1/voice/health'),
-          headers: headers,
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            throw TimeoutException('Health check timed out after 10 seconds');
-          },
-        ),
+        (headers) => http
+            .get(Uri.parse('$_baseUrl/api/v1/voice/health'), headers: headers)
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw TimeoutException(
+                  'Health check timed out after 10 seconds',
+                );
+              },
+            ),
       );
 
       if (response.statusCode == 200) {
@@ -511,11 +574,15 @@ class LiveKitVoiceService {
         debugPrint('[LiveKitVoiceService] Voice service health: $isHealthy');
         return isHealthy;
       } else {
-        debugPrint('[LiveKitVoiceService] Voice service health check failed: ${response.statusCode}');
+        debugPrint(
+          '[LiveKitVoiceService] Voice service health check failed: ${response.statusCode}',
+        );
         return false;
       }
     } catch (e) {
-      debugPrint('[LiveKitVoiceService] Error checking voice service health: $e');
+      debugPrint(
+        '[LiveKitVoiceService] Error checking voice service health: $e',
+      );
       return false;
     }
   }
@@ -524,17 +591,18 @@ class LiveKitVoiceService {
   Future<Map<String, dynamic>?> getVoiceServiceStatus() async {
     try {
       debugPrint('[LiveKitVoiceService] Getting voice service status...');
-      
+
       final response = await _makeAuthenticatedRequest(
-        (headers) => http.get(
-          Uri.parse('$_baseUrl/api/v1/voice/health'),
-          headers: headers,
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            throw TimeoutException('Status check timed out after 10 seconds');
-          },
-        ),
+        (headers) => http
+            .get(Uri.parse('$_baseUrl/api/v1/voice/health'), headers: headers)
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw TimeoutException(
+                  'Status check timed out after 10 seconds',
+                );
+              },
+            ),
       );
 
       if (response.statusCode == 200) {
@@ -542,11 +610,15 @@ class LiveKitVoiceService {
         debugPrint('[LiveKitVoiceService] Voice service status: $data');
         return data;
       } else {
-        debugPrint('[LiveKitVoiceService] Voice service status check failed: ${response.statusCode}');
+        debugPrint(
+          '[LiveKitVoiceService] Voice service status check failed: ${response.statusCode}',
+        );
         return null;
       }
     } catch (e) {
-      debugPrint('[LiveKitVoiceService] Error getting voice service status: $e');
+      debugPrint(
+        '[LiveKitVoiceService] Error getting voice service status: $e',
+      );
       return null;
     }
   }
