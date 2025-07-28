@@ -49,8 +49,11 @@ dependencies:
   # Voice chat dependencies - LiveKit
   livekit_client: ^2.2.6
   permission_handler: ^11.0.1 # For microphone permissions
+  permission_handler_html: ^0.1.3+5 # Web version of permission handler
   record: ^5.0.4 # For audio recording
   path_provider: ^2.1.1 # For file paths
+  connectivity_plus: ^6.0.4 # For network connectivity
+  device_info_plus: ^10.1.0 # For device information
 
 dev_dependencies:
   flutter_test:
