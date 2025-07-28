@@ -4,9 +4,11 @@ import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
+import '../widgets/session_type_selection_widget.dart';
+import '../widgets/due_topics_selection_widget.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/chat_bubble.dart';
-import '../widgets/pulsing_mic_button.dart';
+import '../widgets/voice_button.dart';
 import '../widgets/stt_button.dart';
 import '../services/audio_player_service.dart';
 import '../services/stt_service.dart';
@@ -40,14 +42,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // For due topics selection (kept for backwards compatibility)
   List<dynamic> _dueTasks = []; // Changed from List<Task> to List<dynamic>
-  Set<String> _selectedTopics = {};
+  final Set<String> _selectedTopics = {};
   bool _isLoadingDueTasks = false;
 
   // Prevent duplicate sends
   bool _isSending = false;
-
-  // Sidebar collapse state
-  bool _isSidebarCollapsed = false;
 
   // Voice chat state
   LiveKitVoiceService? _voiceService;
@@ -208,6 +207,13 @@ class _ChatScreenState extends State<ChatScreen> {
         _isVoiceConnecting = true;
       });
 
+      // Get current chat session ID and capture context
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      String? chatId = chatProvider.currentSessionId;
+      final mounted = this.mounted;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      final theme = Theme.of(context);
+
       try {
         // Get user ID
         final authService = AuthService();
@@ -223,10 +229,6 @@ class _ChatScreenState extends State<ChatScreen> {
           throw Exception('Microphone permission denied');
         }
 
-        // Get current chat session ID
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        String? chatId = chatProvider.currentSessionId;
-
         // Require a valid chat ID for voice
         if (chatId == null || chatId.isEmpty) {
           throw Exception(
@@ -236,10 +238,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
         // Check voice service health before starting
         final isHealthy = await _voiceService!.checkVoiceServiceHealth();
+        if (!mounted) return;
         if (!isHealthy) {
-          throw Exception('Voice service is not healthy. Please try again later.');
+          throw Exception(
+            'Voice service is not healthy. Please try again later.',
+          );
         }
-        
+
         // Start voice session with chat ID only
         await _voiceService!.startVoiceSession(chatId, user.uid);
 
@@ -254,10 +259,10 @@ class _ChatScreenState extends State<ChatScreen> {
             _isVoiceConnecting = false;
             _isVoiceConnected = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text('Failed to start voice chat: $e'),
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: theme.colorScheme.error,
             ),
           );
         }
@@ -388,18 +393,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
   void _scrollToBottomWithDelay() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted && _scrollController.hasClients) {
@@ -435,7 +428,10 @@ class _ChatScreenState extends State<ChatScreen> {
               // Show session type selection if no active session and in initial state
               if (!chatProvider.hasActiveSession &&
                   chatProvider.sessionState == SessionState.initial) {
-                return _buildSessionTypeSelection();
+                return SessionTypeSelectionWidget(
+                  onNewItemsPressed: _startNewItemsSession,
+                  onPastReviewsPressed: _startPastReviewsSession,
+                );
               }
 
               // Show topic selection for new items
@@ -446,7 +442,28 @@ class _ChatScreenState extends State<ChatScreen> {
               // Show due topics selection
               if (chatProvider.sessionState ==
                   SessionState.selectingDueTopics) {
-                return _buildDueTopicsSelection();
+                return DueTopicsSelectionWidget(
+                  dueTasks: _dueTasks,
+                  selectedTopics: _selectedTopics,
+                  isLoadingDueTasks: _isLoadingDueTasks,
+                  onBackPressed: () {
+                    final chatProvider = Provider.of<ChatProvider>(
+                      context,
+                      listen: false,
+                    );
+                    chatProvider.setSessionState(SessionState.initial);
+                  },
+                  onStartSession: _startDueTopicsSession,
+                  onTopicToggled: (topicId) {
+                    setState(() {
+                      if (_selectedTopics.contains(topicId)) {
+                        _selectedTopics.remove(topicId);
+                      } else {
+                        _selectedTopics.add(topicId);
+                      }
+                    });
+                  },
+                );
               }
 
               // Show normal chat interface
@@ -497,103 +514,6 @@ class _ChatScreenState extends State<ChatScreen> {
               );
             },
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSessionTypeSelection() {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 600),
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.psychology, size: 80, color: theme.colorScheme.primary),
-            const SizedBox(height: 24),
-            Text(
-              'Start Your Learning Session',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Choose how you\'d like to learn today',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 48),
-
-            // New Items Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _startNewItemsSession,
-                icon: const Icon(Icons.add_circle_outline, size: 24),
-                label: const Text('New Items'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 20,
-                    horizontal: 24,
-                  ),
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: theme.colorScheme.onPrimary,
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Past Reviews Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _startPastReviewsSession,
-                icon: const Icon(Icons.history, size: 24),
-                label: const Text('Past Reviews'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 20,
-                    horizontal: 24,
-                  ),
-                  foregroundColor: theme.colorScheme.primary,
-                  side: BorderSide(color: theme.colorScheme.primary, width: 2),
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            Text(
-              'New Items: Learn completely new topics\nPast Reviews: Review topics you\'ve studied before',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     );
@@ -687,290 +607,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildDueTopicsSelection() {
-    final theme = Theme.of(context);
-
-    return Column(
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(
-                color: theme.colorScheme.outline.withValues(alpha: 0.2),
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      final chatProvider = Provider.of<ChatProvider>(
-                        context,
-                        listen: false,
-                      );
-                      chatProvider.setSessionState(SessionState.initial);
-                    },
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Select Topics to Review',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Choose which topics you\'d like to review today',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.7,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // Content
-        Expanded(
-          child:
-              _isLoadingDueTasks
-                  ? const Center(child: CircularProgressIndicator())
-                  : _dueTasks.isEmpty
-                  ? _buildNoDueTasksMessage()
-                  : _buildDueTasksList(),
-        ),
-
-        // Bottom action bar
-        if (_dueTasks.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  '${_selectedTopics.length} topic${_selectedTopics.length == 1 ? '' : 's'} selected',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed:
-                      _selectedTopics.isEmpty ? null : _startDueTopicsSession,
-                  child: const Text('Start Review Session'),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildNoDueTasksMessage() {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: 80,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'All Caught Up!',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'You don\'t have any topics due for review right now. Great job staying on top of your learning!',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _startNewItemsSession,
-              child: const Text('Learn New Topics Instead'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDueTasksList() {
-    final theme = Theme.of(context);
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _dueTasks.length,
-      itemBuilder: (context, index) {
-        final task = _dueTasks[index];
-        // Since we no longer have the old Task model, we'll need to handle this differently
-        // For now, treat tasks as simple strings or maps
-        final taskName =
-            task is String ? task : (task['name'] ?? 'Unknown Task');
-        final isSelected = _selectedTopics.contains(taskName);
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: CheckboxListTile(
-            value: isSelected,
-            onChanged: (bool? value) {
-              setState(() {
-                if (value == true) {
-                  _selectedTopics.add(taskName);
-                } else {
-                  _selectedTopics.remove(taskName);
-                }
-              });
-            },
-            title: Text(
-              taskName,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _buildTaskChip(
-                      'No difficulty data',
-                      theme.colorScheme.secondary,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildTaskChip(
-                      'No repetition data',
-                      theme.colorScheme.tertiary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _getTaskDueText(task),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: _getTaskDueColor(task, theme),
-                  ),
-                ),
-              ],
-            ),
-            controlAffinity: ListTileControlAffinity.trailing,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTaskChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  String _getTaskDueText(dynamic task) {
-    // Since we no longer have the Task model, return empty or placeholder text
-    return 'No due date available';
-  }
-
-  Color _getTaskDueColor(dynamic task, ThemeData theme) {
-    // Since we no longer have the Task model, return default color
-    return theme.colorScheme.onSurface.withValues(alpha: 0.6);
-  }
-
-  Widget _buildMessagesArea() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-      ),
-      child: Consumer<ChatProvider>(
-        builder: (context, chatProvider, child) {
-          // Scroll to bottom when messages change
-          if (chatProvider.messages.isNotEmpty) {
-            _scrollToBottom();
-          }
-
-          return Column(
-            children: [
-              // Messages list
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  itemCount:
-                      chatProvider.messages.length +
-                      (chatProvider.isTyping ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == chatProvider.messages.length &&
-                        chatProvider.isTyping) {
-                      return SmartTypingIndicator(
-                        sessionState: chatProvider.sessionState.toString(),
-                        isGeneratingQuestions:
-                            chatProvider.isGeneratingQuestions,
-                        isProcessingAnswer: chatProvider.isProcessingAnswer,
-                      );
-                    }
-                    return _buildMessageBubble(chatProvider.messages[index]);
-                  },
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildMessageBubble(ChatMessage message) {
     return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
   }
@@ -1008,7 +644,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       foregroundColor: theme.colorScheme.onSurface,
                       disabledForegroundColor: theme.colorScheme.onSurface
-                          .withOpacity(0.4),
+                          .withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -1071,7 +707,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       foregroundColor: theme.colorScheme.error,
                       disabledForegroundColor: theme.colorScheme.error
-                          .withOpacity(0.4),
+                          .withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -1104,7 +740,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     // Voice-to-voice button (only show when session is active AND voice is enabled)
                     if (chatProvider.sessionState == SessionState.active &&
                         settingsProvider.voiceEnabled) ...[
-                      PulsingMicButton(
+                      VoiceButton(
                         isConnecting: _isVoiceConnecting,
                         isVoiceConnected: _isVoiceConnected,
                         isSpeaking: _isSpeaking,

@@ -4,7 +4,7 @@ import '../providers/chat_provider.dart';
 import '../screens/chat_screen.dart';
 
 class ChatProgressWidget extends StatelessWidget {
-  const ChatProgressWidget({Key? key}) : super(key: key);
+  const ChatProgressWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +24,9 @@ class ChatProgressWidget extends StatelessWidget {
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
           child: Column(
@@ -136,7 +138,7 @@ class ChatProgressWidget extends StatelessWidget {
           value: progress,
           backgroundColor: Theme.of(
             context,
-          ).colorScheme.outline.withOpacity(0.2),
+          ).colorScheme.outline.withValues(alpha: 0.2),
           valueColor: AlwaysStoppedAnimation<Color>(
             Theme.of(context).colorScheme.primary,
           ),
@@ -148,7 +150,9 @@ class ChatProgressWidget extends StatelessWidget {
         Text(
           _getMotivationalText(progress),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
             fontStyle: FontStyle.italic,
           ),
           textAlign: TextAlign.center,
@@ -174,7 +178,7 @@ class ChatProgressWidget extends StatelessWidget {
 
 /// Compact progress indicator for the app bar
 class CompactProgressWidget extends StatelessWidget {
-  const CompactProgressWidget({Key? key}) : super(key: key);
+  const CompactProgressWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +205,7 @@ class CompactProgressWidget extends StatelessWidget {
             children: [
               LinearProgressIndicator(
                 value: progress,
-                backgroundColor: Colors.white.withOpacity(0.3),
+                backgroundColor: Colors.white.withValues(alpha: 0.3),
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 minHeight: 3,
               ),

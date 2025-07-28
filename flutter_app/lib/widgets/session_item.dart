@@ -262,7 +262,7 @@ class _SessionItemState extends State<SessionItem> {
           decoration: BoxDecoration(
             color:
                 widget.isSelected
-                    ? colorScheme.primaryContainer.withOpacity(0.3)
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.3)
                     : _isHovered
                     ? colorScheme.surface
                     : Colors.transparent,
@@ -270,7 +270,7 @@ class _SessionItemState extends State<SessionItem> {
             border:
                 widget.isSelected
                     ? Border.all(
-                      color: colorScheme.primary.withOpacity(0.3),
+                      color: colorScheme.primary.withValues(alpha: 0.3),
                       width: 1,
                     )
                     : null,
@@ -353,7 +353,7 @@ class _SessionItemState extends State<SessionItem> {
                     widget.session.topics.take(2).join(', '),
                     style: TextStyle(
                       fontSize: 12,
-                      color: colorScheme.onSurface.withOpacity(0.7),
+                      color: colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -378,7 +378,7 @@ class _SessionItemState extends State<SessionItem> {
                       widget.session.statusText,
                       style: TextStyle(
                         fontSize: 11,
-                        color: colorScheme.onSurface.withOpacity(0.6),
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w400,
                       ),
                     ),

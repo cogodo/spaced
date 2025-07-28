@@ -7,12 +7,12 @@ class TypingIndicatorWidget extends StatefulWidget {
   final Duration animationDuration;
 
   const TypingIndicatorWidget({
-    Key? key,
+    super.key,
     this.customMessage,
     this.dotColor,
     this.dotSize = 8.0,
     this.animationDuration = const Duration(milliseconds: 600),
-  }) : super(key: key);
+  });
 
   @override
   State<TypingIndicatorWidget> createState() => _TypingIndicatorWidgetState();
@@ -66,7 +66,7 @@ class _TypingIndicatorWidgetState extends State<TypingIndicatorWidget>
             radius: 16,
             backgroundColor: Theme.of(
               context,
-            ).colorScheme.primary.withOpacity(0.1),
+            ).colorScheme.primary.withValues(alpha: 0.1),
             child: Icon(
               Icons.psychology,
               size: 18,
@@ -88,7 +88,9 @@ class _TypingIndicatorWidgetState extends State<TypingIndicatorWidget>
                   bottomLeft: Radius.circular(4),
                 ),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
               child: Column(
@@ -102,7 +104,7 @@ class _TypingIndicatorWidgetState extends State<TypingIndicatorWidget>
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withOpacity(0.7),
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -125,9 +127,8 @@ class _TypingIndicatorWidgetState extends State<TypingIndicatorWidget>
                                 decoration: BoxDecoration(
                                   color:
                                       widget.dotColor ??
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.primary.withOpacity(0.6),
+                                      Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.6),
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -154,11 +155,11 @@ class SmartTypingIndicator extends StatelessWidget {
   final bool isProcessingAnswer;
 
   const SmartTypingIndicator({
-    Key? key,
+    super.key,
     this.sessionState,
     this.isGeneratingQuestions = false,
     this.isProcessingAnswer = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +185,7 @@ class SmartTypingIndicator extends StatelessWidget {
 
 /// Compact typing indicator for smaller spaces
 class CompactTypingIndicator extends StatefulWidget {
-  const CompactTypingIndicator({Key? key}) : super(key: key);
+  const CompactTypingIndicator({super.key});
 
   @override
   State<CompactTypingIndicator> createState() => _CompactTypingIndicatorState();

@@ -54,6 +54,9 @@ dependencies:
   path_provider: ^2.1.1 # For file paths
   connectivity_plus: ^6.0.4 # For network connectivity
   device_info_plus: ^10.1.0 # For device information
+  web: ^1.1.1 # For web platform APIs
+  flutter_web_plugins:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:

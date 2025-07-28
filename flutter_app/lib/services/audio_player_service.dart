@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
-import 'dart:typed_data';
+
 import 'dart:async';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -29,9 +29,7 @@ class LiveKitVoiceService {
   void Function(bool isSpeaking)? onLocalSpeakingChanged;
   void Function(String transcript)? onFinalTranscriptReceived;
 
-  LiveKitVoiceService({required String baseUrl}) : _baseUrl = baseUrl {
-    debugPrint('[LiveKitVoiceService] Initialized with baseUrl: $_baseUrl');
-  }
+  LiveKitVoiceService({required String baseUrl}) : _baseUrl = baseUrl;
 
   /// Get authenticated headers for API requests
   Future<Map<String, String>> _getHeaders() async {
@@ -56,7 +54,6 @@ class LiveKitVoiceService {
 
       if (response.statusCode == 401) {
         // Token might be expired, get a fresh one
-        debugPrint('[LiveKitVoiceService] Token expired, refreshing...');
         final refreshedHeaders = await _getHeaders();
         return await requestFunction(refreshedHeaders);
       }
@@ -70,14 +67,9 @@ class LiveKitVoiceService {
   Future<void> startAudioPlayback() async {
     if (_room == null) return;
     try {
-      debugPrint(
-        '[LiveKitVoiceService] Attempting to unlock audio playback...',
-      );
       // On web, this must be called after a user gesture to start playback.
       await _room!.startAudio();
-      debugPrint('[LiveKitVoiceService] Audio playback unlocked.');
     } catch (e) {
-      debugPrint('[LiveKitVoiceService] Could not start audio playback: $e');
       onError?.call('Failed to unlock audio playback: $e');
     }
   }
@@ -85,14 +77,8 @@ class LiveKitVoiceService {
   /// Create a voice room and return connection details
   Future<Map<String, dynamic>> createVoiceRoom(String chatId) async {
     try {
-      debugPrint('[LiveKitVoiceService] Creating room for chat: $chatId');
-      debugPrint('[LiveKitVoiceService] Backend URL: $_baseUrl');
-
       final url = '$_baseUrl/api/v1/voice/create-room';
-      debugPrint('[LiveKitVoiceService] POST URL: $url');
-
       final requestBody = {'chat_id': chatId};
-      debugPrint('[LiveKitVoiceService] Request body: $requestBody');
 
       final response = await _makeAuthenticatedRequest(
         (headers) => http
@@ -109,37 +95,21 @@ class LiveKitVoiceService {
             ),
       );
 
-      debugPrint(
-        '[LiveKitVoiceService] Response status: ${response.statusCode}',
-      );
-      debugPrint('[LiveKitVoiceService] Response body: ${response.body}');
-
       if (response.statusCode == 200) {
         final data = convert.json.decode(response.body);
-        debugPrint(
-          '[LiveKitVoiceService] Room created successfully: ${data['room_name']}',
-        );
 
         // Store connection details for potential reconnection
         _currentRoomName = data['room_name'];
         _currentToken = data['token'];
         _serverUrl = data['server_url'];
 
-        debugPrint('[LiveKitVoiceService] Server URL: ${data['server_url']}');
-        debugPrint(
-          '[LiveKitVoiceService] Token length: ${(data['token'] as String).length}',
-        );
-
         return data;
       } else {
         final errorMsg =
             'Failed to create room: ${response.statusCode} - ${response.body}';
-        debugPrint('[LiveKitVoiceService] ERROR: $errorMsg');
         throw Exception(errorMsg);
       }
     } catch (e) {
-      debugPrint('[LiveKitVoiceService] Exception creating room: $e');
-      debugPrint('[LiveKitVoiceService] Exception type: ${e.runtimeType}');
       onError?.call('Failed to create room: $e');
       rethrow;
     }
@@ -149,12 +119,8 @@ class LiveKitVoiceService {
   Future<bool> hasMicrophonePermission() async {
     try {
       final status = await Permission.microphone.status;
-      debugPrint('[LiveKitVoiceService] Microphone permission status: $status');
       return status.isGranted;
     } catch (e) {
-      debugPrint(
-        '[LiveKitVoiceService] Error checking microphone permission: $e',
-      );
       return false;
     }
   }
@@ -163,12 +129,8 @@ class LiveKitVoiceService {
   Future<bool> requestMicrophonePermission() async {
     try {
       final status = await Permission.microphone.request();
-      debugPrint('[LiveKitVoiceService] Microphone permission: $status');
       return status.isGranted;
     } catch (e) {
-      debugPrint(
-        '[LiveKitVoiceService] Error requesting microphone permission: $e',
-      );
       return false;
     }
   }
@@ -181,7 +143,6 @@ class LiveKitVoiceService {
     required String userId,
   }) async {
     if (_isConnecting) {
-      debugPrint('[LiveKitVoiceService] Already connecting, ignoring request');
       return;
     }
 
@@ -189,20 +150,12 @@ class LiveKitVoiceService {
       _isConnecting = true;
       _currentUserId = userId;
 
-      debugPrint('[LiveKitVoiceService] Connecting to room: $roomName');
-      debugPrint('[LiveKitVoiceService] Server URL: $serverUrl');
-
       // Revert to the simplest, most robust pattern from official docs
       _room = Room();
       _roomListener = _room!.createListener();
       _setupEventListeners();
 
-      await _room!.connect(
-        serverUrl,
-        token,
-        roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true),
-      );
-      debugPrint('[LiveKitVoiceService] Connected to room: $roomName');
+      await _room!.connect(serverUrl, token);
 
       // Wait a moment for connection to stabilize
       await Future.delayed(const Duration(milliseconds: 500));
@@ -213,10 +166,8 @@ class LiveKitVoiceService {
       // Double-check microphone state after enabling
       await Future.delayed(const Duration(milliseconds: 200));
       final isEnabled = isMicrophoneEnabled;
-      debugPrint('[LiveKitVoiceService] Microphone enabled check: $isEnabled');
 
       if (!isEnabled) {
-        debugPrint('[LiveKitVoiceService] Microphone not enabled, retrying...');
         await _enableMicrophone();
       }
 

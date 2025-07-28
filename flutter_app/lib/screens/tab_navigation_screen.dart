@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/chat_history_sidebar.dart';
 import '../routing/route_constants.dart';
-import '../screens/all_review_items_screen.dart';
+
 
 class TabNavigationScreen extends StatefulWidget {
   final Widget child;
@@ -71,11 +71,11 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
 
         return Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.9),
+            color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),

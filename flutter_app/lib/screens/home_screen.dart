@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 'Your intelligent spaced repetition learning companion. Navigate using the sidebar to start learning or review your progress.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 textAlign: TextAlign.center,
               ),

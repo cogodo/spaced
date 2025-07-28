@@ -59,9 +59,6 @@ class ChatProvider extends ChangeNotifier {
   bool _isProcessingAnswer = false;
   bool _isStartingSession = false;
 
-  // Voice context update callback (set by chat screen)
-  Future<void> Function()? _voiceContextUpdateCallback;
-
   // Auto-scroll callback (set by chat screen)
   VoidCallback? _autoScrollCallback;
 
@@ -134,45 +131,6 @@ class ChatProvider extends ChangeNotifier {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $idToken',
     };
-  }
-
-  /// Update voice agent context when session state changes
-  Future<void> _updateVoiceAgentContext() async {
-    try {
-      // Only update if we have an active session and a connected voice service
-      if (_currentSessionId == null || _currentSession == null) return;
-
-      // Check if voice service is available and connected (from chat screen)
-      // We'll access this through a global reference or callback
-      _logger.info(
-        'Triggering voice agent context update for session $_currentSessionId',
-      );
-
-      // Extract recent conversation for context
-      final recentMessages =
-          _messages.length > 10
-              ? _messages.sublist(_messages.length - 10)
-              : _messages;
-
-      final conversationHistory =
-          recentMessages
-              .map((msg) => '${msg.isUser ? "User" : "AI"}: ${msg.text}')
-              .toList();
-
-      // Get current topic from session
-      final currentTopic =
-          _currentSession?.topics.isNotEmpty == true
-              ? _currentSession!.topics.join(', ')
-              : null;
-
-      // We'll need a way to access the voice service from here
-      // This will be implemented via a callback or global reference
-      _logger.info(
-        'Voice context update prepared - topic: $currentTopic, messages: ${conversationHistory.length}',
-      );
-    } catch (e) {
-      _logger.warning('Failed to update voice agent context: $e');
-    }
   }
 
   void addVoiceMessage(String transcript, String aiResponse) {
@@ -254,9 +212,6 @@ class ChatProvider extends ChangeNotifier {
 
   /// Initialize a new chat session
   Future<void> startNewSession(List<String> topics) async {
-    print(
-      'startNewSession: userId=$_userId, currentSessionId=$_currentSessionId',
-    );
     _logger.info('Starting new chat session with topics: $topics');
     _setLoadingWithTyping(
       true,
@@ -427,7 +382,6 @@ class ChatProvider extends ChangeNotifier {
 
   /// Load an existing session from Firebase
   Future<void> loadSession(String sessionId) async {
-    print('loadSession: userId=$_userId, sessionId=$sessionId');
     if (_userId == null) {
       _logger.warning('Cannot load session: No user authenticated');
       return;
@@ -462,7 +416,7 @@ class ChatProvider extends ChangeNotifier {
       _autoScrollCallback?.call();
     } catch (e) {
       _logger.severe('Error loading session $sessionId: $e');
-      // TODO: Show error to user
+      rethrow; // Re-throw to let the UI handle the error
     } finally {
       _setLoading(false);
     }
@@ -599,45 +553,6 @@ class ChatProvider extends ChangeNotifier {
 
     // Just call sendMessage, let it handle optimistic update and Firestore listener
     await sendMessage(transcript);
-  }
-
-  /// Handle user input based on current session state
-  Future<void> _handleUserInput(String input) async {
-    _setLoading(true);
-
-    try {
-      switch (_sessionState) {
-        case SessionState.initial:
-        case SessionState.selectingSessionType:
-        case SessionState.selectingDueTopics:
-          // These states should be handled by UI, not text input
-          _addAIMessage("Please use the buttons above to make your selection.");
-          break;
-
-        case SessionState.active:
-          await _handleAnswerInput(input);
-          break;
-
-        case SessionState.completed:
-        case SessionState.error:
-          // Session has ended - no user input allowed
-          break;
-        case SessionState.collectingTopics:
-          // This state is no longer used with the new flow.
-          break;
-      }
-    } catch (e) {
-      await _handleError(e);
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  /// Handle answer input during active session
-  Future<void> _handleAnswerInput(String answer) {
-    // For self-evaluation, just add a placeholder message
-    _addAIMessage("Please use the buttons below to evaluate your answer.");
-    return Future.value();
   }
 
   /// Update current session with latest messages and metadata
@@ -881,33 +796,6 @@ class ChatProvider extends ChangeNotifier {
   /// Get the current session token for routing
   String? get currentSessionToken => _currentSession?.token;
 
-  /// Handle errors
-  Future<void> _handleError(dynamic error) async {
-    _sessionState = SessionState.error;
-    String errorMessage = "Unexpected error occurred";
-
-    if (error is ApiException) {
-      errorMessage = "API Error: ${error.message}";
-    } else {
-      errorMessage = "Error: ${error.toString()}";
-    }
-
-    _addAIMessage(errorMessage);
-
-    _updateCurrentSession();
-    await _autoSaveSession();
-  }
-
-  /// Reset the current session
-  void _resetSession() {
-    _sessionState = SessionState.initial;
-    _currentSessionId = null;
-    _currentTopicId = null;
-    _finalScores = null;
-    // Note: We keep _currentSession and _messages for persistence
-    notifyListeners();
-  }
-
   /// Add user message
   void _addUserMessage(String text, {bool isVoice = false}) {
     final message = ChatMessage(
@@ -1058,7 +946,6 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _listenToMessages(String userId, String sessionId) {
-    print('Setting up Firestore listener for user=$userId, session=$sessionId');
     _messagesSubscription?.cancel();
     final messagesRef = FirebaseFirestore.instance
         .collection('users')
@@ -1069,13 +956,9 @@ class ChatProvider extends ChangeNotifier {
         .orderBy('messageIndex');
 
     _messagesSubscription = messagesRef.snapshots().listen((snapshot) {
-      print(
-        'Firestore listener received ${snapshot.docs.length} messages for user=$userId, session=$sessionId',
-      );
-      for (var doc in snapshot.docs) print(doc.data());
       final firestoreMessages =
           snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
+            final data = doc.data();
             return ChatMessage(
               text: data['text'] ?? '',
               isUser: data['isUser'] ?? false,
@@ -1110,58 +993,11 @@ class ChatProvider extends ChangeNotifier {
     _messagesSubscription = null;
   }
 
-  // Call _listenToMessages(_userId, _currentSessionId) after loading/starting a session
-  // Call _stopListeningToMessages() when switching/ending session or on dispose
-
-  // Example integration:
-  // Future<void> loadSession(String sessionId) async {
-  //   if (_userId == null) {
-  //     _logger.warning('Cannot load session: No user authenticated');
-  //     return;
-  //   }
-
-  //   _logger.info('Loading session: $sessionId');
-  //   _setLoading(true);
-
-  //   try {
-  //     final session = await _sessionService.loadSession(_userId!, sessionId);
-
-  //     if (session == null) {
-  //       _logger.warning('Session $sessionId not found');
-  //       return;
-  //     }
-
-  //     // Set loaded session as current
-  //     _currentSession = session;
-  //     _currentSessionId = session.id;
-  //     _currentTopicId = session.topicId;
-  //     _sessionState = session.state; // Restore the session state
-  //     _messages = List.from(session.messages);
-  //     _finalScores = session.finalScores;
-
-  //     // Start listening to messages
-  //     _listenToMessages(_userId!, sessionId);
-
-  //     notifyListeners();
-  //     _logger.info('Successfully loaded session $sessionId');
-  //   } catch (e) {
-  //     _logger.severe('Error loading session $sessionId: $e');
-  //     // TODO: Show error to user
-  //   } finally {
-  //     _setLoading(false);
-  //   }
-  // }
-
   // Clean up listener on dispose
   @override
   void dispose() {
-    print('Disposing ChatProvider and stopping Firestore listener');
     _stopListeningToMessages();
     super.dispose();
-  }
-
-  void setVoiceContextUpdateCallback(Future<void> Function() callback) {
-    _voiceContextUpdateCallback = callback;
   }
 
   void setAutoScrollCallback(VoidCallback callback) {

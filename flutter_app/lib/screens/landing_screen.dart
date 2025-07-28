@@ -264,11 +264,6 @@ class _LandingScreenState extends State<LandingScreen>
         final currentLocation = GoRouterState.of(context).matchedLocation;
         final isOnProfilePage = currentLocation == Routes.appProfile;
 
-        // Debug: Print current location for troubleshooting
-        print(
-          'Landing Header Debug: Current location: $currentLocation, isOnProfilePage: $isOnProfilePage',
-        );
-
         return Container(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? 80 : 20,
@@ -350,7 +345,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                           // Dynamic button based on auth status and current page
                           if (authProvider.isSignedIn && !isOnProfilePage)
-                            Container(
+                            SizedBox(
                               width: 70,
                               height: 70,
                               child: Tooltip(
@@ -494,7 +489,7 @@ class _LandingScreenState extends State<LandingScreen>
     final isMobile = MediaQuery.of(context).size.width < 600;
     final containerHeight = isMobile ? 350.0 : 500.0; // Smaller on mobile
 
-    return Container(
+    return SizedBox(
       height: containerHeight,
       child: Center(child: _buildAnimatedLogo(context)),
     );
@@ -1123,8 +1118,7 @@ class _LandingScreenState extends State<LandingScreen>
         throw 'Could not launch $url';
       }
     } catch (e) {
-      // Log error - URL launching failed
-      print('Failed to launch URL: $e');
+      // URL launching failed - silent fail for better UX
     }
   }
 

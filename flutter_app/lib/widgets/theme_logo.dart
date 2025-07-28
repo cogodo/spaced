@@ -26,7 +26,7 @@ class ThemeLogo extends StatelessWidget {
       }
     }
 
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
       child: ClipRRect(

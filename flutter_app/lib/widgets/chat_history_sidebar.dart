@@ -116,13 +116,17 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                       decoration: BoxDecoration(
                         color:
                             isSelected
-                                ? colorScheme.primaryContainer.withOpacity(0.3)
+                                ? colorScheme.primaryContainer.withValues(
+                                  alpha: 0.3,
+                                )
                                 : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         border:
                             isSelected
                                 ? Border.all(
-                                  color: colorScheme.primary.withOpacity(0.3),
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
                                   width: 1,
                                 )
                                 : null,
@@ -160,13 +164,17 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     decoration: BoxDecoration(
                       color:
                           isSelected
-                              ? colorScheme.primaryContainer.withOpacity(0.3)
+                              ? colorScheme.primaryContainer.withValues(
+                                alpha: 0.3,
+                              )
                               : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border:
                           isSelected
                               ? Border.all(
-                                color: colorScheme.primary.withOpacity(0.3),
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.3,
+                                ),
                                 width: 1,
                               )
                               : null,
@@ -215,7 +223,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
         color: colorScheme.surface,
         border: Border(
           right: BorderSide(
-            color: colorScheme.outline.withOpacity(0.15),
+            color: colorScheme.outline.withValues(alpha: 0.15),
             width: 1,
           ),
         ),
@@ -229,7 +237,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
               color: colorScheme.surface,
               border: Border(
                 bottom: BorderSide(
-                  color: colorScheme.outline.withOpacity(0.1),
+                  color: colorScheme.outline.withValues(alpha: 0.1),
                   width: 1,
                 ),
               ),
@@ -259,7 +267,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
             Container(
               margin: const EdgeInsets.symmetric(vertical: 8),
               height: 1,
-              color: colorScheme.outline.withOpacity(0.1),
+              color: colorScheme.outline.withValues(alpha: 0.1),
             ),
           ],
 
@@ -281,13 +289,13 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: colorScheme.outline.withOpacity(0.3),
+                      color: colorScheme.outline.withValues(alpha: 0.3),
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: colorScheme.outline.withOpacity(0.3),
+                      color: colorScheme.outline.withValues(alpha: 0.3),
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
@@ -324,7 +332,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                                 ? Icons.search_off
                                 : Icons.chat_bubble_outline,
                             size: 48,
-                            color: colorScheme.outline.withOpacity(0.5),
+                            color: colorScheme.outline.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -332,7 +340,9 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                                 ? 'No sessions found'
                                 : 'No chat sessions yet',
                             style: TextStyle(
-                              color: colorScheme.onSurface.withOpacity(0.6),
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                               fontSize: 16,
                             ),
                           ),
@@ -341,7 +351,9 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                             Text(
                               'Start a new chat to begin',
                               style: TextStyle(
-                                color: colorScheme.onSurface.withOpacity(0.4),
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
                                 fontSize: 14,
                               ),
                             ),
@@ -412,7 +424,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                 color: colorScheme.surface,
                 border: Border(
                   top: BorderSide(
-                    color: colorScheme.outline.withOpacity(0.1),
+                    color: colorScheme.outline.withValues(alpha: 0.1),
                     width: 1,
                   ),
                 ),
@@ -472,7 +484,9 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                               user.email ?? '',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: colorScheme.onSurface.withOpacity(0.6),
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

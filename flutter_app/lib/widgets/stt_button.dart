@@ -7,11 +7,11 @@ class SttButton extends StatefulWidget {
   final double size;
 
   const SttButton({
-    Key? key,
+    super.key,
     required this.sttService,
     required this.onTranscriptReceived,
     this.size = 56.0,
-  }) : super(key: key);
+  });
 
   @override
   State<SttButton> createState() => _SttButtonState();
@@ -41,6 +41,7 @@ class _SttButtonState extends State<SttButton> {
     if (_isRecording) {
       // Stop recording and get transcript
       final transcript = await widget.sttService.stopRecordingAndTranscribe();
+      if (!mounted) return;
       setState(() {
         _isRecording = false;
       });
@@ -58,6 +59,7 @@ class _SttButtonState extends State<SttButton> {
     } else {
       // Start recording
       final success = await widget.sttService.startRecording();
+      if (!mounted) return;
       if (success) {
         setState(() {
           _isRecording = true;
@@ -101,7 +103,7 @@ class _SttButtonState extends State<SttButton> {
 
           boxShadow: [
             BoxShadow(
-              color: theme.shadowColor.withOpacity(0.1),
+              color: theme.shadowColor.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
