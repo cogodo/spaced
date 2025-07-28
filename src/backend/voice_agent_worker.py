@@ -97,6 +97,7 @@ def generate_service_token():
         custom_token = auth.create_custom_token(
             service_uid,
             {"service": "voice_agent", "permissions": ["chat_api_access"], "issued_at": datetime.utcnow().isoformat()},
+            app=_firebase_app,  # Explicitly use our voice agent app
         )
 
         logger.info("Generated custom token for voice agent")

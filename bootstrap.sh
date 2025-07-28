@@ -18,6 +18,7 @@ LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-}"
 LIVEKIT_SERVER_URL="${LIVEKIT_SERVER_URL:-}"
 CARTESIA_API_KEY="${CARTESIA_API_KEY:-}"
 DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
+FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}"
 
 # --- Environment Detection ---
 # Determine if this is staging or production based on domain
@@ -162,6 +163,7 @@ Group=$APP_USER
 WorkingDirectory=$BACKEND_DIR
 EnvironmentFile=$ENV_FILE
 Environment="FIREBASE_SERVICE_ACCOUNT_JSON=\$(cat $SERVICE_ACCOUNT_JSON_PATH)"
+Environment="FIREBASE_WEB_API_KEY=${FIREBASE_WEB_API_KEY}"
 ExecStart=$VENV_DIR/bin/python voice_agent_worker.py start
 Restart=on-failure
 RestartSec=10
@@ -258,6 +260,12 @@ if [ -n "$DEEPGRAM_API_KEY" ]; then
     echo "✅ DEEPGRAM_API_KEY: Set (optional)"
 else
     echo "⚠️  DEEPGRAM_API_KEY: Not set (will use OpenAI Whisper)"
+fi
+
+if [ -n "$FIREBASE_WEB_API_KEY" ]; then
+    echo "✅ FIREBASE_WEB_API_KEY: Set"
+else
+    echo "❌ FIREBASE_WEB_API_KEY: Not set (required for voice agent auth)"
 fi
 
 if [ -n "$BACKEND_URL" ]; then
