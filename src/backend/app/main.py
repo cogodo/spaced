@@ -11,7 +11,8 @@ from api.v1.router import api_router
 from app.config import settings
 from core.monitoring.logger import get_logger
 from infrastructure.firebase import initialize_firebase
-from infrastructure.redis import close_redis, initialize_redis
+
+# from infrastructure.redis import close_redis, initialize_redis  # Commented out Redis
 
 # Initialize logger
 logger = get_logger("main")
@@ -67,20 +68,22 @@ def create_app() -> FastAPI:
         except Exception as e:
             print(f"ERROR: Failed to initialize Firebase: {e}")
 
-        try:
-            await initialize_redis()
-            print("Redis initialized successfully.")
-        except Exception as e:
-            print(f"WARNING: Failed to initialize Redis: {e}")
+        # try:
+        #     await initialize_redis()
+        #     print("Redis initialized successfully.")
+        # except Exception as e:
+        #     print(f"WARNING: Failed to initialize Redis: {e}")
+        print("Redis initialization skipped - running without Redis")
 
     @app.on_event("shutdown")
     async def shutdown_event():
         """Clean up resources on application shutdown."""
-        try:
-            await close_redis()
-            print("Redis connection closed.")
-        except Exception as e:
-            print(f"ERROR: Failed to close Redis connection: {e}")
+        # try:
+        #     await close_redis()
+        #     print("Redis connection closed.")
+        # except Exception as e:
+        #     print(f"ERROR: Failed to close Redis connection: {e}")
+        print("Redis cleanup skipped - running without Redis")
 
     # --- Routers ---
     # The main API router for version 1

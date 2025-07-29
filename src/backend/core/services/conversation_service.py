@@ -19,7 +19,8 @@ from core.services.feedback_service import FeedbackError, FeedbackService
 from core.services.question_service import QuestionService
 from core.services.routing_service import RoutingService
 from core.services.session_service import SessionService
-from infrastructure.redis.session_manager import RedisSessionManager
+
+# from infrastructure.redis.session_manager import RedisSessionManager  # Commented out Redis
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,7 @@ class ConversationService:
     """
 
     def __init__(self):
-        self.redis_manager = RedisSessionManager()
+        # self.redis_manager = RedisSessionManager()  # Commented out Redis
         self.question_service = QuestionService()
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.topic_repo = TopicRepository()
@@ -265,33 +266,34 @@ class ConversationService:
         """
         Skips the current question, updates the state, and returns the next question.
         """
-        state = await self.redis_manager.get_conversation_state(user_id, session_id)
-        if not state:
-            raise ValueError("Conversation state not found.")
+        # state = await self.redis_manager.get_conversation_state(user_id, session_id) # Commented out Redis
+        # if not state: # Commented out Redis
+        #     raise ValueError("Conversation state not found.") # Commented out Redis
 
-        # Mark current question as answered (skipped)
-        state.answered_question_ids.append(state.question_ids[state.question_index])
-        state.question_index += 1
-        state.history.append(Turn(user_input="skip", bot_response="Question skipped."))
+        # Mark current question as answered (skipped) # Commented out Redis
+        # state.answered_question_ids.append(state.question_ids[state.question_index]) # Commented out Redis
+        # state.question_index += 1 # Commented out Redis
+        # state.history.append(Turn(user_input="skip", bot_response="Question skipped.")) # Commented out Redis
 
-        # Save the updated state
-        await self._save_state(user_id, session_id, state)
+        # Save the updated state # Commented out Redis
+        # await self._save_state(user_id, session_id, state) # Commented out Redis
 
-        # Check for completion
-        if state.question_index >= len(state.question_ids):
-            return {
-                "is_done": True,
-                "next_question": "Congratulations, you've completed all questions for this topic!",
-            }
+        # Check for completion # Commented out Redis
+        # if state.question_index >= len(state.question_ids): # Commented out Redis
+        #     return { # Commented out Redis
+        #         "is_done": True, # Commented out Redis
+        #         "next_question": "Congratulations, you've completed all questions for this topic!", # Commented out Redis
+        #     } # Commented out Redis
 
-        # Get the next question
-        next_question = await self.question_repo.get_by_id(
-            user_id=user_id,
-            topic_id=state.topic_id,
-            question_id=state.question_ids[state.question_index],
-        )
+        # Get the next question # Commented out Redis
+        # next_question = await self.question_repo.get_by_id( # Commented out Redis
+        #     user_id=user_id, # Commented out Redis
+        #     topic_id=state.topic_id, # Commented out Redis
+        #     question_id=state.question_ids[state.question_index], # Commented out Redis
+        # ) # Commented out Redis
 
-        return {"is_done": False, "next_question": next_question.text}
+        # return {"is_done": False, "next_question": next_question.text} # Commented out Redis
+        raise NotImplementedError("Redis session management is currently disabled.")
 
     async def end_session(self, session: Session) -> Dict[str, Any]:
         """
@@ -489,4 +491,5 @@ Return your entire response as a single JSON object with two keys:
             raise ConversationServiceError("Failed to get a response from the AI.") from e
 
     async def _save_state(self, user_id: str, session_id: str, state: ConversationState):
-        await self.redis_manager.save_conversation_state(user_id, session_id, state)
+        # await self.redis_manager.save_conversation_state(user_id, session_id, state) # Commented out Redis
+        raise NotImplementedError("Redis session management is currently disabled.")

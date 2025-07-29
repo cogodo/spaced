@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = Field("spaced-b571d", env="FIREBASE_PROJECT_ID")
 
     # Redis Configuration
-    redis_url: str = Field("redis://localhost:6379", env="REDIS_URL")
+    # redis_url: str = Field("redis://localhost:6379", env="REDIS_URL")  # Commented out Redis
 
     # OpenAI API Key
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
