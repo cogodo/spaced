@@ -737,18 +737,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Voice-to-voice button (only show when session is active AND voice is enabled)
-                    if (chatProvider.sessionState == SessionState.active &&
-                        settingsProvider.voiceEnabled) ...[
-                      VoiceButton(
-                        isConnecting: _isVoiceConnecting,
-                        isVoiceConnected: _isVoiceConnected,
-                        isSpeaking: _isSpeaking,
-                        onTap: _toggleVoiceChat,
-                        size: 56.0, // Match the send button size
-                      ),
-                      const SizedBox(width: 12),
-                    ],
+                    // Voice-to-voice button - Disabled due to RAM constraints
+                    // if (chatProvider.sessionState == SessionState.active &&
+                    //     settingsProvider.voiceEnabled) ...[
+                    //   VoiceButton(
+                    //     isConnecting: _isVoiceConnecting,
+                    //     isVoiceConnected: _isVoiceConnected,
+                    //     isSpeaking: _isSpeaking,
+                    //     onTap: _toggleVoiceChat,
+                    //     size: 56.0, // Match the send button size
+                    //   ),
+                    //   const SizedBox(width: 12),
+                    // ],
 
                     // STT button (only show when session is active AND STT is enabled)
                     if (chatProvider.sessionState == SessionState.active &&

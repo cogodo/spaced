@@ -68,10 +68,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Voice Settings Section
-                  _buildVoiceSettingsSection(context),
+                  // Voice Settings Section - Disabled due to RAM constraints
+                  // _buildVoiceSettingsSection(context),
 
-                  const SizedBox(height: 32),
+                  // const SizedBox(height: 32),
 
                   // STT Settings Section
                   _buildSttSettingsSection(context),
