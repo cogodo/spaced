@@ -187,24 +187,12 @@
       }
     }
 
-    .logo-container {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .logo-image {
-      width: 60px;
-      height: 60px;
-      filter: brightness(0) invert(1);
-    }
-
     .logo-text {
-      font-size: 2.5rem;
+      font-size: 3rem;
       font-weight: 700;
       font-family: 'ChironSungHK', serif;
       color: #ffffff;
+      margin-bottom: 2rem;
     }
 
     .loading-spinner {
@@ -349,10 +337,7 @@
 <body>
   <!-- Themed Loading Screen -->
   <div id="loading" class="loading-container">
-    <div class="logo-container">
-      <img src="web/favicon.png" alt="Spaced Logo" class="logo-image">
-      <div class="logo-text">SPACED</div>
-    </div>
+    <div class="logo-text">SPACED</div>
     <div class="loading-spinner"></div>
     <div class="motivational-text" id="motivational-text">
       Knowledge is power, but spaced repetition is the key to mastery.
