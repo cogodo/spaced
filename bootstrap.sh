@@ -12,13 +12,14 @@ GIT_BRANCH="main"
 CERTBOT_EMAIL="cogo@umich.edu"
 
 # --- Voice-to-Voice Configuration ---
+# DISABLED: Voice agent disabled due to AWS VPS memory constraints and stability issues
 # These should be set as environment variables or passed as parameters
-LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-}"
-LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-}"
-LIVEKIT_SERVER_URL="${LIVEKIT_SERVER_URL:-}"
-CARTESIA_API_KEY="${CARTESIA_API_KEY:-}"
-DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
-FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}"
+# LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-}"
+# LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-}"
+# LIVEKIT_SERVER_URL="${LIVEKIT_SERVER_URL:-}"
+# CARTESIA_API_KEY="${CARTESIA_API_KEY:-}"
+# DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
+# FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}"
 
 # --- Environment Detection ---
 # Determine if this is staging or production based on domain
@@ -130,7 +131,7 @@ sudo tee /etc/systemd/system/backend.service > /dev/null << EOF
 [Unit]
 Description=Spaced FastAPI Backend
 After=network.target redis6.service
-Before=voice-agent.service
+# Before=voice-agent.service  # DISABLED: Voice agent disabled due to AWS VPS memory constraints
 
 [Service]
 User=$APP_USER
@@ -150,29 +151,30 @@ WantedBy=multi-user.target
 EOF
 
 # 8. Create systemd unit for voice agent worker
-echo "Creating voice agent systemd service file..."
-sudo tee /etc/systemd/system/voice-agent.service > /dev/null << EOF
-[Unit]
-Description=Spaced Voice Agent Worker
-After=network.target backend.service
-Requires=backend.service
-
-[Service]
-User=$APP_USER
-Group=$APP_USER
-WorkingDirectory=$BACKEND_DIR
-EnvironmentFile=$ENV_FILE
-Environment="FIREBASE_SERVICE_ACCOUNT_JSON=\$(cat $SERVICE_ACCOUNT_JSON_PATH)"
-Environment="FIREBASE_WEB_API_KEY=${FIREBASE_WEB_API_KEY}"
-ExecStart=$VENV_DIR/bin/python voice_agent_worker.py start
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# DISABLED: Voice agent disabled due to AWS VPS memory constraints and stability issues
+# echo "Creating voice agent systemd service file..."
+# sudo tee /etc/systemd/system/voice-agent.service > /dev/null << EOF
+# [Unit]
+# Description=Spaced Voice Agent Worker
+# After=network.target backend.service
+# Requires=backend.service
+# 
+# [Service]
+# User=$APP_USER
+# Group=$APP_USER
+# WorkingDirectory=$BACKEND_DIR
+# EnvironmentFile=$ENV_FILE
+# Environment="FIREBASE_SERVICE_ACCOUNT_JSON=\$(cat $SERVICE_ACCOUNT_JSON_PATH)"
+# Environment="FIREBASE_WEB_API_KEY=${FIREBASE_WEB_API_KEY}"
+# ExecStart=$VENV_DIR/bin/python voice_agent_worker.py start
+# Restart=on-failure
+# RestartSec=10
+# StandardOutput=journal
+# StandardError=journal
+# 
+# [Install]
+# WantedBy=multi-user.target
+# EOF
 
 # 9. Create logs directory
 echo "Creating logs directory..."
@@ -183,9 +185,9 @@ sudo chown "$APP_USER:$APP_USER" /var/log/spaced
 echo "Starting services..."
 sudo systemctl daemon-reload
 sudo systemctl enable backend.service
-sudo systemctl enable voice-agent.service
+# sudo systemctl enable voice-agent.service  # DISABLED: Voice agent disabled due to AWS VPS memory constraints
 sudo systemctl restart backend.service
-sudo systemctl restart voice-agent.service
+# sudo systemctl restart voice-agent.service  # DISABLED: Voice agent disabled due to AWS VPS memory constraints
 
 # 11. Create health check script
 echo "Creating health check script..."
@@ -211,7 +213,7 @@ set -a
 set +a
 
 check_service backend.service
-check_service voice-agent.service
+# check_service voice-agent.service  # DISABLED: Voice agent disabled due to AWS VPS memory constraints
 check_service redis6
 
 # Check API endpoints
@@ -221,11 +223,12 @@ else
     echo "❌ Backend API: Not responding"
 fi
 
-if curl -s http://localhost:8000/api/v1/voice/health > /dev/null; then
-    echo "✅ Voice API: Responding"
-else
-    echo "❌ Voice API: Not responding"
-fi
+# DISABLED: Voice agent disabled due to AWS VPS memory constraints
+# if curl -s http://localhost:8000/api/v1/voice/health > /dev/null; then
+#     echo "✅ Voice API: Responding"
+# else
+#     echo "❌ Voice API: Not responding"
+# fi
 
 # Check voice environment variables
 echo ""

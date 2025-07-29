@@ -32,9 +32,21 @@ class QuestionService:
         self.repository = QuestionRepository()
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    async def get_topic_questions(self, topic_id: str, user_uid: str) -> List[Question]:
-        """Get all questions for a topic from user's subcollection"""
-        return await self.repository.list_by_topic(topic_id, user_uid)
+    def get_topic_questions(
+        self, topic_id: str, user_uid: str, limit: Optional[int] = None, randomize: bool = False
+    ) -> List[Question]:
+        """Get questions for a topic from user's subcollection"""
+        questions = self.repository.list_by_topic(topic_id, user_uid)
+
+        if randomize:
+            import random
+
+            random.shuffle(questions)
+
+        if limit and limit > 0:
+            questions = questions[:limit]
+
+        return questions
 
     async def generate_question_bank(self, topic: Topic) -> List[Question]:
         """
@@ -84,7 +96,7 @@ class QuestionService:
                 )
 
                 # Save to database with user context
-                await self.repository.create(question, topic.ownerUid)
+                self.repository.create(question, topic.ownerUid)
                 questions.append(question)
 
             except Exception as e:
@@ -102,7 +114,7 @@ class QuestionService:
 
     async def generate_initial_questions(self, topic: Topic, user_uid: str) -> List[Question]:
         """
-        Generate a small initial set of questions quickly (5 questions, no refinement)
+        Generate a small initial set of questions quickly (20 questions, no refinement)
         """
 
         question_templates = [
@@ -122,10 +134,10 @@ class QuestionService:
 
         questions = []
 
-        # Generate 5 questions quickly without refinement
-        for i in range(5):
+        # Generate 20 questions quickly without refinement
+        for i in range(20):
             question_type, template = question_templates[i % len(question_templates)]
-            difficulty = min(i // 2 + 1, 3)  # Distribute difficulties 1-3
+            difficulty = min(i // 7 + 1, 3)  # Distribute difficulties 1-3 across 20 questions
 
             try:
                 # Single step generation (no refinement for speed)
@@ -145,7 +157,7 @@ class QuestionService:
                 )
 
                 # Save to database with user context
-                await self.repository.create(question, user_uid)
+                self.repository.create(question, user_uid)
                 questions.append(question)
 
             except OpenAITimeoutError as e:
@@ -160,7 +172,7 @@ class QuestionService:
                         type=question_type,
                         difficulty=difficulty,
                     )
-                    await self.repository.create(question, user_uid)
+                    self.repository.create(question, user_uid)
                     questions.append(question)
                 except Exception as retry_e:
                     print(f"Retry failed for question {i + 1}: {retry_e}")
@@ -180,9 +192,10 @@ Requirements:
 - Create a clear, well-structured question
 - Ensure it is relevant to the topic of {topic}
 - The question should be answerable without external resources
+- Do NOT include the answer to the question in your return
 """
 
-        return await self._call_openai(prompt, max_tokens=250, temperature=0.8)
+        return await self._call_openai(prompt, max_tokens=250, temperature=0.9)
 
     async def _refine_question(self, initial_question: str, question_type: str, difficulty: int) -> str:
         """Refine a generated question for quality and clarity"""
@@ -198,6 +211,9 @@ Critique this question based on:
 
 Return ONLY the improved question text. If the original is already excellent,
 return it unchanged.
+NEVER include the answer to the question in your return
+NEVER include a heading like "improved question:" or "Question:" before the question in your return
+ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE ANYTHING THAT SAYS "ANSWER" and any follwing related text
 """
         return await self._call_openai(prompt, temperature=0.5)
 
@@ -222,7 +238,7 @@ return it unchanged.
                 metadata={"generated_by": "openai_basic", "topic_name": topic.name},
             )
 
-            await self.repository.create(question, topic.ownerUid)
+            self.repository.create(question, topic.ownerUid)
             return question
 
         except Exception:
@@ -254,9 +270,9 @@ return it unchanged.
             safe_error = str(e).replace("{", "{{").replace("}", "}}")
             raise Exception(f"OpenAI API error: {safe_error}")
 
-    async def get_question(self, question_id: str, user_uid: str, topic_id: str) -> Optional[Question]:
+    def get_question(self, question_id: str, user_uid: str, topic_id: str) -> Optional[Question]:
         """Get a specific question by ID from user's topic subcollection"""
-        return await self.repository.get_by_id(question_id, user_uid, topic_id)
+        return self.repository.get_by_id(question_id, user_uid, topic_id)
 
     # New Phase 3 advanced features
 
@@ -315,7 +331,7 @@ Provide your analysis in this JSON format:
 
     async def get_question_bank_analytics(self, topic_id: str, user_uid: str) -> Dict[str, Any]:
         """Get analytics for a topic's question bank"""
-        questions = await self.get_topic_questions(topic_id, user_uid)
+        questions = self.get_topic_questions(topic_id, user_uid)
 
         if not questions:
             return {"error": "No questions found"}

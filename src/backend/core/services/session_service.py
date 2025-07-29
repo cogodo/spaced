@@ -32,7 +32,8 @@ class SessionService:
         """Starts a new unified learning session."""
         logger.info(f"Starting session for user {user_uid} and topic {topic_id}")
         try:
-            questions = await self.question_service.get_topic_questions(topic_id, user_uid)
+            # Get random questions for the session (limit to 5 questions per session for variety)
+            questions = self.question_service.get_topic_questions(topic_id, user_uid, limit=5, randomize=True)
             if not questions:
                 logger.warning(f"No questions found for topic {topic_id}. Starting with empty session.")
                 question_ids = []
@@ -51,34 +52,32 @@ class SessionService:
                 turnState=TurnState.AWAITING_INITIAL_ANSWER,
             )
 
-            await self.repository.create(session)
+            self.repository.create(session)
             logger.info(f"Session {session.id} created successfully.")
             return session
         except Exception as e:
             raise SessionServiceError(f"Failed to start session for topic {topic_id}") from e
 
-    async def get_session(self, session_id: str, user_uid: str) -> Optional[Session]:
+    def get_session(self, session_id: str, user_uid: str) -> Optional[Session]:
         """Retrieves a session by its ID."""
-        return await self.repository.get(session_id, user_uid)
+        return self.repository.get(session_id, user_uid)
 
-    async def get_current_question(
-        self, session_id: str, user_uid: str
-    ) -> Tuple[Optional[Session], Optional[Question]]:
+    def get_current_question(self, session_id: str, user_uid: str) -> Tuple[Optional[Session], Optional[Question]]:
         """Gets the current question for a given session."""
         try:
-            session = await self.get_session(session_id, user_uid)
+            session = self.get_session(session_id, user_uid)
             if not session or session.questionIdx >= len(session.questionIds):
                 return session, None
 
             question_id = session.questionIds[session.questionIdx]
-            question = await self.question_service.get_question(question_id, user_uid, session.topicId)
+            question = self.question_service.get_question(question_id, user_uid, session.topicId)
             return session, question
         except Exception as e:
             raise SessionServiceError(f"Failed to get current question for session {session_id}") from e
 
-    async def record_answer(self, session_id: str, user_uid: str, score: int) -> Session:
+    def record_answer(self, session_id: str, user_uid: str, score: int) -> Session:
         """Records a user's answer score and advances to the next question."""
-        session = await self.get_session(session_id, user_uid)
+        session = self.get_session(session_id, user_uid)
         if not session:
             raise ValueError("Session not found")
 
@@ -87,12 +86,12 @@ class SessionService:
         session.questionIdx += 1
         session.touch()
 
-        await self.repository.update(session_id, user_uid, session.dict())
+        self.repository.update(session_id, user_uid, session.dict())
         return session
 
-    async def update_session_state(self, session_id: str, user_uid: str, **updates) -> Session:
+    def update_session_state(self, session_id: str, user_uid: str, **updates) -> Session:
         """Update session fields."""
-        session = await self.get_session(session_id, user_uid)
+        session = self.get_session(session_id, user_uid)
         if not session:
             raise ValueError("Session not found")
 
@@ -104,7 +103,7 @@ class SessionService:
         session.touch()
 
         # Save to database
-        await self.repository.update(session_id, user_uid, session.dict())
+        self.repository.update(session_id, user_uid, session.dict())
         return session
 
     # Backward compatibility methods for existing ContextService interface

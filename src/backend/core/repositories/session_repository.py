@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 
-from anyio import to_thread
 from google.cloud.firestore_v1 import DocumentSnapshot
 
 from core.models.session import Session
@@ -16,7 +15,7 @@ class SessionRepository:
     def __init__(self):
         self.db = get_firestore_client()
 
-    async def get(self, session_id: str, user_uid: str) -> Optional[Session]:
+    def get(self, session_id: str, user_uid: str) -> Optional[Session]:
         """Get a session by ID from the user's sessions subcollection."""
         doc_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
         snapshot: DocumentSnapshot = doc_ref.get()
@@ -27,24 +26,24 @@ class SessionRepository:
             return Session(**data)
         return None
 
-    async def create(self, session: Session) -> Session:
+    def create(self, session: Session) -> Session:
         """Create or overwrite a session document."""
         doc_ref = self.db.collection("users").document(session.userUid).collection("sessions").document(session.id)
         doc_ref.set(session.dict())
         return session
 
-    async def update(self, session_id: str, user_uid: str, data: dict) -> None:
-        """Update an existing session document asynchronously."""
+    def update(self, session_id: str, user_uid: str, data: dict) -> None:
+        """Update an existing session document."""
         logger.info(f"Updating session {session_id} for user {user_uid}")
         doc_ref = self.db.collection("users").document(user_uid).collection("sessions").document(session_id)
         try:
-            await to_thread.run_sync(doc_ref.update, data)
+            doc_ref.update(data)
             logger.info(f"Successfully updated session {session_id}")
         except Exception as e:
             logger.error(f"Failed to update session {session_id}: {e}", exc_info=True)
             raise
 
-    async def delete(self, session_id: str, user_uid: str) -> None:
+    def delete(self, session_id: str, user_uid: str) -> None:
         """Delete a session document and its messages subcollection."""
         batch = self.db.batch()
 
@@ -66,7 +65,7 @@ class SessionRepository:
 
         batch.commit()
 
-    async def list_by_user(self, user_uid: str) -> List[Session]:
+    def list_by_user(self, user_uid: str) -> List[Session]:
         """List all sessions for a given user."""
         collection_ref = self.db.collection("users").document(user_uid).collection("sessions")
         snapshots = collection_ref.stream()
@@ -84,7 +83,7 @@ class SessionRepository:
 
         return sessions
 
-    async def save_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+    def save_messages(self, session_id: str, user_uid: str, messages: list) -> None:
         """Save a list of Message objects to the messages subcollection for a session."""
         messages_ref = (
             self.db.collection("users")
@@ -105,7 +104,7 @@ class SessionRepository:
             batch.set(msg_ref, msg_data)
         batch.commit()
 
-    async def append_messages(self, session_id: str, user_uid: str, messages: list) -> None:
+    def append_messages(self, session_id: str, user_uid: str, messages: list) -> None:
         """Append new Message objects to the messages subcollection for a session."""
         messages_ref = (
             self.db.collection("users")

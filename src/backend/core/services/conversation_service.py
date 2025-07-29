@@ -9,7 +9,7 @@ from core.models.conversation import (
     Turn,
 )
 from core.models.llm_outputs import NextAction
-from core.models.session import Session, TurnState
+from core.models.session import Session, SessionState, TurnState
 from core.monitoring.logger import get_logger
 from core.repositories.question_repository import QuestionRepository
 from core.repositories.topic_repository import TopicRepository
@@ -57,9 +57,13 @@ class ConversationService:
         """
         try:
             logger.info(f"Processing turn for chat {chat_id}")
-            session = await self.session_service.get_session(chat_id, user_uid)
+            session = self.session_service.get_session(chat_id, user_uid)
             if not session:
                 raise ValueError("Chat session not found.")
+
+            # Check if session is already completed
+            if session.state == SessionState.COMPLETED or session.isCompleted:
+                return "This session has already been completed. You can start a new session to continue learning!"
 
             # Handle direct actions (skip/end) before state machine logic
             user_input_lower = user_input.lower().strip()
@@ -92,9 +96,11 @@ class ConversationService:
 
     async def _handle_initial_answer(self, session: Session, user_input: str) -> str:
         """Handles the user's first answer to a question."""
-        _, question = await self.session_service.get_current_question(session.id, session.userUid)
+        _, question = self.session_service.get_current_question(session.id, session.userUid)
         if not question:
-            return "It looks like we've run out of questions! Well done."
+            # End session if we run out of questions
+            summary = await self.end_session(session)
+            return f"It looks like we've run out of questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
         try:
             score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
@@ -104,13 +110,20 @@ class ConversationService:
                 # Good answer, move to next question prompt
                 session.scores[question.id] = score.score
                 session.turnState = TurnState.AWAITING_NEXT_ACTION
-                await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+                # Check if we've answered 5 questions
+                answered_questions = len(session.scores)
+                if answered_questions >= 5:
+                    summary = await self.end_session(session)
+                    return f"{feedback}\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+
                 return f"{feedback}\n\nReady for the next question, or do you have any questions about this one?"
             else:
                 # Poor answer, await follow-up
                 session.initialScore = score.score
                 session.turnState = TurnState.AWAITING_FOLLOW_UP
-                await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
                 return feedback
 
         except ValueError as e:
@@ -119,9 +132,11 @@ class ConversationService:
 
     async def _handle_follow_up(self, session: Session, user_input: str) -> str:
         """Handles the user's response after receiving a hint."""
-        _, question = await self.session_service.get_current_question(session.id, session.userUid)
+        _, question = self.session_service.get_current_question(session.id, session.userUid)
         if not question:
-            return "Error: Could not find the current question."
+            # End session if we run out of questions
+            summary = await self.end_session(session)
+            return f"Error: Could not find the current question. Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
         try:
             # Re-evaluate the answer, this time noting it's after a hint
@@ -132,7 +147,13 @@ class ConversationService:
             session.scores[question.id] = final_score
             session.turnState = TurnState.AWAITING_NEXT_ACTION
 
-            await self.session_service.repository.update(session.id, session.userUid, session.dict())
+            self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+            # Check if we've answered 5 questions
+            answered_questions = len(session.scores)
+            if answered_questions >= 5:
+                summary = await self.end_session(session)
+                return f"Thanks for the clarification! I've recorded a score of {final_score} for that question.\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
             return f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
 
@@ -149,11 +170,19 @@ class ConversationService:
                 session.questionIdx += 1
                 session.initialScore = None
                 session.turnState = TurnState.AWAITING_INITIAL_ANSWER
-                await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
 
-                _, next_question = await self.session_service.get_current_question(session.id, session.userUid)
+                # Check if we've answered 5 questions (excluding skipped ones)
+                answered_questions = len(session.scores)
+                if answered_questions >= 5:
+                    summary = await self.end_session(session)
+                    return f"Session completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+
+                _, next_question = self.session_service.get_current_question(session.id, session.userUid)
                 if not next_question:
-                    return "You've completed all the questions! Great job."
+                    # End session if we run out of questions before reaching 5
+                    summary = await self.end_session(session)
+                    return f"You've completed all the questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
                 return f"Great, let's move on. Here is your next question:\n\n{next_question.text}"
 
             elif decision.next_action == NextAction.END_CHAT:
@@ -161,7 +190,11 @@ class ConversationService:
                 return f"Session ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
             elif decision.next_action == NextAction.AWAIT_CLARIFICATION:
-                _, question = await self.session_service.get_current_question(session.id, session.userUid)
+                _, question = self.session_service.get_current_question(session.id, session.userUid)
+                if not question:
+                    # End session if we run out of questions
+                    summary = await self.end_session(session)
+                    return f"Error: Could not find the current question. Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
                 try:
                     answer, impact = await self.clarification_service.handle_clarification(question, user_input)
@@ -170,7 +203,14 @@ class ConversationService:
                     if impact.adjusted_score == 1:
                         session.scores[question.id] = 1
                         session.turnState = TurnState.AWAITING_NEXT_ACTION
-                        await self.session_service.repository.update(session.id, session.userUid, session.dict())
+                        self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+                        # Check if we've answered 5 questions
+                        answered_questions = len(session.scores)
+                        if answered_questions >= 5:
+                            summary = await self.end_session(session)
+                            return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later.\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+
                         return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later. Ready for the next question?"
                     else:
                         # Otherwise, just provide the info and wait for another attempt
@@ -188,23 +228,32 @@ class ConversationService:
         """Handles skipping the current question and moving to the next one."""
         try:
             # Get current question to mark it as skipped
-            _, current_question = await self.session_service.get_current_question(session.id, session.userUid)
+            _, current_question = self.session_service.get_current_question(session.id, session.userUid)
             if not current_question:
-                return "You've completed all the questions! Great job."
+                # End session if we run out of questions
+                summary = await self.end_session(session)
+                return f"You've completed all the questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
-            # Mark current question as skipped (score of 0)
-            session.scores[current_question.id] = 0
+            # Skip the question without recording a score (exclude from scoring)
             session.questionIdx += 1
             session.initialScore = None
             session.turnState = TurnState.AWAITING_INITIAL_ANSWER
 
             # Save the updated session
-            await self.session_service.repository.update(session.id, session.userUid, session.dict())
+            self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+            # Check if we've answered 5 questions (excluding skipped ones)
+            answered_questions = len(session.scores)
+            if answered_questions >= 5:
+                summary = await self.end_session(session)
+                return f"Session completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
             # Get the next question
-            _, next_question = await self.session_service.get_current_question(session.id, session.userUid)
+            _, next_question = self.session_service.get_current_question(session.id, session.userUid)
             if not next_question:
-                return "You've completed all the questions! Great job."
+                # End session if we run out of questions before reaching 5
+                summary = await self.end_session(session)
+                return f"You've completed all the questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
             return f"Question skipped. Here's your next question:\n\n{next_question.text}"
 
@@ -250,7 +299,7 @@ class ConversationService:
         """
         logger.info(f"Ending session for chat {session.id}")
         session.end_session()
-        await self.session_service.repository.update(session.id, session.userUid, session.dict())
+        self.session_service.repository.update(session.id, session.userUid, session.dict())
 
         # Calculate stats
         questions_answered = len(session.scores)
@@ -263,7 +312,7 @@ class ConversationService:
         topic_name = "your recent topic"
         try:
             if session.topicId and session.userUid:
-                topic = await self.topic_repo.get_by_id(session.topicId, session.userUid)
+                topic = self.topic_repo.get_by_id(session.topicId, session.userUid)
                 if topic:
                     topic_name = topic.name
         except Exception as e:
@@ -278,7 +327,7 @@ class ConversationService:
                 from core.services.fsrs_service import FSRSService
 
                 fsrs_service = FSRSService()
-                await fsrs_service.update_fsrs_for_topic(session.userUid, session.topicId, session.scores)
+                fsrs_service.update_fsrs_for_topic(session.userUid, session.topicId, session.scores)
                 logger.info(f"Successfully updated FSRS for topic {session.topicId}")
             except Exception as e:
                 logger.error(f"Failed to update FSRS for topic {session.topicId}: {e}", exc_info=True)
@@ -329,8 +378,8 @@ class ConversationService:
     ) -> ConversationState:
         """Creates a new conversation state for the user's session."""
         if topic_id is None:
-            topic_id = await self.topic_repo.get_default_topic_id()
-        questions = await self.question_service.get_topic_questions(topic_id, user_id)
+            raise ValueError("Topic ID is required for conversation state creation.")
+        questions = self.question_service.get_topic_questions(topic_id, user_id)
         if not questions:
             raise ValueError(f"No questions found for topic ID '{topic_id}'. Cannot start conversation.")
         question_ids = [q.id for q in questions]

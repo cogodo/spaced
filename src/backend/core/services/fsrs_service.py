@@ -13,6 +13,7 @@ except ImportError:
 
 from core.models import FSRSParams
 from core.repositories.topic_repository import TopicRepository
+from infrastructure.cache import TopicCache
 
 
 class FSRSService:
@@ -22,12 +23,13 @@ class FSRSService:
         else:
             self.fsrs = None
         self.topic_repo = TopicRepository()
+        self.cache = TopicCache()
 
-    async def update_fsrs_for_topic(self, user_uid: str, topic_id: str, scores: Dict[str, int]):
+    def update_fsrs_for_topic(self, user_uid: str, topic_id: str, scores: Dict[str, int]):
         """
         Updates the FSRS parameters for a topic based on a session's scores.
         """
-        topic = await self.topic_repo.get_by_id(topic_id, user_uid)
+        topic = self.topic_repo.get_by_id(topic_id, user_uid)
         if not topic:
             # Handle case where topic is not found
             return
@@ -49,11 +51,14 @@ class FSRSService:
             "nextReviewAt": review_data["nextReviewAt"],
             "lastReviewedAt": datetime.now(),
         }
-        await self.topic_repo.update(
+        self.topic_repo.update(
             topic_id,
             user_uid,
             update_data,
         )
+
+        # Invalidate cache to ensure fresh data in "all reviews" section
+        self.cache.invalidate_user(user_uid)
 
     def calculate_next_review(
         self,

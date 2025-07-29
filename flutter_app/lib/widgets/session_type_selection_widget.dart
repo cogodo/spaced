@@ -96,7 +96,7 @@ class SessionTypeSelectionWidget extends StatelessWidget {
             const SizedBox(height: 32),
 
             Text(
-              'New Items: Learn completely new topics\nPast Reviews: Review topics you\'ve studied before',
+              'New Items: Learn a new topic\nPast Reviews: Review topics you\'ve studied before',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),

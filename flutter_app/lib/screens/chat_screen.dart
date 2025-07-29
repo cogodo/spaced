@@ -6,14 +6,15 @@ import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
 import '../widgets/session_type_selection_widget.dart';
 import '../widgets/due_topics_selection_widget.dart';
+import '../widgets/question_generation_loading_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/chat_bubble.dart';
-import '../widgets/voice_button.dart';
 import '../widgets/stt_button.dart';
 import '../services/audio_player_service.dart';
 import '../services/stt_service.dart';
-import '../services/auth_service.dart';
+// import '../services/auth_service.dart';
 import '../services/logger_service.dart';
+import '../utils/time_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -50,9 +51,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Voice chat state
   LiveKitVoiceService? _voiceService;
-  bool _isVoiceConnecting = false;
-  bool _isVoiceConnected = false;
-  bool _isSpeaking = false;
+  // bool _isVoiceConnecting = false;
+  // bool _isVoiceConnected = false;
+  // bool _isSpeaking = false;
   String? _currentTranscript;
 
   // STT service
@@ -130,8 +131,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.info('Voice connected');
       if (mounted) {
         setState(() {
-          _isVoiceConnected = true;
-          _isVoiceConnecting = false;
+          // _isVoiceConnected = true;
+          // _isVoiceConnecting = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -146,8 +147,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.info('Voice disconnected');
       if (mounted) {
         setState(() {
-          _isVoiceConnected = false;
-          _isSpeaking = false;
+          // _isVoiceConnected = false;
+          // _isSpeaking = false;
         });
       }
     };
@@ -156,8 +157,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.severe('Voice error: $error');
       if (mounted) {
         setState(() {
-          _isVoiceConnecting = false;
-          _isVoiceConnected = false;
+          // _isVoiceConnecting = false;
+          // _isVoiceConnected = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -171,7 +172,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _voiceService!.onLocalSpeakingChanged = (isSpeaking) {
       if (mounted) {
         setState(() {
-          _isSpeaking = isSpeaking;
+          // _isSpeaking = isSpeaking;
         });
         _logger.info('Speaking status changed: $isSpeaking');
       }
@@ -191,84 +192,84 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _toggleVoiceChat() async {
-    if (_isVoiceConnecting) return;
+  // Future<void> _toggleVoiceChat() async {
+  //   if (_isVoiceConnecting) return;
 
-    if (_isVoiceConnected) {
-      // Disconnect voice
-      await _voiceService?.disconnect();
-      setState(() {
-        _isVoiceConnected = false;
-        _isSpeaking = false;
-      });
-    } else {
-      // Connect to voice
-      setState(() {
-        _isVoiceConnecting = true;
-      });
+  //   if (_isVoiceConnected) {
+  //     // Disconnect voice
+  //     await _voiceService?.disconnect();
+  //     setState(() {
+  //       _isVoiceConnected = false;
+  //       _isSpeaking = false;
+  //     });
+  //   } else {
+  //     // Connect to voice
+  //     setState(() {
+  //       _isVoiceConnecting = true;
+  //     });
 
-      // Get current chat session ID and capture context
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-      String? chatId = chatProvider.currentSessionId;
-      final mounted = this.mounted;
-      final scaffoldMessenger = ScaffoldMessenger.of(context);
-      final theme = Theme.of(context);
+  //     // Get current chat session ID and capture context
+  //     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+  //     String? chatId = chatProvider.currentSessionId;
+  //     final mounted = this.mounted;
+  //     final scaffoldMessenger = ScaffoldMessenger.of(context);
+  //     final theme = Theme.of(context);
 
-      try {
-        // Get user ID
-        final authService = AuthService();
-        final user = authService.currentUser;
-        if (user == null) {
-          throw Exception('User not authenticated');
-        }
+  //     try {
+  //       // Get user ID
+  //       final authService = AuthService();
+  //       final user = authService.currentUser;
+  //       if (user == null) {
+  //         throw Exception('User not authenticated');
+  //       }
 
-        // Request microphone permission
-        final hasMicPermission =
-            await _voiceService!.requestMicrophonePermission();
-        if (!hasMicPermission) {
-          throw Exception('Microphone permission denied');
-        }
+  //       // Request microphone permission
+  //       final hasMicPermission =
+  //           await _voiceService!.requestMicrophonePermission();
+  //       if (!hasMicPermission) {
+  //         throw Exception('Microphone permission denied');
+  //       }
 
-        // Require a valid chat ID for voice
-        if (chatId == null || chatId.isEmpty) {
-          throw Exception(
-            'No active session found. Please start a chat session first.',
-          );
-        }
+  //       // Require a valid chat ID for voice
+  //       if (chatId == null || chatId.isEmpty) {
+  //         throw Exception(
+  //           'No active session found. Please start a chat session first.',
+  //         );
+  //       }
 
-        // Check voice service health before starting
-        final isHealthy = await _voiceService!.checkVoiceServiceHealth();
-        if (!mounted) return;
-        if (!isHealthy) {
-          throw Exception(
-            'Voice service is not healthy. Please try again later.',
-          );
-        }
+  //       // Check voice service health before starting
+  //       final isHealthy = await _voiceService!.checkVoiceServiceHealth();
+  //       if (!mounted) return;
+  //       if (!isHealthy) {
+  //         throw Exception(
+  //           'Voice service is not healthy. Please try again later.',
+  //         );
+  //       }
 
-        // Start voice session with chat ID only
-        await _voiceService!.startVoiceSession(chatId, user.uid);
+  //       // Start voice session with chat ID only
+  //       await _voiceService!.startVoiceSession(chatId, user.uid);
 
-        // Unlock audio playback on web after user gesture
-        if (mounted) {
-          await _voiceService!.startAudioPlayback();
-        }
-      } catch (e) {
-        _logger.severe('Failed to start voice chat: $e');
-        if (mounted) {
-          setState(() {
-            _isVoiceConnecting = false;
-            _isVoiceConnected = false;
-          });
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text('Failed to start voice chat: $e'),
-              backgroundColor: theme.colorScheme.error,
-            ),
-          );
-        }
-      }
-    }
-  }
+  //       // Unlock audio playback on web after user gesture
+  //       if (mounted) {
+  //         await _voiceService!.startAudioPlayback();
+  //       }
+  //     } catch (e) {
+  //       _logger.severe('Failed to start voice chat: $e');
+  //       if (mounted) {
+  //         setState(() {
+  //           _isVoiceConnecting = false;
+  //           _isVoiceConnected = false;
+  //         });
+  //         scaffoldMessenger.showSnackBar(
+  //           SnackBar(
+  //             content: Text('Failed to start voice chat: $e'),
+  //             backgroundColor: theme.colorScheme.error,
+  //           ),
+  //         );
+  //       }
+  //     }
+  //   }
+  // }
 
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
@@ -311,17 +312,69 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      // Since we removed the old task system, just set empty tasks
-      setState(() {
-        _dueTasks = [];
-        _selectedTopics.clear();
-      });
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      await chatProvider.fetchDueTopics();
+
+      if (chatProvider.dueTopics != null) {
+        final dueTopics = chatProvider.dueTopics!;
+        final recentlyReviewed = chatProvider.recentlyReviewedTopicIds;
+
+        // Perform client-side categorization based on local time (same as today's reviews)
+        final now = SystemTimeProvider().nowUtc().toLocal();
+        final today = DateTime(now.year, now.month, now.day);
+
+        final allTopics =
+            dueTopics.topics.where((topic) {
+              if (recentlyReviewed.contains(topic.id)) {
+                return false; // Filter out recently reviewed
+              }
+              if (topic.nextReviewAt == null) {
+                return false; // Filter out topics with no review date
+              }
+              // Compare using the local timezone
+              final reviewDateLocal = topic.nextReviewAt!.toLocal();
+              final reviewDay = DateTime(
+                reviewDateLocal.year,
+                reviewDateLocal.month,
+                reviewDateLocal.day,
+              );
+              return reviewDay.isBefore(today) ||
+                  reviewDay.isAtSameMomentAs(today);
+            }).toList();
+
+        // Convert to the format expected by the widget
+        final dueTasks =
+            allTopics
+                .map(
+                  (topic) => {
+                    'topic_id': topic.id,
+                    'topic_name': topic.name,
+                    'topic':
+                        topic, // Include the full topic object for rich display
+                  },
+                )
+                .toList();
+
+        setState(() {
+          _dueTasks = dueTasks;
+          _selectedTopics.clear();
+        });
+      } else {
+        setState(() {
+          _dueTasks = [];
+          _selectedTopics.clear();
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error loading due tasks: $e')));
       }
+      setState(() {
+        _dueTasks = [];
+        _selectedTopics.clear();
+      });
     } finally {
       setState(() {
         _isLoadingDueTasks = false;
@@ -337,21 +390,27 @@ class _ChatScreenState extends State<ChatScreen> {
   void _startPastReviewsSession() {
     _loadDueTasks();
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    chatProvider.loadPopularTopics();
     chatProvider.setSessionState(SessionState.selectingDueTopics);
   }
 
   void _startDueTopicsSession() {
     if (_selectedTopics.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one topic to review'),
-        ),
+        const SnackBar(content: Text('Please select a topic to review')),
       );
       return;
     }
 
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.startNewSession(_selectedTopics.toList());
+    // Since we're now single select, just take the first (and only) selected topic
+    final selectedTopicId = _selectedTopics.first;
+    final selectedTopic = _dueTasks.firstWhere(
+      (task) => task['topic_id'] == selectedTopicId,
+      orElse: () => {'topic_id': '', 'topic_name': 'Unknown'},
+    );
+
+    chatProvider.startNewSession([selectedTopic['topic_name']]);
   }
 
   @override
@@ -425,6 +484,13 @@ class _ChatScreenState extends State<ChatScreen> {
           behavior: HitTestBehavior.translucent,
           child: Consumer<ChatProvider>(
             builder: (context, chatProvider, child) {
+              // Show question generation loading screen
+              if (chatProvider.isGeneratingQuestions) {
+                final topicName =
+                    chatProvider.currentGeneratingTopic ?? 'your topic';
+                return QuestionGenerationLoadingScreen(topicName: topicName);
+              }
+
               // Show session type selection if no active session and in initial state
               if (!chatProvider.hasActiveSession &&
                   chatProvider.sessionState == SessionState.initial) {
@@ -444,8 +510,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   SessionState.selectingDueTopics) {
                 return DueTopicsSelectionWidget(
                   dueTasks: _dueTasks,
-                  selectedTopics: _selectedTopics,
+                  selectedTopicId:
+                      _selectedTopics.isNotEmpty ? _selectedTopics.first : null,
                   isLoadingDueTasks: _isLoadingDueTasks,
+                  existingTopics:
+                      chatProvider.popularTopics
+                          .map(
+                            (topic) => {
+                              'name': topic.name,
+                              'description': topic.description,
+                            },
+                          )
+                          .toList(),
+                  isLoadingExistingTopics: chatProvider.isLoadingPopularTopics,
                   onBackPressed: () {
                     final chatProvider = Provider.of<ChatProvider>(
                       context,
@@ -454,14 +531,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     chatProvider.setSessionState(SessionState.initial);
                   },
                   onStartSession: _startDueTopicsSession,
-                  onTopicToggled: (topicId) {
+                  onTopicSelected: (topicId) {
                     setState(() {
-                      if (_selectedTopics.contains(topicId)) {
-                        _selectedTopics.remove(topicId);
-                      } else {
-                        _selectedTopics.add(topicId);
-                      }
+                      _selectedTopics.clear();
+                      _selectedTopics.add(topicId);
                     });
+                  },
+                  onExistingTopicSelected: (topicName) {
+                    final chatProvider = Provider.of<ChatProvider>(
+                      context,
+                      listen: false,
+                    );
+                    chatProvider.startNewSession([topicName]);
                   },
                 );
               }

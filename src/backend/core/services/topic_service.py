@@ -30,7 +30,7 @@ class TopicService:
             return cached_topics
 
         # Fetch from database
-        topics = await self.repository.list_by_owner(user_uid)
+        topics = self.repository.list_by_owner(user_uid)
 
         # Cache the results
         self.cache.set_topics(user_uid, topics)
@@ -49,7 +49,7 @@ class TopicService:
             regenerating=False,
         )
 
-        created_topic = await self.repository.create(topic)
+        created_topic = self.repository.create(topic)
 
         # Invalidate cache
         self.cache.invalidate_user(user_uid)
@@ -58,16 +58,16 @@ class TopicService:
 
     async def get_topic(self, topic_id: str, user_uid: str) -> Optional[Topic]:
         """Get a specific topic by ID from user's subcollection"""
-        return await self.repository.get_by_id(topic_id, user_uid)
+        return self.repository.get_by_id(topic_id, user_uid)
 
     async def mark_regenerating(self, topic_id: str, user_uid: str, regenerating: bool) -> None:
         """Mark a topic as regenerating questions"""
-        await self.repository.update(topic_id, user_uid, {"regenerating": regenerating})
+        self.repository.update(topic_id, user_uid, {"regenerating": regenerating})
 
     async def update_question_bank(self, topic_id: str, user_uid: str, question_ids: List[str]) -> None:
         """Update the question bank for a topic"""
         try:
-            await self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
+            self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
             # Invalidate cache since we updated the topic
             self.cache.invalidate_user(user_uid)
         except Exception as e:
@@ -84,7 +84,7 @@ class TopicService:
     ):
         """Update FSRS parameters and review dates for a topic using a safe read-modify-write pattern."""
         # 1. Read the full topic object first to ensure we have the complete, correct model.
-        topic = await self.repository.get_by_id(topic_id, user_uid)
+        topic = self.repository.get_by_id(topic_id, user_uid)
         if not topic:
             logger.error(f"Cannot update FSRS params: Topic {topic_id} not found for user {user_uid}")
             return
@@ -106,7 +106,7 @@ class TopicService:
             "nextReviewAt": topic.nextReviewAt,
         }
 
-        await self.repository.update(topic_id, user_uid, update_data)
+        self.repository.update(topic_id, user_uid, update_data)
         self.cache.invalidate_user(user_uid)
 
     async def delete_topic(self, topic_id: str, user_uid: str):
@@ -115,7 +115,7 @@ class TopicService:
         # This is not yet implemented in the QuestionRepository, so we will
         # need to add it there first.
         # For now, we will just delete the topic.
-        await self.repository.delete(topic_id, user_uid)
+        self.repository.delete(topic_id, user_uid)
         self.cache.invalidate_user(user_uid)
 
     # New methods for chat functionality

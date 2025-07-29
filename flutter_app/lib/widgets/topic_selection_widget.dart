@@ -23,26 +23,14 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to avoid calling provider during build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-      if (chatProvider.popularTopics.isEmpty) {
-        chatProvider.loadPopularTopics();
-      }
-    });
   }
 
   void _submitTopics() {
     final text = _topicController.text.trim();
     if (text.isEmpty) return;
 
-    final topics =
-        text
-            .split(',')
-            .map((t) => t.trim())
-            .where((t) => t.isNotEmpty)
-            .toList();
-    widget.onTopicsSelected(topics);
+    // Only allow single topic
+    widget.onTopicsSelected([text]);
   }
 
   @override
@@ -54,16 +42,14 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
           children: [
             const SizedBox(height: 24),
             Text(
-              'Select an existing topic:',
+              'Enter a new topic to learn:',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Expanded(child: _buildTopicList(chatProvider)),
             const SizedBox(height: 16),
             TextField(
               controller: _topicController,
               decoration: InputDecoration(
-                hintText: 'Or enter new topics (comma-separated)...',
+                hintText: 'e.g., Machine Learning, Spanish Grammar, World History...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -84,35 +70,5 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
     );
   }
 
-  Widget _buildTopicList(ChatProvider chatProvider) {
-    if (chatProvider.isLoadingPopularTopics) {
-      return const Center(child: CircularProgressIndicator());
-    }
 
-    if (chatProvider.popularTopics.isEmpty) {
-      return const Center(child: Text('No topics found. Create a new one!'));
-    }
-
-    final topics = chatProvider.popularTopics;
-    return ListView.builder(
-      itemCount: topics.length,
-      itemBuilder: (context, index) {
-        final topic = topics[index];
-        return Card(
-          child: ListTile(
-            title: Text(topic.name),
-            subtitle: Text(topic.description),
-            onTap: () {
-              // Use the popular topic selection callback if available
-              if (widget.onPopularTopicSelected != null) {
-                widget.onPopularTopicSelected!(topic);
-              } else {
-                widget.onTopicsSelected([topic.name]);
-              }
-            },
-          ),
-        );
-      },
-    );
-  }
 }

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'circuit_breaker.dart';
 import 'dart:async';
+import '../models/question.dart';
 
 /// Enums
 
@@ -367,6 +368,78 @@ class ApiService {
     );
     if (response.statusCode != 200) {
       throw ApiException('Failed to generate questions', response.statusCode);
+    }
+  }
+
+  // --- Question Management Endpoints ---
+
+  Future<List<Question>> getTopicQuestions(String topicId) async {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions');
+
+    final response = await _breaker.execute(
+      () => _makeRequestWithRetry(
+        (headers) => http.get(url, headers: headers).timeout(timeout),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List;
+      return data
+          .map((item) => Question.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw ApiException('Failed to get topic questions', response.statusCode);
+    }
+  }
+
+  Future<List<Question>> createQuestions(String topicId, List<CreateQuestionRequest> questions) async {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions');
+    final body = jsonEncode(CreateQuestionsRequest(questions: questions).toJson());
+
+    final response = await _breaker.execute(
+      () => _makeRequestWithRetry(
+        (headers) => http.post(url, headers: headers, body: body).timeout(timeout),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List;
+      return data
+          .map((item) => Question.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw ApiException('Failed to create questions', response.statusCode);
+    }
+  }
+
+  Future<void> deleteQuestion(String topicId, String questionId) async {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId');
+
+    final response = await _breaker.execute(
+      () => _makeRequestWithRetry(
+        (headers) => http.delete(url, headers: headers).timeout(timeout),
+      ),
+    );
+
+    if (response.statusCode != 204) {
+      throw ApiException('Failed to delete question', response.statusCode);
+    }
+  }
+
+  Future<Question> updateQuestion(String topicId, String questionId, UpdateQuestionRequest question) async {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId');
+    final body = jsonEncode(question.toJson());
+
+    final response = await _breaker.execute(
+      () => _makeRequestWithRetry(
+        (headers) => http.put(url, headers: headers, body: body).timeout(timeout),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      return Question.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } else {
+      throw ApiException('Failed to update question', response.statusCode);
     }
   }
 }

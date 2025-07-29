@@ -58,11 +58,14 @@ class ChatProvider extends ChangeNotifier {
   bool _isGeneratingQuestions = false;
   bool _isProcessingAnswer = false;
   bool _isStartingSession = false;
+  String? _currentGeneratingTopic; // Track the topic being generated
 
   // Auto-scroll callback (set by chat screen)
   VoidCallback? _autoScrollCallback;
 
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
+
+  bool _isEndingSession = false; // Add flag to prevent double ending
 
   ChatProvider() {
     String backendUrl;
@@ -116,9 +119,13 @@ class ChatProvider extends ChangeNotifier {
   bool get isGeneratingQuestions => _isGeneratingQuestions;
   bool get isProcessingAnswer => _isProcessingAnswer;
   bool get isStartingSession => _isStartingSession;
+  String? get currentGeneratingTopic => _currentGeneratingTopic;
 
   // Backend URL getter for voice service
   String get backendUrl => _api.baseUrl;
+
+  // API Service getter for question management
+  ApiService get apiService => _api;
 
   // Helper method for authenticated API calls
   Future<Map<String, String>> _getAuthHeaders() async {
@@ -196,6 +203,7 @@ class ChatProvider extends ChangeNotifier {
     _isGeneratingQuestions = false;
     _isProcessingAnswer = false;
     _isStartingSession = false;
+    _currentGeneratingTopic = null;
     _recentlyReviewedTopicIds.clear();
 
     // Navigate to the clean chat screen to begin topic selection.
@@ -216,8 +224,11 @@ class ChatProvider extends ChangeNotifier {
     _setLoadingWithTyping(
       true,
       typingMessage: "Preparing your learning session...",
+      generatingQuestions: true,
     );
     _isStartingSession = true;
+    _isGeneratingQuestions = true;
+    _currentGeneratingTopic = topics.isNotEmpty ? topics.first : null;
     notifyListeners();
 
     try {
@@ -264,8 +275,14 @@ class ChatProvider extends ChangeNotifier {
       }
       _sessionState = SessionState.error;
     } finally {
-      _setLoadingWithTyping(false, typingMessage: null);
+      _setLoadingWithTyping(
+        false,
+        typingMessage: null,
+        generatingQuestions: false,
+      );
       _isStartingSession = false;
+      _isGeneratingQuestions = false;
+      _currentGeneratingTopic = null;
       notifyListeners();
     }
   }
@@ -281,7 +298,14 @@ class ChatProvider extends ChangeNotifier {
       );
 
       // Get the initial AI question for this topic using the existing session
-      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+      _setLoadingWithTyping(
+        true,
+        typingMessage: "Preparing your questions...",
+        generatingQuestions: true,
+      );
+      _isGeneratingQuestions = true;
+      _currentGeneratingTopic = topics.isNotEmpty ? topics.first : null;
+      notifyListeners();
 
       try {
         // Use startChat with existing session ID to get the proper initial message
@@ -316,7 +340,13 @@ class ChatProvider extends ChangeNotifier {
           );
         }
       } finally {
-        _setLoadingWithTyping(false, typingMessage: null);
+        _setLoadingWithTyping(
+          false,
+          typingMessage: null,
+          generatingQuestions: false,
+        );
+        _isGeneratingQuestions = false;
+        _currentGeneratingTopic = null;
       }
 
       notifyListeners();
@@ -335,7 +365,14 @@ class ChatProvider extends ChangeNotifier {
       );
 
       // Get the initial AI question for this topic using the existing session
-      _setLoadingWithTyping(true, typingMessage: "Preparing your questions...");
+      _setLoadingWithTyping(
+        true,
+        typingMessage: "Preparing your questions...",
+        generatingQuestions: true,
+      );
+      _isGeneratingQuestions = true;
+      _currentGeneratingTopic = topic.name;
+      notifyListeners();
 
       try {
         // Use startChat with existing session ID to get the proper initial message
@@ -370,7 +407,13 @@ class ChatProvider extends ChangeNotifier {
           );
         }
       } finally {
-        _setLoadingWithTyping(false, typingMessage: null);
+        _setLoadingWithTyping(
+          false,
+          typingMessage: null,
+          generatingQuestions: false,
+        );
+        _isGeneratingQuestions = false;
+        _currentGeneratingTopic = null;
       }
 
       notifyListeners();
@@ -473,6 +516,33 @@ class ChatProvider extends ChangeNotifier {
   /// Send a message in the current session
   Future<void> sendMessage(String text) async {
     if (_currentSessionId == null) return;
+
+    // Check if session is completed
+    if (_currentSession?.isCompleted == true ||
+        _sessionState == SessionState.completed) {
+      _addAIMessage(
+        "This session has already been completed. You can start a new session to continue learning!",
+      );
+      return;
+    }
+
+    // Check if this is an end command and we're already ending the session
+    final isEndCommand =
+        text.toLowerCase().trim() == 'end' ||
+        text.toLowerCase().trim() == 'end session' ||
+        text.toLowerCase().trim() == 'end chat' ||
+        text.toLowerCase().trim() == 'quit' ||
+        text.toLowerCase().trim() == 'stop';
+
+    if (isEndCommand && _isEndingSession) {
+      _addAIMessage("Session is already being ended. Please wait...");
+      return;
+    }
+
+    if (isEndCommand) {
+      _isEndingSession = true;
+    }
+
     _addUserMessage(text);
     _setLoadingWithTyping(
       true,
@@ -483,6 +553,24 @@ class ChatProvider extends ChangeNotifier {
     try {
       final botResponse = await _api.handleTurn(_currentSessionId!, text);
       _addAIMessage(botResponse);
+
+      // Check if the response indicates session completion
+      if (botResponse.contains("Session completed!") ||
+          botResponse.contains("session has already been completed") ||
+          botResponse.contains("Session ended!") ||
+          botResponse.contains("run out of questions") ||
+          botResponse.contains("completed all the questions") ||
+          botResponse.contains("Here's your summary:")) {
+        _sessionState = SessionState.completed;
+        if (_currentSession != null) {
+          _currentSession = _currentSession!.copyWith(
+            state: SessionState.completed,
+            isCompleted: true,
+            updatedAt: DateTime.now(),
+          );
+        }
+        notifyListeners();
+      }
 
       // Save the updated session state to Firebase after each turn
       if (_currentSession != null && _userId != null) {
@@ -508,6 +596,8 @@ class ChatProvider extends ChangeNotifier {
         typingMessage: null,
         processingAnswer: false,
       );
+      // Reset the ending session flag
+      _isEndingSession = false;
     }
   }
 
@@ -855,12 +945,23 @@ class ChatProvider extends ChangeNotifier {
   /// End the current session early
   Future<void> endCurrentSession() async {
     if (_currentSessionId == null) return;
+
+    // Prevent double execution
+    if (_isEndingSession) {
+      _logger.info('Session ending already in progress, skipping...');
+      return;
+    }
+
+    _isEndingSession = true;
     _logger.info('Ending current session: $_currentSessionId');
     _setLoadingWithTyping(true, typingMessage: "Ending your session...");
 
     try {
       final summaryMessage = await _api.handleTurn(_currentSessionId!, 'end');
       _addAIMessage(summaryMessage);
+
+      // Update session state to completed
+      _sessionState = SessionState.completed;
 
       if (_currentSession != null) {
         final updatedSession = _currentSession!.copyWith(
@@ -878,17 +979,17 @@ class ChatProvider extends ChangeNotifier {
 
         if (_userId != null) {
           await _sessionService.saveSession(_userId!, updatedSession);
-          // No need to call these here, as the UI will react to the state change
-          // and the data will be loaded when needed.
-          // await fetchDueTopics();
-          // loadSessionHistory();
         }
       }
+
+      // Notify listeners to update UI
+      notifyListeners();
     } catch (e) {
       _logger.severe('Error ending session: $e');
       _addAIMessage('Sorry, there was an error ending your session.');
     } finally {
       _setLoadingWithTyping(false);
+      _isEndingSession = false;
     }
   }
 

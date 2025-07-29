@@ -4,7 +4,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from api.v1.endpoints import chat, topics, voice
+from api.v1.endpoints import chat, questions, topics, voice
 
 # Load environment variables
 load_dotenv()
@@ -24,7 +24,12 @@ async def api_root():
         "name": "Spaced Repetition Backend API",
         "version": "v1",
         "status": "healthy",
-        "endpoints": {"chat_completions": "/chat/completions", "topics": "/topics", "voice": "/voice"},
+        "endpoints": {
+            "chat_completions": "/chat/completions",
+            "topics": "/topics",
+            "questions": "/topics/{topic_id}/questions",
+            "voice": "/voice",
+        },
     }
 
 
@@ -59,5 +64,6 @@ async def transcribe(audio: UploadFile = File(...)):
 
 # Include endpoint routers
 api_router.include_router(topics.router, prefix="/topics", tags=["topics"])
+api_router.include_router(questions.router, tags=["questions"])
 api_router.include_router(chat.router, tags=["chat"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])

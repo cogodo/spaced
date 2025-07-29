@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from api.v1.dependencies import get_current_user
 from core.models import Message
+from core.models.session import SessionState
 from core.monitoring.logger import get_logger
 from core.services.conversation_service import ConversationService
 from core.services.question_service import QuestionGenerationError, QuestionService
@@ -56,7 +57,7 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
         primary_topic = topics[0]
 
         # 2. Ensure topic has questions, generating them if necessary
-        questions = await question_service.get_topic_questions(primary_topic.id, user_uid)
+        questions = question_service.get_topic_questions(primary_topic.id, user_uid)
         if not questions:
             logger.info(f"Generating initial questions for topic {primary_topic.name}...")
             questions = await question_service.generate_initial_questions(primary_topic, user_uid)
@@ -80,7 +81,7 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
 
         # 4. Get the first question
         logger.info(f"Getting current question for session {session.id}.")
-        _, question = await session_service.get_current_question(session.id, user_uid)
+        _, question = session_service.get_current_question(session.id, user_uid)
         if not question:
             raise HTTPException(500, "Failed to get first question for the session")
         logger.info(f"Successfully retrieved first question {question.id} for session {session.id}.")
@@ -111,7 +112,7 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=500, detail="An unexpected internal error occurred.")
 
 
-async def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response):
+def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response):
     from datetime import datetime
 
     logger.info(
@@ -125,7 +126,7 @@ async def _write_user_and_bot_messages(session_service, chat_id, user_uid, user_
         timestamp=datetime.utcnow(),
         isVoice=True,
     )
-    await session_service.repository.append_messages(chat_id, user_uid, [user_msg, bot_msg])
+    session_service.repository.append_messages(chat_id, user_uid, [user_msg, bot_msg])
 
 
 # Keep backward compatibility with old endpoint
@@ -139,8 +140,16 @@ async def handle_turn(
         session_service = SessionService()
         user_uid = current_user["uid"]
         user_message = request.user_input
+
+        # Check if session is completed before processing turn
+        session = session_service.get_session(chat_id, user_uid)
+        if session and (session.state == SessionState.COMPLETED or session.isCompleted):
+            return TurnResponse(
+                bot_response="This session has already been completed. You can start a new session to continue learning!"
+            )
+
         bot_response = await conversation_service.process_turn(chat_id, user_uid, user_message)
-        await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
+        _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
         return TurnResponse(bot_response=bot_response)
     except Exception as e:
         logger.error(f"Unexpected error handling turn for chat {chat_id}: {e}", exc_info=True)
@@ -226,13 +235,13 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
 
         logger.info(f"Using user UID: {user_uid}")
 
-        session = await session_service.get_session(chat_id, user_uid)
+        session = session_service.get_session(chat_id, user_uid)
 
         if not session:
             logger.error(f"Session {chat_id} not found for user {user_uid}")
             # Let's check what sessions do exist for this user
             try:
-                all_sessions = await session_service.repository.list_by_user(user_uid)
+                all_sessions = session_service.repository.list_by_user(user_uid)
                 session_ids = [s.id for s in all_sessions]
                 logger.error(f"Available sessions for user {user_uid}: {session_ids}")
             except Exception as e:
@@ -253,7 +262,7 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                 chat_id=chat_id, user_uid=user_uid, user_input=user_message
             )
             logger.info(f"Got response from conversation service: '{bot_response[:100]}...'")
-            await _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
+            _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
         except Exception as e:
             logger.error(f"Failed to process conversation turn: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Conversation processing error: {str(e)}")
