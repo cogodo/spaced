@@ -116,7 +116,7 @@ class _QuestionInputWidgetState extends State<QuestionInputWidget> {
           children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                initialValue: _selectedType,
+                value: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Question Type',
                   border: OutlineInputBorder(),
@@ -140,7 +140,7 @@ class _QuestionInputWidgetState extends State<QuestionInputWidget> {
             const SizedBox(width: 16),
             Expanded(
               child: DropdownButtonFormField<int>(
-                initialValue: _selectedDifficulty,
+                value: _selectedDifficulty,
                 decoration: const InputDecoration(
                   labelText: 'Difficulty',
                   border: OutlineInputBorder(),
