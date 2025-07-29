@@ -15,6 +15,7 @@ Thumbs.db
 .idea/
 .vscode/
 .swiftpm/
+.cursor/
 
 # --- Environment Files ---
 .env
@@ -64,6 +65,10 @@ src/backend/.venv/
 src/backend/__pycache__/
 src/backend/.pytest_cache/
 src/backend/.coverage
+src/backend/.ruff_cache/
+
+# Voice agent log files (keep the source files)
+src/backend/voice_agent*.log
 
 src/backend/firebase_service_account.json
 # --- Node / JS ---

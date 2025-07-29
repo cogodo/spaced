@@ -6,16 +6,13 @@ Requires-Dist: uvicorn[standard]
 Requires-Dist: pydantic
 Requires-Dist: pydantic-settings
 Requires-Dist: firebase-admin
-Requires-Dist: redis
 Requires-Dist: openai<2.0.0,>=1.0.0
 Requires-Dist: tenacity
 Requires-Dist: ruff
 Requires-Dist: pre-commit
 Requires-Dist: psutil
 Requires-Dist: python-multipart
-Requires-Dist: soundfile
-Requires-Dist: numpy
-Requires-Dist: cartesia
 Requires-Dist: livekit-agents[cartesia,deepgram,openai,silero,turn-detector]~=1.0
 Requires-Dist: livekit-plugins-noise-cancellation~=0.2
 Requires-Dist: python-dotenv
+Requires-Dist: requests

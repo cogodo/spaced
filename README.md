@@ -1,4 +1,4 @@
-# Spaced Repetition Learning System
+# Spaced:  Learn things, forever.
 
 A modern spaced repetition learning application built with Flutter frontend and Python backend.
 
@@ -43,10 +43,10 @@ flutter run -d web-server \
 ### Backend
 ```bash
 cd src/backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
+python app/main.py
 ```
 
-### Voice Services (Development)
+### Voice Services (Development) 
 ```bash
 cd src/backend
 # Start voice agent worker
@@ -56,42 +56,10 @@ python voice_agent_worker.py
 ./start_voice_services.sh
 ```
 
-### Production Deployment
-```bash
-# Set voice environment variables
-export LIVEKIT_API_KEY="your-key"
-export LIVEKIT_API_SECRET="your-secret"
-export LIVEKIT_SERVER_URL="wss://your-server.livekit.cloud"
-export CARTESIA_API_KEY="your-cartesia-key"
-export DEEPGRAM_API_KEY="your-deepgram-key"  # Optional
-
-# Run bootstrap script
-sudo ./bootstrap.sh
-```
-
 The app automatically deploys to [getspaced.app](https://getspaced.app) via GitHub Actions when changes are pushed to the main branch.
 
-## Features
-
-- **Spaced Repetition Algorithm**: Smart scheduling using FSRS
-- **AI Chat Assistant**: Get learning tips and guidance
-- **🎤 Voice-to-Voice Chatbot**: Natural voice conversations with AI tutor
-  - Real-time speech-to-text and text-to-speech
-  - LiveKit-powered voice rooms
-  - Voice activity detection and noise cancellation
-- **Multi-Platform**: Web, mobile, and desktop support
-- **Modern UI**: Multiple themes with responsive design
-- **Performance Optimized**: Fast loading and smooth interactions
-
 ## Voice-to-Voice Feature
-
-The voice-to-voice chatbot allows users to have natural voice conversations with the AI tutor. See [VOICE_TO_VOICE_README.md](VOICE_TO_VOICE_README.md) for:
-
-- **Architecture Overview**: How voice processing works
-- **Deployment Guide**: Setting up voice services in production
-- **Service Management**: Managing voice agent worker
-- **Health Monitoring**: Checking service status
-- **Troubleshooting**: Common issues and solutions
+This is not on the site because it is too heavy for my backend and also kinda sucked too much to invest into, so play with it locally if you want to. Most of the code is commented out right now, but it wouldn't be tough to set up. The voice-to-voice chatbot allows users to have natural voice conversations with the AI tutor. 
 
 ### Quick Voice Setup
 
@@ -113,7 +81,7 @@ The voice-to-voice chatbot allows users to have natural voice conversations with
 3. **Start Services**:
    ```bash
    # Development
-   ./src/backend/start_voice_services.sh
+   ./src/backend/voice_agent_.sh
    
    # Production
    sudo ./bootstrap.sh
@@ -133,7 +101,4 @@ Visit the app: [https://getspaced.app](https://getspaced.app)
 
 Spaced uses scientifically proven spaced repetition techniques to help you remember information more effectively. Add items you want to remember, and the app will schedule reviews at optimal intervals based on your recall performance.
 
-- No account required
-- Data stored locally on your device
-- Simple, distraction-free interface
-- **Natural voice interaction** with AI tutor
+There is a lot of potential for this app, so feel free to reach out if you want to collaborate! Email is cogo [at] umich [dot] edu.

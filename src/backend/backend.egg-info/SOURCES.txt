@@ -6,6 +6,7 @@ api/v1/dependencies.py
 api/v1/router.py
 api/v1/endpoints/__init__.py
 api/v1/endpoints/chat.py
+api/v1/endpoints/questions.py
 api/v1/endpoints/topics.py
 api/v1/endpoints/voice.py
 app/__init__.py
@@ -20,10 +21,11 @@ backend.egg-info/requires.txt
 backend.egg-info/top_level.txt
 core/__init__.py
 core/models/__init__.py
-core/models/context.py
 core/models/conversation.py
 core/models/llm_outputs.py
+core/models/message.py
 core/models/question.py
+core/models/session.py
 core/models/topic.py
 core/monitoring/__init__.py
 core/monitoring/logger.py
@@ -34,12 +36,11 @@ core/reliability/circuit_breaker.py
 core/reliability/retry.py
 core/reliability/timeouts.py
 core/repositories/__init__.py
-core/repositories/context_repository.py
 core/repositories/question_repository.py
+core/repositories/session_repository.py
 core/repositories/topic_repository.py
 core/services/__init__.py
 core/services/clarification_service.py
-core/services/context_service.py
 core/services/conversation_service.py
 core/services/evaluation_service.py
 core/services/feedback_service.py
@@ -47,6 +48,7 @@ core/services/fsrs_service.py
 core/services/question_service.py
 core/services/routing_service.py
 core/services/scoring_service.py
+core/services/session_service.py
 core/services/topic_service.py
 infrastructure/__init__.py
 infrastructure/cache/__init__.py
