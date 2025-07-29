@@ -40,8 +40,8 @@
   <!-- Material Design Icons with better fallback handling -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Primary Material Icons - load synchronously for immediate availability -->
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block" rel="stylesheet">
+  <!-- Primary Material Icons - load asynchronously for better performance -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=swap" rel="stylesheet">
   <!-- Additional variants can load asynchronously -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round&display=swap" rel="stylesheet">
@@ -49,6 +49,12 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Two+Tone&display=swap" rel="stylesheet">
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Resource hints for faster loading -->
+  <link rel="dns-prefetch" href="//fonts.googleapis.com">
+  <link rel="dns-prefetch" href="//fonts.gstatic.com">
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
 
   <style>
     body {
@@ -168,32 +174,84 @@
       top: 0;
       left: 0;
       z-index: 9999;
-      background: #1a1a1a;
-      /* Dark theme default */
+      background: #1E1E2E;
       color: #ffffff;
+      font-family: 'ChironSungHK', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     /* Auto-detect system theme */
     @media (prefers-color-scheme: light) {
       .loading-container {
-        background: #fafafa;
-        color: #1a1a1a;
+        background: #8b5cf6;
+        color: #ffffff;
       }
+    }
 
-      .loading-spinner {
-        border-color: rgba(127, 81, 214, 0.2) !important;
-        border-top-color: #7f51d6 !important;
-      }
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .logo-image {
+      width: 60px;
+      height: 60px;
+      filter: brightness(0) invert(1);
+    }
+
+    .logo-text {
+      font-size: 2.5rem;
+      font-weight: 700;
+      font-family: 'ChironSungHK', serif;
+      color: #ffffff;
     }
 
     .loading-spinner {
-      width: 48px;
-      height: 48px;
-      border: 3px solid rgba(127, 81, 214, 0.3);
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
       border-radius: 50%;
-      border-top-color: #7f51d6;
-      animation: spin 1s linear infinite;
+      border-top-color: #ffffff;
+      animation: spin 1.2s linear infinite;
+      margin-bottom: 2rem;
     }
+
+    .motivational-text {
+      font-size: 1.3rem;
+      font-weight: 400;
+      text-align: center;
+      max-width: 450px;
+      margin: 0 auto;
+      line-height: 1.7;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out forwards;
+      font-family: 'ChironSungHK', serif;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      opacity: 0.9;
+      margin-top: 1.5rem;
+      font-weight: 300;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+      font-family: 'ChironSungHK', serif;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+
 
     @keyframes spin {
       to {
@@ -222,6 +280,19 @@
   <script>
     // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
+
+    // Performance monitoring
+    console.time('Flutter Initialization');
+    window.addEventListener('flutter-first-frame', function () {
+      console.timeEnd('Flutter Initialization');
+      console.log('🚀 Flutter app fully loaded');
+    });
+
+    // Monitor main.dart.js loading
+    const script = document.createElement('script');
+    script.src = 'main.dart.js';
+    script.onload = () => console.log('📦 main.dart.js loaded');
+    script.onerror = () => console.error('❌ main.dart.js failed to load');
   </script>
 
   <!-- Font loading diagnostic and fallback -->
@@ -278,7 +349,15 @@
 <body>
   <!-- Themed Loading Screen -->
   <div id="loading" class="loading-container">
+    <div class="logo-container">
+      <img src="web/favicon.png" alt="Spaced Logo" class="logo-image">
+      <div class="logo-text">SPACED</div>
+    </div>
     <div class="loading-spinner"></div>
+    <div class="motivational-text" id="motivational-text">
+      Knowledge is power, but spaced repetition is the key to mastery.
+    </div>
+    <div class="subtitle">Loading your learning journey...</div>
   </div>
 
   <script>
@@ -292,14 +371,71 @@
     });
   </script>
 
+  <!-- Lazy-load the Flutter runtime after the page has rendered -->
+  <script>
+    (function () {
+      function loadFlutter() {
+        var s = document.createElement('script');
+        s.src = 'main.dart.js';
+        s.defer = true;
+        document.body.appendChild(s);
+      }
+      if (document.readyState === 'complete') {
+        loadFlutter();
+      } else {
+        window.addEventListener('load', loadFlutter);
+      }
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
+    // Motivational messages for the loading screen
+    const motivationalMessages = [
+      "Knowledge is power, but spaced repetition is the key to mastery.",
+      "Every expert was once a beginner. Keep going!",
+      "The best time to learn was yesterday. The second best time is now.",
+      "Small progress is still progress. Celebrate every step forward.",
+      "Your brain is like a muscle. Exercise it daily with spaced repetition.",
+      "Learning is a journey, not a destination. Enjoy the process.",
+      "Consistency beats perfection. Show up every day.",
+      "The more you learn, the more you realize how much you don't know.",
+      "Success is not final, failure is not fatal. It's the courage to continue that counts.",
+      "Your future self is watching you right now through memories.",
+      "The only way to do great work is to love what you learn.",
+      "Learning is the only thing the mind never exhausts, never fears, and never regrets."
+    ];
+
+    let currentMessageIndex = 0;
+    const motivationalText = document.getElementById('motivational-text');
+
+    // Cycle through motivational messages every 3 seconds
+    function cycleMessages() {
+      if (motivationalText) {
+        motivationalText.style.opacity = '0';
+        setTimeout(() => {
+          currentMessageIndex = (currentMessageIndex + 1) % motivationalMessages.length;
+          motivationalText.textContent = motivationalMessages[currentMessageIndex];
+          motivationalText.style.opacity = '1';
+        }, 300);
+      }
+    }
+
+    // Start cycling messages after initial load
+    setTimeout(() => {
+      setInterval(cycleMessages, 3000);
+    }, 2000);
+
     // Hide loading screen when Flutter is ready
     window.addEventListener('flutter-first-frame', function () {
       const loading = document.querySelector('#loading');
       if (loading) {
-        loading.remove();
+        loading.style.opacity = '0';
+        loading.style.transition = 'opacity 0.5s ease-out';
+        setTimeout(() => {
+          loading.remove();
+        }, 500);
       }
     });
   </script>
