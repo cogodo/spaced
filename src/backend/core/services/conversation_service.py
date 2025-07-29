@@ -61,6 +61,14 @@ class ConversationService:
             if not session:
                 raise ValueError("Chat session not found.")
 
+            # Handle direct actions (skip/end) before state machine logic
+            user_input_lower = user_input.lower().strip()
+            if user_input_lower in ["skip", "skip question", "skip this question"]:
+                return await self._handle_skip_question(session)
+            elif user_input_lower in ["end", "end session", "end chat", "quit", "stop"]:
+                summary = await self.end_session(session)
+                return f"Session ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+
             # Main state machine logic
             if session.turnState == TurnState.AWAITING_INITIAL_ANSWER:
                 return await self._handle_initial_answer(session, user_input)
@@ -175,6 +183,34 @@ class ConversationService:
         except ValueError as e:
             logger.error(f"Error determining next action: {str(e)}")
             return f"I'm having trouble understanding your response right now. {str(e)}"
+
+    async def _handle_skip_question(self, session: Session) -> str:
+        """Handles skipping the current question and moving to the next one."""
+        try:
+            # Get current question to mark it as skipped
+            _, current_question = await self.session_service.get_current_question(session.id, session.userUid)
+            if not current_question:
+                return "You've completed all the questions! Great job."
+
+            # Mark current question as skipped (score of 0)
+            session.scores[current_question.id] = 0
+            session.questionIdx += 1
+            session.initialScore = None
+            session.turnState = TurnState.AWAITING_INITIAL_ANSWER
+
+            # Save the updated session
+            await self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+            # Get the next question
+            _, next_question = await self.session_service.get_current_question(session.id, session.userUid)
+            if not next_question:
+                return "You've completed all the questions! Great job."
+
+            return f"Question skipped. Here's your next question:\n\n{next_question.text}"
+
+        except Exception as e:
+            logger.error(f"Error skipping question: {str(e)}")
+            return f"I'm having trouble skipping the question right now. {str(e)}"
 
     async def skip_question(self, user_id: str, session_id: str) -> Dict[str, Any]:
         """
