@@ -88,7 +88,7 @@ Respond with a JSON object containing exactly this field:
         """Makes the OpenAI API call for intent classification."""
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using cheaper model for testing
+                model="gpt-4.1-mini",  # Using cheaper model for testing
                 messages=[
                     {
                         "role": "system",

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # OpenAI API Key
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
+    openai_model: str = Field("gpt-4.1-mini", env="OPENAI_MODEL")
 
     # Cartesia API Key for TTS
     cartesia_api_key: Optional[str] = Field(None, env="CARTESIA_API_KEY")

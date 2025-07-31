@@ -108,7 +108,7 @@ Provide your evaluation as a JSON object with exactly these fields:
         """Makes the OpenAI API call for scoring with proper error handling."""
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using cheaper model for testing
+                model="gpt-4.1-mini",  # Using cheaper model for testing
                 messages=[
                     {
                         "role": "system",

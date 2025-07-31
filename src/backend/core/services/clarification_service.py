@@ -89,7 +89,7 @@ Provide a direct, helpful response to their clarification request:"""
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using cheaper model for testing
+                model="gpt-4.1-mini",  # Using cheaper model for testing
                 messages=[
                     {
                         "role": "system",
@@ -152,7 +152,7 @@ Provide your assessment as a JSON object:
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Using cheaper model for testing
+                model="gpt-4.1-mini",  # Using cheaper model for testing
                 messages=[
                     {
                         "role": "system",
@@ -160,7 +160,7 @@ Provide your assessment as a JSON object:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=200,
+                max_tokens=300,
                 temperature=0.2,
                 response_format={"type": "json_object"},
             )
