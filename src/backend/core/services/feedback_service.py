@@ -114,7 +114,7 @@ Generate feedback that will help the student learn and stay motivated:"""
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=350,
+                max_tokens=500,
                 temperature=0.7,  # Higher temperature for more natural conversation
             )
 

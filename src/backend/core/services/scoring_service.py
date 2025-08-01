@@ -78,7 +78,7 @@ class ScoringService:
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    max_tokens=300,
+                    max_tokens=500,
                     temperature=0.3,  # Lower temperature for more consistent scoring
                     response_format={"type": "json_object"},  # Force JSON response
                 ),

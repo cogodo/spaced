@@ -97,7 +97,7 @@ Provide a direct, helpful response to their clarification request:"""
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=300,
+                max_tokens=500,
                 temperature=0.7,
             )
 
@@ -160,7 +160,7 @@ Provide your assessment as a JSON object:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=300,
+                max_tokens=500,
                 temperature=0.2,
                 response_format={"type": "json_object"},
             )

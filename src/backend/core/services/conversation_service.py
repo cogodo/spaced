@@ -366,7 +366,7 @@ class ConversationService:
                     {"role": "system", "content": "You are Spaced, a friendly and motivational learning tutor."},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=100,
+                max_tokens=500,
                 temperature=0.5,
             )
             content = response.choices[0].message.content

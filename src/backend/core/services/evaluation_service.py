@@ -116,7 +116,7 @@ Provide your evaluation as a JSON object with exactly these fields:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=300,
+                max_tokens=500,
                 temperature=0.2,  # Low temperature for consistent scoring
                 response_format={"type": "json_object"},
             )

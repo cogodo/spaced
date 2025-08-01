@@ -64,7 +64,7 @@ USER'S RESPONSE:
 
 CLASSIFICATION OPTIONS:
 1. "next_question" - User wants to move on to the next question
-   Examples: "next", "let's move on", "I'm ready for the next one", "got it, what's next?", "continue"
+   Examples: "next", "let's move on", "I'm ready for the next one", "got it, what's next?", "continue", "yes"
 
 2. "end_chat" - User wants to end the session
    Examples: "stop", "I'm done", "end session", "quit", "that's enough for now", "goodbye"
@@ -73,7 +73,7 @@ CLASSIFICATION OPTIONS:
    Examples: "I don't understand", "can you explain?", "what does X mean?", "how do you...?", "why is...?"
 
 CLASSIFICATION RULES:
-- If the response contains clear indicators of wanting to proceed (next, continue, ready), choose "next_question"
+- If the response contains clear indicators of wanting to proceed (next, continue, ready, yes), choose "next_question"
 - If the response contains clear indicators of wanting to stop (stop, end, done, quit), choose "end_chat"
 - If the response is a question, asks for help, or expresses confusion, choose "clarification"
 - For ambiguous responses, default to "clarification" to be helpful
@@ -96,7 +96,7 @@ Respond with a JSON object containing exactly this field:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=100,
+                max_tokens=500,
                 temperature=0.1,  # Very low temperature for consistent classification
                 response_format={"type": "json_object"},
             )

@@ -32,8 +32,8 @@ class SessionService:
         """Starts a new unified learning session."""
         logger.info(f"Starting session for user {user_uid} and topic {topic_id}")
         try:
-            # Get random questions for the session (limit to 5 questions per session for variety)
-            questions = self.question_service.get_topic_questions(topic_id, user_uid, limit=5, randomize=True)
+            # Get diverse questions for the session (limit to 5 questions per session for variety)
+            questions = self.question_service.get_diverse_questions(topic_id, user_uid, limit=5)
             if not questions:
                 logger.warning(f"No questions found for topic {topic_id}. Starting with empty session.")
                 question_ids = []
