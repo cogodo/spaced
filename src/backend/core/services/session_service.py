@@ -1,5 +1,6 @@
+import asyncio
 import uuid
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 from core.models import Question
 from core.models.session import Session, SessionState, TurnState
@@ -27,28 +28,23 @@ class SessionService:
         self.question_service = QuestionService()
 
     async def start_session(
-        self,
-        user_uid: str,
-        topic_id: str,
-        session_id: Optional[str] = None,
-        topics: list = None,
-        name: str = None,
-        question_ids: Optional[List[str]] = None,
+        self, user_uid: str, topic_id: str, session_id: Optional[str] = None, topics: list = None, name: str = None
     ) -> Session:
         """Starts a new unified learning session."""
         logger.info(f"Starting session for user {user_uid} and topic {topic_id}")
         try:
-            # Prefer provided question IDs to avoid read-after-write inconsistencies
-            if question_ids is not None:
-                selected_question_ids = question_ids
-            else:
-                # Get diverse questions for the session (limit to 5 questions per session for variety)
+            # Get diverse questions for the session with simple retries to tolerate read-after-write
+            attempts = 5
+            question_ids = []
+            for attempt in range(attempts):
                 questions = self.question_service.get_diverse_questions(topic_id, user_uid, limit=5)
-                if not questions:
-                    logger.warning(f"No questions found for topic {topic_id}. Starting with empty session.")
-                    selected_question_ids = []
-                else:
-                    selected_question_ids = [q.id for q in questions]
+                if questions:
+                    question_ids = [q.id for q in questions]
+                    break
+                if attempt < attempts - 1:
+                    await asyncio.sleep(0.25)
+            if not question_ids:
+                logger.warning(f"No questions found for topic {topic_id} after retries. Starting with empty session.")
 
             session_id = session_id or str(uuid.uuid4())
             session = Session(
@@ -57,7 +53,7 @@ class SessionService:
                 name=name or f"Session - {session_id[:8]}",
                 topics=topics or [],
                 topicId=topic_id,
-                questionIds=selected_question_ids,
+                questionIds=question_ids,
                 state=SessionState.ACTIVE,
                 turnState=TurnState.AWAITING_INITIAL_ANSWER,
             )

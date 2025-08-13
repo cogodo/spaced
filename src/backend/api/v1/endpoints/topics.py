@@ -109,56 +109,7 @@ async def manage_topic(
         raise HTTPException(400, "Invalid action specified")
 
 
-@router.post("/generate-by-name")
-async def generate_questions_by_name(
-    name: str = Body(..., embed=True, description="Topic name to generate questions for"),
-    current_user: dict = Depends(get_current_user),
-):
-    """Generate questions for a topic name, creating the topic if it doesn't exist."""
-    topic_service = TopicService()
-    question_service = QuestionService()
-
-    try:
-        # Find or create the topic by name
-        topics = await topic_service.find_or_create_topics([name], current_user.get("uid"))
-        if not topics:
-            raise HTTPException(status_code=400, detail="Invalid topic name")
-
-        topic = topics[0]
-
-        # If already regenerating, return status
-        if topic.regenerating:
-            return {"message": "Questions already being generated", "topic_id": topic.id, "success": True}
-
-        # Mark regenerating
-        await topic_service.mark_regenerating(topic.id, current_user.get("uid"), True)
-
-        # Generate a quick initial set
-        questions = await question_service.generate_initial_questions(topic, current_user.get("uid"))
-
-        # Update topic question bank
-        question_ids = [q.id for q in questions]
-        await topic_service.update_question_bank(topic.id, current_user.get("uid"), question_ids)
-
-        # Clear regenerating flag
-        await topic_service.mark_regenerating(topic.id, current_user.get("uid"), False)
-
-        return {
-            "message": f"Generated {len(questions)} questions",
-            "topic_id": topic.id,
-            "questions": len(questions),
-            "success": True,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Ensure regenerating flag is cleared on error
-        try:
-            await topic_service.mark_regenerating(topic.id, current_user.get("uid"), False)  # type: ignore
-        except Exception:
-            pass
-        safe_error_message = str(e).replace("{", "{{").replace("}", "}}")
-        raise HTTPException(500, f"Failed to generate questions: {safe_error_message}")
+## generate-by-name endpoint removed per rollback
 
 
 async def generate_questions(topic_id: str, current_user: dict, idempotency_key: Optional[str] = None):

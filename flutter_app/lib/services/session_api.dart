@@ -306,24 +306,7 @@ class ApiService {
     }
   }
 
-  Future<String> generateQuestionsForName(String name) async {
-    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/generate-by-name');
-    final body = jsonEncode({'name': name});
-
-    final response = await _breaker.execute(
-      () => _makeRequestWithRetry(
-        (headers) =>
-            http.post(url, headers: headers, body: body).timeout(timeout),
-      ),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['topic_id'] as String;
-    } else {
-      throw ApiException('Failed to generate questions', response.statusCode);
-    }
-  }
+  // generateQuestionsForName removed per rollback
 
   Future<void> deleteTopic(String topicId) async {
     final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId');
