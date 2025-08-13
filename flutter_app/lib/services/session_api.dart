@@ -306,6 +306,25 @@ class ApiService {
     }
   }
 
+  Future<String> generateQuestionsForName(String name) async {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/generate');
+    final body = jsonEncode({'name': name});
+
+    final response = await _breaker.execute(
+      () => _makeRequestWithRetry(
+        (headers) =>
+            http.post(url, headers: headers, body: body).timeout(timeout),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['topic_id'] as String;
+    } else {
+      throw ApiException('Failed to generate questions', response.statusCode);
+    }
+  }
+
   Future<void> deleteTopic(String topicId) async {
     final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId');
 
@@ -392,13 +411,19 @@ class ApiService {
     }
   }
 
-  Future<List<Question>> createQuestions(String topicId, List<CreateQuestionRequest> questions) async {
+  Future<List<Question>> createQuestions(
+    String topicId,
+    List<CreateQuestionRequest> questions,
+  ) async {
     final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions');
-    final body = jsonEncode(CreateQuestionsRequest(questions: questions).toJson());
+    final body = jsonEncode(
+      CreateQuestionsRequest(questions: questions).toJson(),
+    );
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
-        (headers) => http.post(url, headers: headers, body: body).timeout(timeout),
+        (headers) =>
+            http.post(url, headers: headers, body: body).timeout(timeout),
       ),
     );
 
@@ -413,7 +438,9 @@ class ApiService {
   }
 
   Future<void> deleteQuestion(String topicId, String questionId) async {
-    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId');
+    final url = Uri.parse(
+      '$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId',
+    );
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
@@ -426,18 +453,27 @@ class ApiService {
     }
   }
 
-  Future<Question> updateQuestion(String topicId, String questionId, UpdateQuestionRequest question) async {
-    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId');
+  Future<Question> updateQuestion(
+    String topicId,
+    String questionId,
+    UpdateQuestionRequest question,
+  ) async {
+    final url = Uri.parse(
+      '$_baseUrl$_apiPrefix/topics/$topicId/questions/$questionId',
+    );
     final body = jsonEncode(question.toJson());
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(
-        (headers) => http.put(url, headers: headers, body: body).timeout(timeout),
+        (headers) =>
+            http.put(url, headers: headers, body: body).timeout(timeout),
       ),
     );
 
     if (response.statusCode == 200) {
-      return Question.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return Question.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } else {
       throw ApiException('Failed to update question', response.statusCode);
     }

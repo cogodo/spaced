@@ -7,20 +7,47 @@ class Question(BaseModel):
     id: str
     topicId: str
     text: str
-    type: Literal["multiple_choice", "short_answer", "explanation"]
+    type: Literal[
+        "multiple_choice",
+        "short_answer",
+        "explanation",
+        "application",
+        "comparison",
+        "analysis",
+        "synthesis",
+        "prediction",
+    ]
     difficulty: int
     metadata: Dict[str, Any] = {}
 
 
 class CreateQuestionRequest(BaseModel):
     text: str
-    type: Literal["multiple_choice", "short_answer", "explanation"]
+    type: Literal[
+        "multiple_choice",
+        "short_answer",
+        "explanation",
+        "application",
+        "comparison",
+        "analysis",
+        "synthesis",
+        "prediction",
+    ]
     difficulty: int = 1
 
 
 class UpdateQuestionRequest(BaseModel):
     text: str
-    type: Literal["multiple_choice", "short_answer", "explanation"]
+    type: Literal[
+        "multiple_choice",
+        "short_answer",
+        "explanation",
+        "application",
+        "comparison",
+        "analysis",
+        "synthesis",
+        "prediction",
+    ]
     difficulty: int
 
 

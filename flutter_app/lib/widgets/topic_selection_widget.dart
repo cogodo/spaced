@@ -25,12 +25,47 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
     super.initState();
   }
 
-  void _submitTopics() {
+  Future<void> _submitTopics() async {
     final text = _topicController.text.trim();
     if (text.isEmpty) return;
 
-    // Only allow single topic
-    widget.onTopicsSelected([text]);
+    final chatProvider = context.read<ChatProvider>();
+    try {
+      // Step 1: Generate questions first
+      await chatProvider.apiService.generateQuestionsForName(text);
+
+      if (!mounted) return;
+
+      // Step 2: Prompt to start session
+      final shouldStart = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Questions generated!'),
+              content: const Text('Start learning session now?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Not now'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Start session'),
+                ),
+              ],
+            ),
+      );
+
+      if (shouldStart == true) {
+        // Start session using the original name (server will resolve to topic)
+        widget.onTopicsSelected([text]);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate questions: $e')),
+      );
+    }
   }
 
   @override
@@ -49,7 +84,8 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
             TextField(
               controller: _topicController,
               decoration: InputDecoration(
-                hintText: 'e.g., Machine Learning, Spanish Grammar, World History...',
+                hintText:
+                    'e.g., Machine Learning, Spanish Grammar, World History...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -61,7 +97,7 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submitTopics,
-                child: const Text('Start Learning Session'),
+                child: const Text('Generate Questions'),
               ),
             ),
           ],
@@ -69,6 +105,4 @@ class _TopicSelectionWidgetState extends State<TopicSelectionWidget> {
       },
     );
   }
-
-
 }
