@@ -221,6 +221,14 @@ class ChatProvider extends ChangeNotifier {
   /// Initialize a new chat session
   Future<void> startNewSession(List<String> topics) async {
     _logger.info('Starting new chat session with topics: $topics');
+
+    // Clear any existing messages to prevent cross-contamination
+    _messages = [];
+    _finalScores = null;
+
+    // Stop listening to any previous session's messages
+    _stopListeningToMessages();
+
     _setLoadingWithTyping(
       true,
       typingMessage: "Preparing your learning session...",
@@ -237,32 +245,50 @@ class ChatProvider extends ChangeNotifier {
       _currentTopicId = response.topicId;
       _sessionState = SessionState.active;
 
-      final session = ChatSession.create(
-        id: response.chatId,
-        topics: response.topics,
-        name: 'New Session - ${_formatTimestamp(DateTime.now())}',
-        topicId: response.topicId,
-      );
+      // Try to load the backend-created session to preserve server metadata (name, etc.)
+      ChatSession? backendSession;
+      if (_userId != null) {
+        for (int i = 0; i < 15; i++) {
+          backendSession = await _sessionService.loadSession(
+            _userId!,
+            _currentSessionId!,
+          );
+          if (backendSession != null) break;
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+      }
 
-      // Update session to active state since we're starting with topics
-      _currentSession = session.copyWith(state: SessionState.active);
+      // Client overrides display name consistently
+      final now = DateTime.now();
+      final displayName =
+          'New Session - '
+          '${now.month}/${now.day}/${now.year} '
+          '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
 
+      if (backendSession != null) {
+        _currentSession = backendSession.copyWith(
+          state: SessionState.active,
+          name: displayName,
+        );
+      } else {
+        _currentSession = ChatSession.create(
+          id: response.chatId,
+          topics: response.topics,
+          name: displayName,
+          topicId: response.topicId,
+        ).copyWith(state: SessionState.active);
+      }
+
+      // Add the initial AI message to local state and persist
       _addAIMessage(response.message);
 
-      // Play the initial message as audio - moved to LiveKit voice system
-      // if (response.message.isNotEmpty) {
-      //   _audioPlayerService.playFromText(response.message);
-      // }
-
-      if (_userId != null) {
+      if (_userId != null && _currentSession != null) {
         await _sessionService.saveSession(_userId!, _currentSession!);
         loadSessionHistory();
-        // Start listening to messages for the new session
         _listenToMessages(_userId!, _currentSessionId!);
       }
       _router?.go('/app/chat/${_currentSession!.token}');
 
-      // Auto-scroll to show the initial message
       _autoScrollCallback?.call();
     } catch (e) {
       _logger.severe('Error starting new session: $e');
@@ -711,10 +737,7 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Format timestamp for display
-  String _formatTimestamp(DateTime timestamp) {
-    return '${timestamp.month}/${timestamp.day}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
-  }
+  // _formatTimestamp removed (unused)
 
   /// Clear all data (for sign out, etc.)
   void clear() {
