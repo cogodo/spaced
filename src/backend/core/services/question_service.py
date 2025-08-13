@@ -196,8 +196,8 @@ class QuestionService:
         questions = []
         existing_question_texts = []
 
-        # Generate 20 questions quickly without refinement but with similarity checking
-        for i in range(20):
+        # Generate 8 questions quickly for faster session start (can generate more later)
+        for i in range(8):
             question_type, template = question_templates[i % len(question_templates)]
             difficulty = min(i // 7 + 1, 3)  # Distribute difficulties 1-3 across 20 questions
 
@@ -396,11 +396,11 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
                     max_tokens=max_tokens,
                     temperature=temperature,
                 ),
-                timeout=15.0,  # 15 second timeout for individual API calls
+                timeout=1.0,  # 1 second timeout - questions should be fast
             )
             return response.choices[0].message.content
         except asyncio.TimeoutError:
-            raise OpenAITimeoutError("OpenAI API call timed out after 15 seconds")
+            raise OpenAITimeoutError("OpenAI API call timed out after 1 second")
         except Exception as e:
             # Escape curly braces in error message to prevent f-string formatting errors
             safe_error = str(e).replace("{", "{{").replace("}", "}}")

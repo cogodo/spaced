@@ -94,10 +94,20 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
             raise HTTPException(500, "Failed to get first question for the session")
         logger.info(f"Successfully retrieved first question {question.id} for session {session.id}.")
 
-        # 5. Return the successful response
+        # 5. Write the initial bot message to Firestore so client can see it
+        initial_message = f"Let's learn about {primary_topic.name}!\n\n**Question 1:**\n{question.text}"
+
+        initial_bot_message = Message(
+            text=initial_message, isUser=False, isSystem=False, timestamp=datetime.utcnow(), isVoice=False
+        )
+
+        session_service.add_message_to_session(session.id, user_uid, initial_bot_message)
+        logger.info(f"Wrote initial message to Firestore for session {session.id}")
+
+        # 6. Return the successful response
         response = StartChatResponse(
             chat_id=session.id,
-            message=f"Let's learn about {primary_topic.name}!\n\n**Question 1:**\n{question.text}",
+            message=initial_message,
             next_question=question.text,
             topics=[t.name for t in topics],
             topic_id=primary_topic.id,
