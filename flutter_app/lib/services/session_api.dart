@@ -307,7 +307,7 @@ class ApiService {
   }
 
   Future<String> generateQuestionsForName(String name) async {
-    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/generate');
+    final url = Uri.parse('$_baseUrl$_apiPrefix/topics/generate-by-name');
     final body = jsonEncode({'name': name});
 
     final response = await _breaker.execute(

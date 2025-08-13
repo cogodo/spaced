@@ -109,7 +109,7 @@ async def manage_topic(
         raise HTTPException(400, "Invalid action specified")
 
 
-@router.post("/generate")
+@router.post("/generate-by-name")
 async def generate_questions_by_name(
     name: str = Body(..., embed=True, description="Topic name to generate questions for"),
     current_user: dict = Depends(get_current_user),
