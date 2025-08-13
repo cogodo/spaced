@@ -58,14 +58,18 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
 
         # 2. Ensure topic has questions, generating them if necessary
         questions = question_service.get_topic_questions(primary_topic.id, user_uid)
+        generated_question_ids = None
         if not questions:
             logger.info(f"Generating initial questions for topic {primary_topic.name}...")
             questions = await question_service.generate_initial_questions(primary_topic, user_uid)
             if not questions:
                 raise HTTPException(500, f"Question generation returned no questions for topic: {primary_topic.name}")
 
-            logger.info(f"Updating question bank for topic {primary_topic.id} with {len(questions)} questions.")
-            await topic_service.update_question_bank(primary_topic.id, user_uid, [q.id for q in questions])
+            generated_question_ids = [q.id for q in questions]
+            logger.info(
+                f"Updating question bank for topic {primary_topic.id} with {len(generated_question_ids)} questions."
+            )
+            await topic_service.update_question_bank(primary_topic.id, user_uid, generated_question_ids)
             logger.info(f"Successfully updated question bank for topic {primary_topic.id}.")
 
         # 3. Start the session (unified learning session)
@@ -76,6 +80,7 @@ async def start_chat(request: StartChatRequest, current_user: dict = Depends(get
             session_id=request.chat_id,
             topics=[t.name for t in topics],
             name=f"Session - {topics[0] if topics else 'Learning'}",
+            question_ids=generated_question_ids,
         )
         logger.info(f"Successfully started session {session.id}.")
 

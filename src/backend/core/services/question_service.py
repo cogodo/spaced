@@ -255,8 +255,14 @@ class QuestionService:
                 except Exception as retry_e:
                     print(f"Retry failed for question {i + 1}: {retry_e}")
             except Exception as e:
-                # Wrap the original exception in our custom error for better handling upstream
-                raise QuestionGenerationError(f"Failed to generate initial question for topic '{topic.name}'") from e
+                # Be resilient: skip this iteration and continue attempting to generate others.
+                # We'll only raise if we fail to generate any questions at all.
+                print(f"Failed to generate initial question {i + 1} for topic '{topic.name}': {e}")
+                continue
+
+        # If we couldn't generate any questions at all, surface a clear error upstream
+        if not questions:
+            raise QuestionGenerationError(f"Failed to generate any initial questions for topic '{topic.name}'")
 
         return questions
 

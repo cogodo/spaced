@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from core.models import Question
 from core.models.session import Session, SessionState, TurnState
@@ -27,18 +27,28 @@ class SessionService:
         self.question_service = QuestionService()
 
     async def start_session(
-        self, user_uid: str, topic_id: str, session_id: Optional[str] = None, topics: list = None, name: str = None
+        self,
+        user_uid: str,
+        topic_id: str,
+        session_id: Optional[str] = None,
+        topics: list = None,
+        name: str = None,
+        question_ids: Optional[List[str]] = None,
     ) -> Session:
         """Starts a new unified learning session."""
         logger.info(f"Starting session for user {user_uid} and topic {topic_id}")
         try:
-            # Get diverse questions for the session (limit to 5 questions per session for variety)
-            questions = self.question_service.get_diverse_questions(topic_id, user_uid, limit=5)
-            if not questions:
-                logger.warning(f"No questions found for topic {topic_id}. Starting with empty session.")
-                question_ids = []
+            # Prefer provided question IDs to avoid read-after-write inconsistencies
+            if question_ids is not None:
+                selected_question_ids = question_ids
             else:
-                question_ids = [q.id for q in questions]
+                # Get diverse questions for the session (limit to 5 questions per session for variety)
+                questions = self.question_service.get_diverse_questions(topic_id, user_uid, limit=5)
+                if not questions:
+                    logger.warning(f"No questions found for topic {topic_id}. Starting with empty session.")
+                    selected_question_ids = []
+                else:
+                    selected_question_ids = [q.id for q in questions]
 
             session_id = session_id or str(uuid.uuid4())
             session = Session(
@@ -47,7 +57,7 @@ class SessionService:
                 name=name or f"Session - {session_id[:8]}",
                 topics=topics or [],
                 topicId=topic_id,
-                questionIds=question_ids,
+                questionIds=selected_question_ids,
                 state=SessionState.ACTIVE,
                 turnState=TurnState.AWAITING_INITIAL_ANSWER,
             )
