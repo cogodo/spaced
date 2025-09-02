@@ -98,11 +98,11 @@ class _QuestionCard extends StatelessWidget {
   Color _getTypeColor(String type, ThemeData theme) {
     switch (type) {
       case 'multiple_choice':
-        return Colors.blue;
+        return theme.colorScheme.secondary;
       case 'short_answer':
-        return Colors.green;
+        return theme.colorScheme.tertiary;
       case 'explanation':
-        return Colors.orange;
+        return theme.colorScheme.primary;
       default:
         return theme.colorScheme.primary;
     }
@@ -111,11 +111,11 @@ class _QuestionCard extends StatelessWidget {
   Color _getDifficultyColor(int difficulty, ThemeData theme) {
     switch (difficulty) {
       case 1:
-        return Colors.green;
+        return theme.colorScheme.tertiary;
       case 2:
-        return Colors.orange;
+        return theme.colorScheme.secondary;
       case 3:
-        return Colors.red;
+        return theme.colorScheme.error;
       default:
         return theme.colorScheme.primary;
     }
@@ -142,7 +142,10 @@ class _QuestionCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
                     tooltip: 'Delete question',
                     iconSize: 20,
                   ),

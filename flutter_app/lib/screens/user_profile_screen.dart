@@ -143,14 +143,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         decoration: BoxDecoration(
                           color:
                               authProvider.isEmailVerified
-                                  ? Colors.green.withValues(alpha: 0.1)
-                                  : Colors.orange.withValues(alpha: 0.1),
+                                  ? Theme.of(
+                                    context,
+                                  ).colorScheme.tertiary.withValues(alpha: 0.1)
+                                  : Theme.of(context).colorScheme.secondary
+                                      .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color:
                                 authProvider.isEmailVerified
-                                    ? Colors.green
-                                    : Colors.orange,
+                                    ? Theme.of(context).colorScheme.tertiary
+                                    : Theme.of(context).colorScheme.secondary,
                             width: 1,
                           ),
                         ),
@@ -163,8 +166,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             fontWeight: FontWeight.w500,
                             color:
                                 authProvider.isEmailVerified
-                                    ? Colors.green
-                                    : Colors.orange,
+                                    ? Theme.of(context).colorScheme.tertiary
+                                    : Theme.of(context).colorScheme.secondary,
                           ),
                         ),
                       ),
@@ -186,9 +189,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       await authProvider.sendEmailVerification();
                       if (mounted) {
                         messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Verification email sent!'),
-                            backgroundColor: Colors.green,
+                          SnackBar(
+                            content: const Text('Verification email sent!'),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.tertiary,
                           ),
                         );
                       }
@@ -199,7 +203,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             content: Text(
                               'Failed to send verification email: $e',
                             ),
-                            backgroundColor: Colors.red,
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error,
                           ),
                         );
                       }
@@ -482,7 +487,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           messenger.showSnackBar(
             SnackBar(
               content: Text('Failed to sign out: $e'),
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
+import 'design_tokens.dart';
 
 // Class to hold theme data along with metadata
 class ThemeMetadata {
@@ -157,6 +158,25 @@ final Map<String, ThemeMetadata> appThemes = {
         seedColor: const Color(0xFF6750A4), // Same deep purple as dark theme
         brightness: Brightness.light,
       ),
+      extensions: <ThemeExtension<dynamic>>[
+        const SpacedTokens(
+          brandPrimary: Color(0xFF6750A4),
+          brandSecondary: Color(0xFF7B68EE),
+          brandAccent: Color(0xFF9A86FD),
+          brandOnPrimary: Colors.white,
+          success: Color(0xFF2E7D32),
+          warning: Color(0xFFF9A825),
+          error: Color(0xFFD32F2F),
+          info: Color(0xFF0288D1),
+          background: Colors.white,
+          surface: Color(0xFFFFFFFF),
+          surfaceAlt: Color(0xFFF7F7FB),
+          surfaceElevated: Color(0xFFF0EFF7),
+          onBackground: Colors.black87,
+          onSurface: Colors.black87,
+          outline: Color(0x1A6750A4),
+        ),
+      ],
       // Apply our custom text theme with dark text for readability
       textTheme: _createChironSungTextTheme(Colors.black87, Brightness.light),
       primaryTextTheme: _createChironSungTextTheme(
@@ -253,6 +273,48 @@ final Map<String, ThemeMetadata> appThemes = {
         0xFF6750A4,
       ).withValues(alpha: 0.2), // Light purple divider
       iconTheme: const IconThemeData(color: Color(0xFF6750A4)), // Purple icons
+      // Component themes (Light)
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 0,
+        surfaceTintColor: const Color(0xFF6750A4).withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: const Color(0xFF6750A4).withValues(alpha: 0.1),
+          ),
+        ),
+        margin: const EdgeInsets.all(8),
+      ),
+      chipTheme: const ChipThemeData(
+        backgroundColor: Color(0xFFF0EFF7),
+        selectedColor: Color(0xFF6750A4),
+        secondarySelectedColor: Color(0xFF6750A4),
+        checkmarkColor: Colors.white,
+        labelStyle: TextStyle(color: Colors.black87),
+        secondaryLabelStyle: TextStyle(color: Colors.white),
+        brightness: Brightness.light,
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: StadiumBorder(),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF6750A4),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: const Color(0xFF6750A4).withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: Color(0xFF6750A4),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
 
       useMaterial3: true,
     ),
@@ -266,6 +328,25 @@ final Map<String, ThemeMetadata> appThemes = {
         seedColor: const Color(0xFF6750A4), // Deep purple seed color
         brightness: Brightness.dark,
       ),
+      extensions: <ThemeExtension<dynamic>>[
+        const SpacedTokens(
+          brandPrimary: Color(0xFF9A86FD),
+          brandSecondary: Color(0xFF7B68EE),
+          brandAccent: Color(0xFFB4A9FF),
+          brandOnPrimary: Colors.white,
+          success: Color(0xFF4CAF50),
+          warning: Color(0xFFFFB300),
+          error: Color(0xFFEF5350),
+          info: Color(0xFF4FC3F7),
+          background: Color(0xFF1E1E2E),
+          surface: Color(0xFF2D2D40),
+          surfaceAlt: Color(0xFF242433),
+          surfaceElevated: Color(0xFF34344A),
+          onBackground: Colors.white,
+          onSurface: Colors.white,
+          outline: Color(0x333D3A50),
+        ),
+      ],
       // Apply our custom text theme for dark mode
       textTheme: _createChironSungTextTheme(Colors.white, Brightness.dark),
       primaryTextTheme: _createChironSungTextTheme(
@@ -358,6 +439,47 @@ final Map<String, ThemeMetadata> appThemes = {
 
       // Add icon theme
       iconTheme: const IconThemeData(color: Color(0xFF9A86FD)),
+
+      // Component themes (Dark)
+      cardTheme: CardThemeData(
+        color: const Color(0xFF2D2D40),
+        elevation: 0,
+        surfaceTintColor: const Color(0xFF9A86FD).withValues(alpha: 0.05),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xFF3D3A50), width: 1),
+        ),
+        margin: const EdgeInsets.all(8),
+      ),
+      chipTheme: const ChipThemeData(
+        backgroundColor: Color(0xFF34344A),
+        selectedColor: Color(0xFF9A86FD),
+        secondarySelectedColor: Color(0xFF9A86FD),
+        checkmarkColor: Colors.white,
+        labelStyle: TextStyle(color: Colors.white),
+        secondaryLabelStyle: TextStyle(color: Colors.white),
+        brightness: Brightness.dark,
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: StadiumBorder(),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF9A86FD),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xFF2D2D40),
+        surfaceTintColor: const Color(0xFF9A86FD).withValues(alpha: 0.05),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: Color(0xFF9A86FD),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
 
       useMaterial3: true,
     ),

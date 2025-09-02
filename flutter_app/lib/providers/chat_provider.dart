@@ -64,6 +64,7 @@ class ChatProvider extends ChangeNotifier {
   VoidCallback? _autoScrollCallback;
 
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
+  StreamSubscription<DocumentSnapshot>? _sessionSubscription;
 
   bool _isEndingSession = false; // Add flag to prevent double ending
 
@@ -281,11 +282,13 @@ class ChatProvider extends ChangeNotifier {
 
       // Add the initial AI message to local state and persist
       _addAIMessage(response.message);
+      _maybeMarkCompletedFromText(response.message);
 
       if (_userId != null && _currentSession != null) {
         await _sessionService.saveSession(_userId!, _currentSession!);
         loadSessionHistory();
         _listenToMessages(_userId!, _currentSessionId!);
+        _listenToSession(_userId!, _currentSessionId!);
       }
       _router?.go('/app/chat/${_currentSession!.token}');
 
@@ -342,6 +345,7 @@ class ChatProvider extends ChangeNotifier {
 
         // Add the AI's initial question (not a user message)
         _addAIMessage(response.message);
+        _maybeMarkCompletedFromText(response.message);
 
         // Update session metadata with new topics if needed
         if (_currentSession != null) {
@@ -409,6 +413,7 @@ class ChatProvider extends ChangeNotifier {
 
         // Add the AI's initial question (not a user message)
         _addAIMessage(response.message);
+        _maybeMarkCompletedFromText(response.message);
 
         // Update session metadata with new topic if needed
         if (_currentSession != null) {
@@ -475,8 +480,9 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
-      // Start listening to messages
+      // Start listening to messages and session doc
       _listenToMessages(_userId!, sessionId);
+      _listenToSession(_userId!, sessionId);
 
       notifyListeners();
       _logger.info('Successfully loaded session $sessionId');
@@ -521,8 +527,9 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
-      // Start listening to messages for the loaded session
+      // Start listening to messages and session doc for the loaded session
       _listenToMessages(_userId!, session.id);
+      _listenToSession(_userId!, session.id);
 
       notifyListeners();
       _logger.info('Successfully loaded session by token $token');
@@ -943,6 +950,17 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _maybeMarkCompletedFromText(String botResponse) {
+    if (botResponse.contains("Session completed!") ||
+        botResponse.contains("session has already been completed") ||
+        botResponse.contains("Session ended!") ||
+        botResponse.contains("run out of questions") ||
+        botResponse.contains("completed all the questions") ||
+        botResponse.contains("Here's your summary:")) {
+      _handleBackendSessionCompleted();
+    }
+  }
+
   /// Skip the current question
   Future<void> skipCurrentQuestion() async {
     if (_currentSessionId == null) return;
@@ -1112,9 +1130,63 @@ class ChatProvider extends ChangeNotifier {
     });
   }
 
+  void _listenToSession(String userId, String sessionId) {
+    _sessionSubscription?.cancel();
+    final sessionRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('sessions')
+        .doc(sessionId);
+
+    _sessionSubscription = sessionRef.snapshots().listen((doc) {
+      if (!doc.exists) return;
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return;
+
+      final String? stateStr = data['state']?.toString();
+      final bool isCompleted =
+          (data['isCompleted'] == true) ||
+          (stateStr != null && stateStr.toLowerCase() == 'completed');
+
+      if (isCompleted) {
+        _handleBackendSessionCompleted();
+      }
+    });
+  }
+
+  Future<void> _handleBackendSessionCompleted() async {
+    if (_sessionState != SessionState.completed) {
+      _sessionState = SessionState.completed;
+    }
+    if (_currentSession != null) {
+      final updatedSession = _currentSession!.copyWith(
+        state: SessionState.completed,
+        isCompleted: true,
+        updatedAt: DateTime.now(),
+      );
+
+      if (_currentSession?.topicId != null) {
+        _recentlyReviewedTopicIds.add(_currentSession!.topicId!);
+      }
+
+      _currentSession = updatedSession;
+
+      if (_userId != null) {
+        try {
+          await _sessionService.saveSession(_userId!, updatedSession);
+        } catch (_) {
+          // Ignore save errors on background completion
+        }
+      }
+    }
+    notifyListeners();
+  }
+
   void _stopListeningToMessages() {
     _messagesSubscription?.cancel();
     _messagesSubscription = null;
+    _sessionSubscription?.cancel();
+    _sessionSubscription = null;
   }
 
   // Clean up listener on dispose

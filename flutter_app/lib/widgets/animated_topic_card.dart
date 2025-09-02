@@ -59,7 +59,7 @@ class _AnimatedTopicCardState extends State<AnimatedTopicCard> {
                 color:
                     _isHovered
                         ? theme.colorScheme.primary.withValues(alpha: 0.2)
-                        : Colors.black.withValues(alpha: 0.1),
+                        : theme.colorScheme.shadow.withValues(alpha: 0.1),
                 blurRadius: _isHovered ? 8.0 : 4.0,
                 offset: Offset(0, _isHovered ? 4.0 : 2.0),
               ),
@@ -79,7 +79,7 @@ class _AnimatedTopicCardState extends State<AnimatedTopicCard> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
+                      icon: Icon(Icons.delete, color: theme.colorScheme.error),
                       onPressed: widget.onDelete,
                     ),
                   ],

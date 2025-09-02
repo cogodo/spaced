@@ -311,7 +311,7 @@ class _DueTopicsSelectionWidgetState extends State<DueTopicsSelectionWidget> {
 
   Color _getBorderColor(DateTime? nextReviewAt) {
     if (nextReviewAt == null) {
-      return Colors.grey; // Default color for topics without a review date
+      return Theme.of(context).colorScheme.outline; // Default
     }
 
     final now = DateTime.now();
@@ -324,11 +324,11 @@ class _DueTopicsSelectionWidgetState extends State<DueTopicsSelectionWidget> {
     final difference = today.difference(reviewDay).inDays;
 
     if (difference > 2) {
-      return Colors.red.shade700; // Overdue by more than 2 days
+      return Theme.of(context).colorScheme.error; // Overdue
     } else if (difference >= 0) {
-      return Colors.yellow.shade800; // Due today or overdue by 1-2 days
+      return Theme.of(context).colorScheme.secondary; // Due today
     } else {
-      return Colors.green.shade700; // Upcoming
+      return Theme.of(context).colorScheme.tertiary; // Upcoming
     }
   }
 

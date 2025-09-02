@@ -119,7 +119,7 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
             content: Text(
               'Successfully added ${questions.length} question${questions.length == 1 ? '' : 's'}',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).colorScheme.tertiary,
             action: SnackBarAction(label: 'Refresh', onPressed: _loadQuestions),
           ),
         );
@@ -135,7 +135,7 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to add questions: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -185,15 +185,17 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Question deleted successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).colorScheme.tertiary,
             action: SnackBarAction(
               label: 'Undo',
               onPressed: () {
-                // Note: In a real implementation, you might want to implement undo functionality
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Undo functionality not implemented yet'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: const Text(
+                      'Undo functionality not implemented yet',
+                    ),
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               },
@@ -212,7 +214,7 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete question: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -281,15 +283,17 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: theme.colorScheme.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: theme.colorScheme.error.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline,
-                      color: Colors.red,
+                      color: theme.colorScheme.error,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -297,15 +301,15 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
                       child: Text(
                         _errorMessage!,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.red,
+                          color: theme.colorScheme.error,
                         ),
                       ),
                     ),
                     IconButton(
                       onPressed: () => setState(() => _errorMessage = null),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
-                        color: Colors.red,
+                        color: theme.colorScheme.error,
                         size: 20,
                       ),
                       padding: EdgeInsets.zero,
@@ -379,7 +383,9 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
                             ),
                             if (_isLoadingOperations)
                               Container(
-                                color: Colors.black.withValues(alpha: 0.3),
+                                color: theme.colorScheme.scrim.withValues(
+                                  alpha: 0.3,
+                                ),
                                 child: const Center(
                                   child: Card(
                                     child: Padding(
