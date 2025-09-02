@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from starlette.concurrency import run_in_threadpool
+
 from core.models import FSRSParams, Topic
 from core.monitoring.logger import get_logger
 from core.repositories import TopicRepository
@@ -30,7 +32,7 @@ class TopicService:
             return cached_topics
 
         # Fetch from database
-        topics = self.repository.list_by_owner(user_uid)
+        topics = await run_in_threadpool(self.repository.list_by_owner, user_uid)
 
         # Cache the results
         self.cache.set_topics(user_uid, topics)
@@ -49,7 +51,7 @@ class TopicService:
             regenerating=False,
         )
 
-        created_topic = self.repository.create(topic)
+        created_topic = await run_in_threadpool(self.repository.create, topic)
 
         # Invalidate cache
         self.cache.invalidate_user(user_uid)
@@ -58,16 +60,16 @@ class TopicService:
 
     async def get_topic(self, topic_id: str, user_uid: str) -> Optional[Topic]:
         """Get a specific topic by ID from user's subcollection"""
-        return self.repository.get_by_id(topic_id, user_uid)
+        return await run_in_threadpool(self.repository.get_by_id, topic_id, user_uid)
 
     async def mark_regenerating(self, topic_id: str, user_uid: str, regenerating: bool) -> None:
         """Mark a topic as regenerating questions"""
-        self.repository.update(topic_id, user_uid, {"regenerating": regenerating})
+        await run_in_threadpool(self.repository.update, topic_id, user_uid, {"regenerating": regenerating})
 
     async def update_question_bank(self, topic_id: str, user_uid: str, question_ids: List[str]) -> None:
         """Update the question bank for a topic"""
         try:
-            self.repository.update(topic_id, user_uid, {"questionBank": question_ids})
+            await run_in_threadpool(self.repository.update, topic_id, user_uid, {"questionBank": question_ids})
             # Invalidate cache since we updated the topic
             self.cache.invalidate_user(user_uid)
         except Exception as e:
@@ -84,7 +86,7 @@ class TopicService:
     ):
         """Update FSRS parameters and review dates for a topic using a safe read-modify-write pattern."""
         # 1. Read the full topic object first to ensure we have the complete, correct model.
-        topic = self.repository.get_by_id(topic_id, user_uid)
+        topic = await run_in_threadpool(self.repository.get_by_id, topic_id, user_uid)
         if not topic:
             logger.error(f"Cannot update FSRS params: Topic {topic_id} not found for user {user_uid}")
             return
@@ -106,7 +108,7 @@ class TopicService:
             "nextReviewAt": topic.nextReviewAt,
         }
 
-        self.repository.update(topic_id, user_uid, update_data)
+        await run_in_threadpool(self.repository.update, topic_id, user_uid, update_data)
         self.cache.invalidate_user(user_uid)
 
     async def delete_topic(self, topic_id: str, user_uid: str):
@@ -115,7 +117,7 @@ class TopicService:
         # This is not yet implemented in the QuestionRepository, so we will
         # need to add it there first.
         # For now, we will just delete the topic.
-        self.repository.delete(topic_id, user_uid)
+        await run_in_threadpool(self.repository.delete, topic_id, user_uid)
         self.cache.invalidate_user(user_uid)
 
     # New methods for chat functionality
@@ -247,14 +249,23 @@ class TopicService:
         topics_with_status = []
         current_time = datetime.now(timezone.utc)
 
+        def ensure_aware_utc(dt: Optional[datetime]) -> Optional[datetime]:
+            """Return a timezone-aware UTC datetime for calculations."""
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
         for topic in topics:
             is_due = False
             is_overdue = False
             days_until_review = None
             review_urgency = "not_scheduled"
 
-            if topic.nextReviewAt:
-                time_diff = topic.nextReviewAt - current_time
+            next_review_at = ensure_aware_utc(topic.nextReviewAt)
+            if next_review_at:
+                time_diff = next_review_at - current_time
                 days_until_review = time_diff.days
                 if time_diff.total_seconds() <= 0:
                     is_overdue = True
@@ -268,8 +279,9 @@ class TopicService:
                     review_urgency = "scheduled"
 
             retention_probability = None
-            if topic.lastReviewedAt:
-                days_since_review = (current_time - topic.lastReviewedAt).days
+            last_reviewed_at = ensure_aware_utc(topic.lastReviewedAt)
+            if last_reviewed_at:
+                days_since_review = (current_time - last_reviewed_at).days
                 retention_probability = fsrs_service.calculate_retention_probability(
                     topic.fsrsParams, days_since_review
                 )

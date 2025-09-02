@@ -23,10 +23,11 @@ def initialize_firebase():
 
     options = {"projectId": settings.firebase_project_id}
 
-    # When running with emulators, FIREBASE_AUTH_EMULATOR_HOST will be set.
-    # In this case, we don't need to use service account credentials.
-    if os.getenv("FIREBASE_AUTH_EMULATOR_HOST"):
-        print("Using Firebase emulator; skipping service account credentials.")
+    # When running with emulators, FIREBASE_AUTH_EMULATOR_HOST and/or
+    # FIRESTORE_EMULATOR_HOST may be set. In this case, we don't need to use
+    # service account credentials and should initialize without a credential.
+    if os.getenv("FIREBASE_AUTH_EMULATOR_HOST") or os.getenv("FIRESTORE_EMULATOR_HOST"):
+        print("Using Firebase emulators; skipping service account credentials.")
         _app = firebase_admin.initialize_app(options=options)
         return
 

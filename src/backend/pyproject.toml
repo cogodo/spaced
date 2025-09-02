@@ -21,6 +21,7 @@ dependencies = [
     "livekit-plugins-noise-cancellation~=0.2",
     "python-dotenv",
     "requests",
+    "fsrs"
 ]
 
 [project.scripts]

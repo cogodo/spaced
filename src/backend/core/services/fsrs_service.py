@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 try:
@@ -46,10 +46,14 @@ class FSRSService:
         review_data = self.calculate_next_review(current_params, avg_performance, topic.lastReviewedAt)
 
         # Update the topic with the new FSRS data
+        next_review_at = review_data["nextReviewAt"]
+        if next_review_at and getattr(next_review_at, "tzinfo", None) is None:
+            next_review_at = next_review_at.replace(tzinfo=timezone.utc)
+
         update_data = {
             "fsrsParams": review_data["updatedParams"].dict(),
-            "nextReviewAt": review_data["nextReviewAt"],
-            "lastReviewedAt": datetime.now(),
+            "nextReviewAt": next_review_at,
+            "lastReviewedAt": datetime.now(timezone.utc),
         }
         self.topic_repo.update(
             topic_id,
@@ -88,7 +92,7 @@ class FSRSService:
 
             # Create FSRS Card from our parameters
             card = Card(
-                due=last_review or datetime.now(),
+                due=last_review or datetime.now(timezone.utc),
                 stability=current_params.ease,
                 difficulty=max(1, min(10, 11 - current_params.ease)),  # Invert ease to difficulty
                 elapsed_days=current_params.interval,
@@ -99,7 +103,7 @@ class FSRSService:
             )
 
             # Calculate next review using FSRS
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             scheduling_cards = self.fsrs.repeat(card, now)
 
             # Get the appropriate scheduling based on rating
@@ -128,7 +132,7 @@ class FSRSService:
                 "nextReviewAt": getattr(
                     next_card,
                     "due",
-                    datetime.now() + timedelta(days=updated_params.interval),
+                    datetime.now(timezone.utc) + timedelta(days=updated_params.interval),
                 ),
                 "updatedParams": updated_params,
                 "intervalDays": updated_params.interval,
@@ -168,7 +172,7 @@ class FSRSService:
             repetition=current_params.repetition + 1,
         )
 
-        next_review = datetime.now() + timedelta(days=new_interval)
+        next_review = datetime.now(timezone.utc) + timedelta(days=new_interval)
 
         return {
             "nextReviewAt": next_review,
@@ -206,7 +210,7 @@ class FSRSService:
 
     def get_optimal_review_time(self, params: FSRSParams) -> datetime:
         """Get the optimal time for next review based on current parameters"""
-        return datetime.now() + timedelta(days=params.interval)
+        return datetime.now(timezone.utc) + timedelta(days=params.interval)
 
     def calculate_retention_probability(self, params: FSRSParams, days_since_review: int) -> float:
         """Calculate probability that user remembers the topic"""
@@ -223,7 +227,7 @@ class FSRSService:
 
     def should_review_now(self, params: FSRSParams, last_review: datetime) -> bool:
         """Determine if a topic should be reviewed now"""
-        days_since = (datetime.now() - last_review).days
+        days_since = (datetime.now(timezone.utc) - last_review).days
         retention = self.calculate_retention_probability(params, days_since)
 
         # Review if retention drops below 90%

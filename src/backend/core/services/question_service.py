@@ -51,12 +51,12 @@ class QuestionService:
 
     async def generate_question_bank(self, topic: Topic) -> List[Question]:
         """
-        Generate a bank of 15 high-quality questions using a single bulk generation
+        Generate a bank of 10 high-quality questions using a single bulk generation
         prompt followed by one bulk refinement pass.
         """
 
         # Step 1: Bulk-generate diverse questions
-        raw_items = await self._bulk_generate_questions(topic, count=15)
+        raw_items = await self._bulk_generate_questions(topic, count=10)
 
         # Step 2: One-pass refinement for quality (preserve type/difficulty)
         refined_map = await self._bulk_refine_questions(raw_items)
@@ -109,11 +109,11 @@ class QuestionService:
 
     async def generate_initial_questions(self, topic: Topic, user_uid: str) -> List[Question]:
         """
-        Generate a set of questions (15 questions).
+        Generate a set of questions (10 questions).
         """
 
         try:
-            items = await self._bulk_generate_questions(topic, count=15)
+            items = await self._bulk_generate_questions(topic, count=10)
         except Exception as e:
             raise QuestionGenerationError(f"Failed to bulk-generate initial questions for topic '{topic.name}': {e}")
 
@@ -247,7 +247,7 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
         except Exception:
             return None
 
-    async def _bulk_generate_questions(self, topic: Topic, count: int = 15) -> List[Dict[str, Any]]:
+    async def _bulk_generate_questions(self, topic: Topic, count: int = 10) -> List[Dict[str, Any]]:
         """Generate many questions in one prompt and return structured items.
 
         Each item has keys: text (str), type (free-form str), tags (list[str]), difficulty (int 1..3)

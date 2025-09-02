@@ -28,6 +28,8 @@ class ChatProvider extends ChangeNotifier {
   // Session history
   List<ChatSessionSummary> _sessionHistory = [];
   bool _isLoadingHistory = false;
+  bool _hasMoreHistory = true;
+  DocumentSnapshot? _historyCursor;
 
   // Services
   late final ApiService _api;
@@ -161,7 +163,7 @@ class ChatProvider extends ChangeNotifier {
     if (_userId == userId) return; // No change
     _userId = userId;
     if (userId != null) {
-      loadSessionHistory();
+      loadSessionHistory(); // Load summaries only (no messages)
       fetchDueTopics(); // Also fetch due topics on user set
     } else {
       clear();
@@ -286,7 +288,6 @@ class ChatProvider extends ChangeNotifier {
 
       if (_userId != null && _currentSession != null) {
         await _sessionService.saveSession(_userId!, _currentSession!);
-        loadSessionHistory();
         _listenToMessages(_userId!, _currentSessionId!);
         _listenToSession(_userId!, _currentSessionId!);
       }
@@ -813,12 +814,45 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final history = await _sessionService.getSessionHistory(_userId!);
-      _sessionHistory = history;
-      _logger.info('Loaded ${history.length} sessions from history');
+      // Reset pagination and fetch first page
+      _historyCursor = null;
+      _hasMoreHistory = true;
+      final page = await _sessionService.getSessionHistoryPage(
+        _userId!,
+        limit: 20,
+      );
+      _sessionHistory = page.items;
+      _historyCursor = page.lastDoc;
+      _hasMoreHistory = page.hasMore;
+      _logger.info('Loaded ${page.items.length} sessions (first page)');
     } catch (e) {
       _logger.severe('Error loading session history: $e');
       _sessionHistory = []; // Clear on error
+    } finally {
+      _isLoadingHistory = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreSessionHistory() async {
+    if (_isLoadingHistory || _userId == null || !_hasMoreHistory) return;
+    _isLoadingHistory = true;
+    notifyListeners();
+
+    try {
+      final page = await _sessionService.getSessionHistoryPage(
+        _userId!,
+        limit: 20,
+        startAfter: _historyCursor,
+      );
+      _sessionHistory.addAll(page.items);
+      _historyCursor = page.lastDoc;
+      _hasMoreHistory = page.hasMore;
+      _logger.info(
+        'Appended ${page.items.length} sessions, hasMore: $_hasMoreHistory',
+      );
+    } catch (e) {
+      _logger.severe('Error loading more session history: $e');
     } finally {
       _isLoadingHistory = false;
       notifyListeners();

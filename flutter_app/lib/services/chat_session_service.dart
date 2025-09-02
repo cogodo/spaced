@@ -12,6 +12,14 @@ class ChatSessionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final _logger = getLogger('ChatSessionService');
 
+  // Coalescing/throttling to reduce Firestore load
+  static const Duration _minSaveInterval = Duration(milliseconds: 1200);
+  final Map<String, ChatSession> _pendingSessions = {};
+  final Set<String> _inFlightSaves = <String>{};
+  final Map<String, DateTime> _lastSaveAt = {};
+  final Map<String, int> _lastSavedMessageCount = {};
+  final Map<String, DateTime?> _lastSavedLastMessageAt = {};
+
   // Collection references
   CollectionReference<Map<String, dynamic>> _getUserSessionsCollection(
     String userId,
@@ -31,6 +39,26 @@ class ChatSessionService {
   /// Save a chat session to Firebase
   Future<void> saveSession(String userId, ChatSession session) async {
     _logger.info('Saving session ${session.id} for user $userId');
+
+    final key = '$userId:${session.id}';
+
+    // Coalesce if a save is already running
+    if (_inFlightSaves.contains(key)) {
+      _pendingSessions[key] = session;
+      _logger.info('Coalescing save for $key while in-flight');
+      return;
+    }
+
+    // Throttle high-frequency saves
+    final now = DateTime.now();
+    final last = _lastSaveAt[key];
+    if (last != null && now.difference(last) < _minSaveInterval) {
+      _pendingSessions[key] = session;
+      _logger.info('Throttling save for $key (scheduled)');
+      return;
+    }
+
+    _inFlightSaves.add(key);
 
     try {
       final batch = _firestore.batch();
@@ -58,36 +86,60 @@ class ChatSessionService {
       final sessionRef = _getUserSessionsCollection(userId).doc(session.id);
       batch.set(sessionRef, sessionData, SetOptions(merge: true));
 
-      final messagesCollection = _getSessionMessagesCollection(
-        userId,
-        session.id,
-      );
+      // Only rewrite messages when changed since last save
+      final currentLastMsgAt =
+          session.messages.isNotEmpty ? session.messages.last.timestamp : null;
+      final lastCount = _lastSavedMessageCount[key];
+      final lastLastMsgAt = _lastSavedLastMessageAt[key];
+      final shouldRewriteMessages =
+          !(lastCount != null &&
+              lastCount == session.messages.length &&
+              lastLastMsgAt == currentLastMsgAt);
 
-      final existingMessages = await messagesCollection.get();
-      for (final doc in existingMessages.docs) {
-        batch.delete(doc.reference);
-      }
+      if (shouldRewriteMessages) {
+        final messagesCollection = _getSessionMessagesCollection(
+          userId,
+          session.id,
+        );
 
-      for (int i = 0; i < session.messages.length; i++) {
-        final message = session.messages[i];
-        final messageData = {
-          'text': message.text,
-          'isUser': message.isUser,
-          'isSystem': message.isSystem,
-          'timestamp': Timestamp.fromDate(message.timestamp),
-          'messageIndex': i,
-        };
-        final messageRef = messagesCollection.doc('msg_$i');
-        batch.set(messageRef, messageData);
+        final existingMessages = await messagesCollection.get();
+        for (final doc in existingMessages.docs) {
+          batch.delete(doc.reference);
+        }
+
+        for (int i = 0; i < session.messages.length; i++) {
+          final message = session.messages[i];
+          final messageData = {
+            'text': message.text,
+            'isUser': message.isUser,
+            'isSystem': message.isSystem,
+            'timestamp': Timestamp.fromDate(message.timestamp),
+            'messageIndex': i,
+          };
+          final messageRef = messagesCollection.doc('msg_$i');
+          batch.set(messageRef, messageData);
+        }
       }
 
       await batch.commit();
+      _lastSaveAt[key] = DateTime.now();
+      _lastSavedMessageCount[key] = session.messages.length;
+      _lastSavedLastMessageAt[key] = currentLastMsgAt;
       _logger.info(
         'Successfully saved session ${session.id} with ${session.messages.length} messages',
       );
     } catch (e, stackTrace) {
       _logger.severe('Error saving session ${session.id}: $e', e, stackTrace);
       throw ChatSessionException('Failed to save session: $e');
+    } finally {
+      _inFlightSaves.remove(key);
+
+      // Schedule follow-up save if something changed during the in-flight save
+      final pending = _pendingSessions.remove(key);
+      if (pending != null) {
+        _logger.info('Scheduling follow-up save for $key');
+        Future.delayed(_minSaveInterval, () => saveSession(userId, pending));
+      }
     }
   }
 
@@ -171,6 +223,50 @@ class ChatSessionService {
     } catch (e, stackTrace) {
       _logger.severe('Error loading session history: $e', e, stackTrace);
       throw ChatSessionException('Failed to load session history: $e');
+    }
+  }
+
+  /// Paginated history page result
+  Future<
+    ({List<ChatSessionSummary> items, DocumentSnapshot? lastDoc, bool hasMore})
+  >
+  getSessionHistoryPage(
+    String userId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    _logger.info(
+      'Loading paged session history for user $userId (limit: $limit)',
+    );
+    try {
+      Query<Map<String, dynamic>> query = _getUserSessionsCollection(
+        userId,
+      ).orderBy('updatedAt', descending: true).limit(limit + 1);
+
+      if (startAfter != null) {
+        query = query.startAfterDocument(startAfter);
+      }
+
+      final snapshot = await query.get();
+
+      final docs = snapshot.docs;
+      final hasMore = docs.length > limit;
+      final pageDocs = hasMore ? docs.sublist(0, limit) : docs;
+
+      final items = <ChatSessionSummary>[];
+      for (final doc in pageDocs) {
+        try {
+          items.add(ChatSessionSummary.fromFirestore(doc));
+        } catch (e) {
+          _logger.warning('Error parsing session ${doc.id}: $e');
+        }
+      }
+
+      final lastDoc = pageDocs.isNotEmpty ? pageDocs.last : null;
+      return (items: items, lastDoc: lastDoc, hasMore: hasMore);
+    } catch (e, stackTrace) {
+      _logger.severe('Error loading paged session history: $e', e, stackTrace);
+      throw ChatSessionException('Failed to load paged session history: $e');
     }
   }
 

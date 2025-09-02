@@ -16,3 +16,4 @@ Requires-Dist: livekit-agents[cartesia,deepgram,openai,silero,turn-detector]~=1.
 Requires-Dist: livekit-plugins-noise-cancellation~=0.2
 Requires-Dist: python-dotenv
 Requires-Dist: requests
+Requires-Dist: fsrs
