@@ -106,7 +106,7 @@ Generate feedback that will help the student learn and stay motivated:"""
         """Makes the OpenAI API call for feedback generation."""
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4.1-mini",  # Using cheaper model for testing
+                model="gpt-5-nano",  # Using cheaper model for testing
                 messages=[
                     {
                         "role": "system",

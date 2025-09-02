@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from openai import AsyncOpenAI
+from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 from core.models import Question, Topic
@@ -50,217 +51,112 @@ class QuestionService:
 
     async def generate_question_bank(self, topic: Topic) -> List[Question]:
         """
-        Generate a bank of 20 high-quality questions using generator + refiner loop
+        Generate a bank of 15 high-quality questions using a single bulk generation
+        prompt followed by one bulk refinement pass.
         """
 
-        question_templates = [
-            (
-                "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. Focus on key concepts.",
-            ),
-            (
-                "short_answer",
-                "Create a short answer question about {topic} that tests understanding.",
-            ),
-            (
-                "explanation",
-                "Create a question asking to explain a concept related to {topic}.",
-            ),
-            (
-                "application",
-                "Create a question asking how to apply {topic} concepts in a real-world scenario.",
-            ),
-            (
-                "comparison",
-                "Create a question asking to compare or contrast different aspects of {topic}.",
-            ),
-            (
-                "analysis",
-                "Create a question asking for analysis or evaluation of {topic} concepts.",
-            ),
-            (
-                "synthesis",
-                "Create a question asking to synthesize or combine multiple {topic} concepts.",
-            ),
-            (
-                "prediction",
-                "Create a question asking to predict outcomes based on {topic} principles.",
-            ),
-        ]
+        # Step 1: Bulk-generate diverse questions
+        raw_items = await self._bulk_generate_questions(topic, count=15)
 
-        questions = []
-        existing_question_texts = []
+        # Step 2: One-pass refinement for quality (preserve type/difficulty)
+        refined_map = await self._bulk_refine_questions(raw_items)
 
-        # Generate different types of questions with refinement and similarity checking
-        for i in range(20):
-            question_type, template = question_templates[i % len(question_templates)]
-            difficulty = (i // 7) + 1  # Distribute difficulties 1-3
+        # Step 3: Persist with deduplication
+        saved_questions: List[Question] = []
+        existing_question_texts: List[str] = []
 
+        for idx, item in enumerate(raw_items):
+            # Use refined text if available; otherwise fallback to original
+            refined_text = refined_map.get(idx, item.get("text", "")).strip()
+            if not refined_text:
+                continue
+
+            if self._is_too_similar(refined_text, existing_question_texts):
+                continue
+
+            q_type_raw = str(item.get("type", "short_answer"))
+            q_type = self._coerce_question_type(q_type_raw)
             try:
-                # Step 1: Generate initial question with retry for diversity
-                max_attempts = 3
-                generated_question = None
+                difficulty_val = int(item.get("difficulty", 2))
+            except Exception:
+                difficulty_val = 2
+            difficulty_val = max(1, min(3, difficulty_val))
 
-                for attempt in range(max_attempts):
-                    generated_question = await self._generate_question(topic, template, difficulty)
+            tags: List[str] = []
+            raw_tags = item.get("tags", [])
+            if isinstance(raw_tags, list):
+                tags = [str(t).strip() for t in raw_tags if str(t).strip()]
 
-                    # Check if question is too similar to existing ones
-                    if not self._is_too_similar(generated_question, existing_question_texts):
-                        break
+            question = Question(
+                id=str(uuid.uuid4()),
+                topicId=topic.id,
+                text=refined_text,
+                tags=tags,
+                type=q_type,
+                difficulty=difficulty_val,
+                metadata={
+                    "generated_by": "openai_bulk_refined",
+                    "topic_name": topic.name,
+                    "generation_version": "bulk_1.0",
+                },
+            )
 
-                    if attempt < max_attempts - 1:
-                        # Add diversity instruction for retry
-                        template += " IMPORTANT: Make this question completely different from common questions about this topic."
+            self.repository.create(question, topic.ownerUid)
+            saved_questions.append(question)
+            existing_question_texts.append(refined_text)
 
-                if generated_question is None:
-                    continue
-
-                # Step 2: Refine the question for quality
-                refined_question = await self._refine_question(generated_question, question_type, difficulty)
-
-                # Final similarity check
-                if self._is_too_similar(refined_question, existing_question_texts):
-                    continue
-
-                question = Question(
-                    id=str(uuid.uuid4()),
-                    topicId=topic.id,
-                    text=refined_question,
-                    type=question_type,
-                    difficulty=difficulty,
-                    metadata={
-                        "generated_by": "openai_refined",
-                        "topic_name": topic.name,
-                        "generation_version": "3.0",
-                    },
-                )
-
-                # Save to database with user context
-                self.repository.create(question, topic.ownerUid)
-                questions.append(question)
-                existing_question_texts.append(refined_question)
-
-            except Exception as e:
-                print(f"Failed to generate refined question {i + 1}: {e}")
-                # Fallback to basic generation
-                try:
-                    basic_question = await self._generate_basic_question(topic, template, difficulty, question_type)
-                    if basic_question:
-                        questions.append(basic_question)
-                except Exception as e2:
-                    print(f"Failed basic generation fallback: {e2}")
-                    continue
-
-        return questions
+        return saved_questions
 
     async def generate_initial_questions(self, topic: Topic, user_uid: str) -> List[Question]:
         """
-        Generate a small initial set of questions quickly (20 questions, no refinement)
+        Generate a set of questions (15 questions).
         """
 
-        question_templates = [
-            (
-                "multiple_choice",
-                "Create a multiple choice question about {topic} with 4 options. Focus on key concepts.",
-            ),
-            (
-                "short_answer",
-                "Create a short answer question about {topic} that tests understanding.",
-            ),
-            (
-                "explanation",
-                "Create a question asking to explain a concept related to {topic}.",
-            ),
-            (
-                "application",
-                "Create a question asking how to apply {topic} concepts in a real-world scenario.",
-            ),
-            (
-                "comparison",
-                "Create a question asking to compare or contrast different aspects of {topic}.",
-            ),
-            (
-                "analysis",
-                "Create a question asking for analysis or evaluation of {topic} concepts.",
-            ),
-            (
-                "synthesis",
-                "Create a question asking to synthesize or combine multiple {topic} concepts.",
-            ),
-            (
-                "prediction",
-                "Create a question asking to predict outcomes based on {topic} principles.",
-            ),
-        ]
+        try:
+            items = await self._bulk_generate_questions(topic, count=15)
+        except Exception as e:
+            raise QuestionGenerationError(f"Failed to bulk-generate initial questions for topic '{topic.name}': {e}")
 
-        questions = []
-        existing_question_texts = []
-
-        # Generate 8 questions quickly for faster session start (can generate more later)
-        for i in range(8):
-            question_type, template = question_templates[i % len(question_templates)]
-            difficulty = min(i // 7 + 1, 3)  # Distribute difficulties 1-3 across 20 questions
-
-            try:
-                # Single step generation with similarity checking
-                max_attempts = 3
-                generated_question = None
-
-                for attempt in range(max_attempts):
-                    generated_question = await self._generate_question(topic, template, difficulty)
-
-                    # Check if question is too similar to existing ones
-                    if not self._is_too_similar(generated_question, existing_question_texts):
-                        break
-
-                    if attempt < max_attempts - 1:
-                        # Add diversity instruction for retry
-                        template += " IMPORTANT: Make this question completely different from common questions about this topic."
-
-                if generated_question is None:
-                    continue
-
-                question = Question(
-                    id=str(uuid.uuid4()),
-                    topicId=topic.id,
-                    text=generated_question,
-                    type=question_type,
-                    difficulty=difficulty,
-                    metadata={
-                        "generated_by": "openai_initial",
-                        "topic_name": topic.name,
-                        "generation_version": "initial_2.0",
-                    },
-                )
-
-                # Save to database with user context
-                self.repository.create(question, user_uid)
-                questions.append(question)
-                existing_question_texts.append(generated_question)
-
-            except OpenAITimeoutError as e:
-                print(f"Timeout generating initial question {i + 1}, retrying... Error: {e}")
-                # Simple retry logic, could be more sophisticated
-                try:
-                    generated_question = await self._generate_question(topic, template, difficulty)
-                    question = Question(
-                        id=str(uuid.uuid4()),
-                        topicId=topic.id,
-                        text=generated_question,
-                        type=question_type,
-                        difficulty=difficulty,
-                    )
-                    self.repository.create(question, user_uid)
-                    questions.append(question)
-                except Exception as retry_e:
-                    print(f"Retry failed for question {i + 1}: {retry_e}")
-            except Exception as e:
-                # Be resilient: skip this iteration and continue attempting to generate others.
-                # We'll only raise if we fail to generate any questions at all.
-                print(f"Failed to generate initial question {i + 1} for topic '{topic.name}': {e}")
+        questions: List[Question] = []
+        existing_question_texts: List[str] = []
+        for it in items:
+            text = str(it.get("text", "")).strip()
+            if not text:
+                continue
+            if self._is_too_similar(text, existing_question_texts):
                 continue
 
-        # If we couldn't generate any questions at all, surface a clear error upstream
+            q_type_raw = str(it.get("type", "short_answer")) or "short_answer"
+            q_type = self._coerce_question_type(q_type_raw)
+            try:
+                difficulty_val = int(it.get("difficulty", 2))
+            except Exception:
+                difficulty_val = 2
+            difficulty_val = max(1, min(3, difficulty_val))
+
+            tags: List[str] = []
+            raw_tags = it.get("tags", [])
+            if isinstance(raw_tags, list):
+                tags = [str(t).strip() for t in raw_tags if str(t).strip()]
+
+            question = Question(
+                id=str(uuid.uuid4()),
+                topicId=topic.id,
+                text=text,
+                tags=tags,
+                type=q_type,
+                difficulty=difficulty_val,
+                metadata={
+                    "generated_by": "openai_initial_bulk",
+                    "topic_name": topic.name,
+                    "generation_version": "initial_bulk_1.0",
+                },
+            )
+
+            self.repository.create(question, user_uid)
+            questions.append(question)
+            existing_question_texts.append(text)
+
         if not questions:
             raise QuestionGenerationError(f"Failed to generate any initial questions for topic '{topic.name}'")
 
@@ -351,6 +247,185 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
         except Exception:
             return None
 
+    async def _bulk_generate_questions(self, topic: Topic, count: int = 15) -> List[Dict[str, Any]]:
+        """Generate many questions in one prompt and return structured items.
+
+        Each item has keys: text (str), type (free-form str), tags (list[str]), difficulty (int 1..3)
+        """
+        import json
+
+        prompt = f"""
+You are generating exactly {count} diverse learning questions for the topic "{topic.name}".
+
+Topic description:
+{topic.description}
+
+Rules:
+- Return STRICT JSON ONLY. No prose.
+- JSON must be an array of exactly {count} objects.
+- Each object keys: "text" (string), "type" (short free-form descriptor), "difficulty" (1, 2, or 3).
+- Write clear, high-quality questions that do NOT include answers.
+- Ensure diversity of question style and depth across the set.
+- Avoid redundancy and overly similar phrasing.
+
+Example JSON shape (not content):
+[
+  {{"text": "...", "type": "concept_check",  "difficulty": 2}},
+  {{"text": "...", "type": "why_how",  ["analysis"], "difficulty": 3}}
+]
+"""
+
+        # Bulk generation needs a longer timeout and higher token budget
+        response = await self._call_openai(
+            prompt,
+            max_tokens=2000,
+            temperature=0.9,
+            timeout=12.0,
+        )
+
+        # Robust JSON array extraction
+        start = response.find("[")
+        end = response.rfind("]") + 1
+        if start == -1 or end <= 0:
+            raise QuestionGenerationError("LLM did not return a JSON array of questions")
+
+        json_str = response[start:end]
+
+        try:
+            items = json.loads(json_str)
+        except Exception as e:
+            raise QuestionGenerationError(f"Failed to parse questions JSON: {e}")
+
+        if not isinstance(items, list):
+            raise QuestionGenerationError("Parsed questions payload was not a list")
+
+        # Pydantic validation for structure
+        class GeneratedQuestionItemModel(BaseModel):
+            text: str
+            type: str
+            tags: Optional[List[str]] = []
+            difficulty: int
+
+        normalized: List[Dict[str, Any]] = []
+        seen_texts: List[str] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            try:
+                parsed = GeneratedQuestionItemModel(**it)
+            except ValidationError:
+                continue
+
+            text = parsed.text.strip()
+            if not text:
+                continue
+            # Cheap dedupe during generation phase
+            if any(self._calculate_similarity(text, s) > 0.85 for s in seen_texts):
+                continue
+
+            q_type = self._coerce_question_type(parsed.type)
+
+            try:
+                diff = int(parsed.difficulty)
+            except Exception:
+                diff = 2
+            diff = max(1, min(3, diff))
+
+            tags: List[str] = []
+            if parsed.tags:
+                tags = [str(t).strip() for t in parsed.tags if str(t).strip()]
+
+            normalized.append({"text": text, "type": q_type, "tags": tags, "difficulty": diff})
+            seen_texts.append(text)
+
+        return normalized
+
+    async def _bulk_refine_questions(self, items: List[Dict[str, Any]]) -> Dict[int, str]:
+        """Refine many questions in one pass. Returns map of index -> refined_text."""
+        import json
+
+        if not items:
+            return {}
+
+        # Build compact JSON array with index for alignment
+        indexed_items = [
+            {
+                "index": i,
+                "text": it.get("text", ""),
+                "type": it.get("type", "short_answer"),
+                "tags": it.get("tags", []),
+                "difficulty": it.get("difficulty", 2),
+            }
+            for i, it in enumerate(items)
+        ]
+
+        input_json = json.dumps(indexed_items, ensure_ascii=False)
+
+        prompt = f"""
+Refine the clarity and learning value of each question below without changing its intent.
+Do NOT add answers. Keep each question as a single sentence or concise prompt.
+
+Input JSON (array of objects with index, text, type, difficulty):
+{input_json}
+
+Return STRICT JSON ONLY: an array of objects with keys "index" (int) and "text" (string), same order/length.
+No explanations.
+"""
+
+        response = await self._call_openai(
+            prompt,
+            max_tokens=1800,
+            temperature=0.7,
+            timeout=12.0,
+        )
+
+        start = response.find("[")
+        end = response.rfind("]") + 1
+        if start == -1 or end <= 0:
+            # If refinement fails, return original texts
+            return {i: it.get("text", "") for i, it in enumerate(items)}
+
+        try:
+            refined_list = json.loads(response[start:end])
+        except Exception:
+            return {i: it.get("text", "") for i, it in enumerate(items)}
+
+        refined_map: Dict[int, str] = {}
+        for obj in refined_list if isinstance(refined_list, list) else []:
+            try:
+                idx = int(obj.get("index"))
+                txt = str(obj.get("text", "")).strip()
+                if txt:
+                    refined_map[idx] = txt
+            except Exception:
+                continue
+
+        # Ensure all indices present
+        for i in range(len(items)):
+            if i not in refined_map:
+                refined_map[i] = items[i].get("text", "")
+
+        return refined_map
+
+    def _coerce_question_type(self, free_form_type: str) -> str:
+        """Map free-form descriptors into our allowed enum. Defaults to short_answer."""
+        t = (free_form_type or "").lower()
+        if any(k in t for k in ["multiple", "choice", "mcq"]):
+            return "multiple_choice"
+        if any(k in t for k in ["explain", "explanation"]):
+            return "explanation"
+        if any(k in t for k in ["apply", "application", "scenario"]):
+            return "application"
+        if any(k in t for k in ["compare", "contrast", "versus", "vs."]):
+            return "comparison"
+        if any(k in t for k in ["analy", "why", "how"]):
+            return "analysis"
+        if any(k in t for k in ["synth", "combine", "integrate"]):
+            return "synthesis"
+        if any(k in t for k in ["predict", "forecast"]):
+            return "prediction"
+        return "short_answer"
+
     def _calculate_similarity(self, question1: str, question2: str) -> float:
         """Calculate similarity between two questions using simple heuristics."""
         # Convert to lowercase and remove punctuation for comparison
@@ -380,12 +455,19 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
                 return True
         return False
 
-    async def _call_openai(self, prompt: str, max_tokens: int = 500, temperature: float = 1.0) -> str:
-        """Make OpenAI API call with error handling and timeout"""
+    async def _call_openai(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 1.0,
+        timeout: float = 1.0,
+        model: Optional[str] = None,
+    ) -> str:
+        """Make OpenAI API call with error handling and configurable timeout"""
         try:
             response = await asyncio.wait_for(
                 self.openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
+                    model=model or "gpt-5",
                     messages=[
                         {
                             "role": "system",
@@ -396,11 +478,11 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
                     max_tokens=max_tokens,
                     temperature=temperature,
                 ),
-                timeout=1.0,  # 1 second timeout - questions should be fast
+                timeout=timeout,
             )
             return response.choices[0].message.content
         except asyncio.TimeoutError:
-            raise OpenAITimeoutError("OpenAI API call timed out after 1 second")
+            raise OpenAITimeoutError(f"OpenAI API call timed out after {timeout} seconds")
         except Exception as e:
             # Escape curly braces in error message to prevent f-string formatting errors
             safe_error = str(e).replace("{", "{{").replace("}", "}}")

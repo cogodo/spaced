@@ -16,6 +16,7 @@ class Topic(BaseModel):
     name: str
     description: str
     questionBank: List[str] = []
+    questionCursor: int = 0
     fsrsParams: FSRSParams = FSRSParams()
     regenerating: bool = False
     createdAt: Optional[datetime] = None

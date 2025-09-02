@@ -7,6 +7,7 @@ class Question(BaseModel):
     id: str
     topicId: str
     text: str
+    tags: List[str] = []
     type: Literal[
         "multiple_choice",
         "short_answer",
@@ -23,6 +24,7 @@ class Question(BaseModel):
 
 class CreateQuestionRequest(BaseModel):
     text: str
+    tags: List[str] = []
     type: Literal[
         "multiple_choice",
         "short_answer",
@@ -38,6 +40,7 @@ class CreateQuestionRequest(BaseModel):
 
 class UpdateQuestionRequest(BaseModel):
     text: str
+    tags: List[str] = []
     type: Literal[
         "multiple_choice",
         "short_answer",
