@@ -7,7 +7,6 @@ import '../providers/auth_provider.dart';
 import '../models/chat_session.dart';
 import '../routing/route_constants.dart';
 import '../widgets/theme_logo.dart';
-import 'new_chat_button.dart';
 import 'session_item.dart';
 
 class ChatHistorySidebar extends StatefulWidget {
@@ -63,6 +62,11 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
       return 2;
     }
 
+    // Highlight New Chat tab when on its route
+    if (currentPath == Routes.appNewChat) {
+      return -1;
+    }
+
     switch (currentPath) {
       case Routes.appTodays:
         return 0;
@@ -93,9 +97,9 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
     final tokens = theme.extension<SpacedTokens>();
 
     final navigationItems = [
+      {'icon': Icons.add, 'label': 'New Chat', 'index': -1},
       {'icon': Icons.home, 'label': 'Today', 'index': 0},
       {'icon': Icons.list, 'label': 'All Items', 'index': 1},
-      {'icon': Icons.chat, 'label': 'Chat', 'index': 2},
     ];
 
     if (widget.isCollapsed) {
@@ -109,8 +113,14 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: InkWell(
-                    onTap:
-                        () => _navigateToIndex(context, item['index'] as int),
+                    onTap: () {
+                      final idx = item['index'] as int;
+                      if (idx == -1) {
+                        context.go(Routes.appNewChat);
+                      } else {
+                        _navigateToIndex(context, idx);
+                      }
+                    },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 48,
@@ -155,7 +165,14 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
               return Container(
                 margin: const EdgeInsets.symmetric(vertical: 2),
                 child: InkWell(
-                  onTap: () => _navigateToIndex(context, item['index'] as int),
+                  onTap: () {
+                    final idx = item['index'] as int;
+                    if (idx == -1) {
+                      context.go(Routes.appNewChat);
+                    } else {
+                      _navigateToIndex(context, idx);
+                    }
+                  },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -221,55 +238,31 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
 
     return Container(
       width: widget.isCollapsed ? 72 : 280,
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-          right: BorderSide(
-            color: colorScheme.outline.withValues(alpha: 0.15),
-            width: 1,
-          ),
-        ),
-      ),
+      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
       child: Column(
         children: [
           // Header with logo and toggle button
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.outline.withValues(alpha: 0.1),
-                  width: 1,
-                ),
-              ),
-            ),
+            color: Colors.transparent,
             child:
                 widget.isCollapsed
                     ? _buildCollapsedHeader(colorScheme)
                     : _buildExpandedHeader(colorScheme),
           ),
 
-          // Navigation tabs (above new chat button)
+          // Navigation tabs (New Chat + Today/All)
           Container(
             padding: const EdgeInsets.all(8),
             child: _buildNavigationTabs(),
           ),
-
-          // New chat button (only show when expanded)
-          if (!widget.isCollapsed) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: const NewChatButton(),
-            ),
-          ],
 
           // Divider
           if (!widget.isCollapsed) ...[
             Container(
               margin: const EdgeInsets.symmetric(vertical: 8),
               height: 1,
-              color: colorScheme.outline.withValues(alpha: 0.1),
+              color: Colors.transparent,
             ),
           ],
 
@@ -288,16 +281,18 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     horizontal: 12,
                     vertical: 8,
                   ),
+                  filled: true,
+                  fillColor: theme.scaffoldBackgroundColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: colorScheme.outline.withValues(alpha: 0.3),
+                      color: colorScheme.outline.withValues(alpha: 0.12),
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: colorScheme.outline.withValues(alpha: 0.3),
+                      color: colorScheme.outline.withValues(alpha: 0.12),
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
@@ -365,19 +360,24 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     );
                   }
 
-                  // Simple list of all sessions
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: filteredSessions.length,
-                    itemBuilder: (context, index) {
-                      final session = filteredSessions[index];
-                      final isSelected =
-                          session.token == widget.selectedSessionToken;
-                      return SessionItem(
-                        session: session,
-                        isSelected: isSelected,
-                      );
-                    },
+                  // Simple list of all sessions (with scrollbars disabled)
+                  return ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: false),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: filteredSessions.length,
+                      itemBuilder: (context, index) {
+                        final session = filteredSessions[index];
+                        final isSelected =
+                            session.token == widget.selectedSessionToken;
+                        return SessionItem(
+                          session: session,
+                          isSelected: isSelected,
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -402,13 +402,17 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: colorScheme.primary,
+                        color: Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.35),
+                          width: 1,
+                        ),
                       ),
                       child: Icon(
                         Icons.add,
                         size: 24,
-                        color: colorScheme.onPrimary,
+                        color: colorScheme.primary,
                       ),
                     ),
                   ),
@@ -422,15 +426,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
           if (!widget.isCollapsed)
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                border: Border(
-                  top: BorderSide(
-                    color: colorScheme.outline.withValues(alpha: 0.1),
-                    width: 1,
-                  ),
-                ),
-              ),
+              color: Colors.transparent,
               child: Consumer<AuthProvider>(
                 builder: (context, authProvider, child) {
                   final user = authProvider.user;
@@ -553,8 +549,8 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     icon: const Icon(Icons.menu, size: 20),
                     tooltip: 'Expand Sidebar',
                     style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: colorScheme.primary,
                       minimumSize: const Size(40, 40),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -585,8 +581,8 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
           icon: const Icon(Icons.menu_open, size: 24),
           tooltip: 'Collapse Sidebar',
           style: IconButton.styleFrom(
-            backgroundColor: colorScheme.surface,
-            foregroundColor: colorScheme.onSurface,
+            backgroundColor: Colors.transparent,
+            foregroundColor: colorScheme.primary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),

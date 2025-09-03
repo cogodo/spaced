@@ -154,14 +154,14 @@ final Map<String, ThemeMetadata> appThemes = {
     name: 'Light',
     data: ThemeData(
       brightness: Brightness.light,
-      // Use ColorScheme.fromSeed with paler violet seed
+      // Use ColorScheme.fromSeed with even paler violet seed
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE6DAFF),
+        seedColor: const Color(0xFFF4EEFF),
         brightness: Brightness.light,
       ),
       extensions: <ThemeExtension<dynamic>>[
         const SpacedTokens(
-          brandPrimary: Color(0xFFF2ECFF),
+          brandPrimary: Color(0xFFFAF7FF),
           brandSecondary: Color(0xFFD7F1FF),
           brandAccent: Color(0xFFFFDEE5),
           brandOnPrimary: Colors.white,
@@ -192,9 +192,9 @@ final Map<String, ThemeMetadata> appThemes = {
         elevation: 0,
       ),
 
-      // Backgrounds (test: force full black to verify wiring)
-      cardColor: Colors.black,
-      scaffoldBackgroundColor: Colors.black,
+      // Backgrounds - unify surfaces for liminal look
+      cardColor: const Color(0xFF0B0B11),
+      scaffoldBackgroundColor: const Color(0xFF0B0B11),
       // Pale-accent buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -217,9 +217,9 @@ final Map<String, ThemeMetadata> appThemes = {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFF2ECFF),
+          foregroundColor: const Color(0xFFFAF7FF),
           side: const BorderSide(
-            color: Color(0xFFF2ECFF),
+            color: Color(0xFFFAF7FF),
             width: 1.5,
           ), // Purple border
           textStyle: TextStyle(
@@ -323,14 +323,14 @@ final Map<String, ThemeMetadata> appThemes = {
     name: 'Dark',
     data: ThemeData(
       brightness: Brightness.dark,
-      // Use ColorScheme.fromSeed with paler violet seed
+      // Use ColorScheme.fromSeed with even paler violet seed
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE6DAFF),
+        seedColor: const Color(0xFFF4EEFF),
         brightness: Brightness.dark,
       ),
       extensions: <ThemeExtension<dynamic>>[
         const SpacedTokens(
-          brandPrimary: Color(0xFFF2ECFF),
+          brandPrimary: Color(0xFFFAF7FF),
           brandSecondary: Color(0xFFD7F1FF),
           brandAccent: Color(0xFFFFDEE5),
           brandOnPrimary: Colors.white,
@@ -385,8 +385,8 @@ final Map<String, ThemeMetadata> appThemes = {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFD7F1FF),
-          side: const BorderSide(color: Color(0xFFD7F1FF), width: 1.5),
+          foregroundColor: const Color(0xFFE9F6FF),
+          side: const BorderSide(color: Color(0xFFE9F6FF), width: 1.5),
           textStyle: TextStyle(
             fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 16,
@@ -399,9 +399,9 @@ final Map<String, ThemeMetadata> appThemes = {
         ),
       ),
 
-      // Backgrounds (test: force full black to verify wiring)
-      cardColor: Colors.black,
-      scaffoldBackgroundColor: Colors.black,
+      // Backgrounds - unify surfaces for liminal look
+      cardColor: const Color(0xFF0B0B11),
+      scaffoldBackgroundColor: const Color(0xFF0B0B11),
 
       // Input decoration matching the theme
       inputDecorationTheme: InputDecorationTheme(

@@ -15,6 +15,7 @@ import '../screens/all_review_items_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/todays_reviews_screen.dart';
 import '../screens/user_profile_screen.dart';
+import '../screens/new_chat_screen.dart';
 import '../providers/auth_provider.dart';
 import '../services/logger_service.dart';
 import '../widgets/loading_screen.dart';
@@ -141,6 +142,16 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         builder: (context, state) {
           _logger.info('📋 Building app all items route');
           return TabNavigationScreen(child: AllReviewItemsScreen());
+        },
+      ),
+
+      // New Chat screen
+      GoRoute(
+        path: Routes.appNewChat,
+        name: 'app-new',
+        builder: (context, state) {
+          _logger.info('🆕 Building app new chat route');
+          return TabNavigationScreen(child: NewChatScreen());
         },
       ),
 

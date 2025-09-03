@@ -40,30 +40,15 @@ class _AnimatedTopicCardState extends State<AnimatedTopicCard> {
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color:
-                _isHovered
-                    ? theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.3,
-                    )
-                    : theme.colorScheme.surface,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
                   _isHovered
-                      ? theme.colorScheme.primary.withValues(alpha: 0.7)
-                      : widget.borderColor,
-              width: _isHovered ? 2.0 : 1.5,
+                      ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                      : widget.borderColor.withValues(alpha: 0.35),
+              width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    _isHovered
-                        ? theme.colorScheme.primary.withValues(alpha: 0.2)
-                        : theme.colorScheme.shadow.withValues(alpha: 0.1),
-                blurRadius: _isHovered ? 8.0 : 4.0,
-                offset: Offset(0, _isHovered ? 4.0 : 2.0),
-              ),
-            ],
           ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),

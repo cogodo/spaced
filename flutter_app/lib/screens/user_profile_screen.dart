@@ -93,12 +93,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     AuthProvider authProvider,
   ) {
     return Card(
-      elevation: 2,
-      color: Theme.of(context).colorScheme.surface,
+      elevation: 0,
+      color: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
           width: 1,
         ),
       ),
@@ -147,19 +147,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color:
-                              authProvider.isEmailVerified
-                                  ? Theme.of(
-                                    context,
-                                  ).colorScheme.tertiary.withValues(alpha: 0.1)
-                                  : Theme.of(context).colorScheme.secondary
-                                      .withValues(alpha: 0.1),
+                          color: Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color:
-                                authProvider.isEmailVerified
+                            color: (authProvider.isEmailVerified
                                     ? Theme.of(context).colorScheme.tertiary
-                                    : Theme.of(context).colorScheme.secondary,
+                                    : Theme.of(context).colorScheme.secondary)
+                                .withValues(alpha: 0.35),
                             width: 1,
                           ),
                         ),
@@ -300,14 +294,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return Consumer<SettingsProvider>(
       builder: (context, settingsProvider, child) {
         return Card(
-          elevation: 2,
-          color: Theme.of(context).colorScheme.surface,
+          elevation: 0,
+          color: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
               color: Theme.of(
                 context,
-              ).colorScheme.outline.withValues(alpha: 0.15),
+              ).colorScheme.outline.withValues(alpha: 0.12),
               width: 1,
             ),
           ),
@@ -388,12 +382,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     AuthProvider authProvider,
   ) {
     return Card(
-      elevation: 2,
-      color: Theme.of(context).colorScheme.surface,
+      elevation: 0,
+      color: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
           width: 1,
         ),
       ),

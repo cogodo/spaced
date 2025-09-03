@@ -124,70 +124,90 @@ class _TodaysReviewsScreenState extends State<TodaysReviewsScreen> {
 
           return RefreshIndicator(
             onRefresh: () => chatProvider.fetchDueTopics(),
-            child: ListView.builder(
-              itemCount: allTopics.length,
-              itemBuilder: (context, index) {
-                final topic = allTopics[index];
-                final borderColor = _getBorderColor(topic.nextReviewAt);
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.builder(
+                itemCount: allTopics.length,
+                itemBuilder: (context, index) {
+                  final topic = allTopics[index];
+                  final borderColor = _getBorderColor(topic.nextReviewAt);
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(color: borderColor, width: 1.5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          topic.name,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          topic.isOverdue
-                              ? 'Overdue for review'
-                              : 'Due for review today',
-                          style: TextStyle(
-                            color: borderColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildInfoColumn(
-                              'Last Reviewed',
-                              _formatDate(topic.lastReviewedAt),
-                            ),
-                            _buildInfoColumn(
-                              'Next Review',
-                              _formatDate(topic.nextReviewAt),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            Provider.of<ChatProvider>(
-                              context,
-                              listen: false,
-                            ).startNewSession([topic.name]);
-                            context.go(Routes.appChat);
-                          },
-                          child: const Text('Start Review'),
-                        ),
-                      ],
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                  ),
-                );
-              },
+                    elevation: 0,
+                    color: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(
+                        color: borderColor.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            topic.name,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            topic.isOverdue
+                                ? 'Overdue for review'
+                                : 'Due for review today',
+                            style: TextStyle(
+                              color: borderColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildInfoColumn(
+                                'Last Reviewed',
+                                _formatDate(topic.lastReviewedAt),
+                              ),
+                              _buildInfoColumn(
+                                'Next Review',
+                                _formatDate(topic.nextReviewAt),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton(
+                            onPressed: () {
+                              Provider.of<ChatProvider>(
+                                context,
+                                listen: false,
+                              ).startNewSession([topic.name]);
+                              context.go(Routes.appChat);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.35),
+                                width: 1,
+                              ),
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.primary,
+                            ),
+                            child: const Text('Start Review'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           );
         },

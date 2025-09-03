@@ -269,20 +269,17 @@ class _SessionItemState extends State<SessionItem> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color:
-                widget.isSelected
-                    ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                    : _isHovered
-                    ? colorScheme.surface
-                    : Colors.transparent,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border:
-                widget.isSelected
-                    ? Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.3),
-                      width: 1,
-                    )
-                    : null,
+            border: Border.all(
+              color:
+                  widget.isSelected
+                      ? colorScheme.primary.withValues(alpha: 0.35)
+                      : colorScheme.outline.withValues(
+                        alpha: _isHovered ? 0.12 : 0.08,
+                      ),
+              width: 1,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -62,23 +62,28 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
           final topics = chatProvider.dueTopics!.topics;
           return RefreshIndicator(
             onRefresh: () => chatProvider.fetchDueTopics(),
-            child: ListView.builder(
-              itemCount: topics.length,
-              itemBuilder: (context, index) {
-                final topic = topics[index];
-                final borderColor = _getBorderColor(topic.nextReviewAt);
-                return AnimatedTopicCard(
-                  topic: topic,
-                  borderColor: borderColor,
-                  onTap: () => _showQuestionManagementDialog(context, topic),
-                  onDelete: () async {
-                    await Provider.of<ChatProvider>(
-                      context,
-                      listen: false,
-                    ).deleteTopic(topic.id);
-                  },
-                );
-              },
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.builder(
+                itemCount: topics.length,
+                itemBuilder: (context, index) {
+                  final topic = topics[index];
+                  final borderColor = _getBorderColor(topic.nextReviewAt);
+                  return AnimatedTopicCard(
+                    topic: topic,
+                    borderColor: borderColor,
+                    onTap: () => _showQuestionManagementDialog(context, topic),
+                    onDelete: () async {
+                      await Provider.of<ChatProvider>(
+                        context,
+                        listen: false,
+                      ).deleteTopic(topic.id);
+                    },
+                  );
+                },
+              ),
             ),
           );
         },
