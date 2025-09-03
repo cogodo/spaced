@@ -73,12 +73,12 @@ class _SttButtonState extends State<SttButton> {
       } else {
         // Show error if recording failed
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+          SnackBar(
+            content: const Text(
               'Failed to start recording. Please check microphone permissions.',
             ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

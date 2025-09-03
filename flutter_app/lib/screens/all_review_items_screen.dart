@@ -24,7 +24,7 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
 
   Color _getBorderColor(DateTime? nextReviewAt) {
     if (nextReviewAt == null) {
-      return Colors.grey; // Default color for topics without a review date
+      return Theme.of(context).colorScheme.outline; // Default
     }
 
     final now = SystemTimeProvider().nowUtc();
@@ -37,16 +37,11 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
     final difference = today.difference(reviewDay).inDays;
 
     if (difference > 2) {
-      return Colors.red.shade700; // Overdue by more than 2 days
+      return Theme.of(context).colorScheme.error; // Overdue
     } else if (difference >= 0) {
-      return const Color.fromARGB(
-        255,
-        241,
-        237,
-        16,
-      ); // Due today or overdue by 1-2 days
+      return Theme.of(context).colorScheme.secondary; // Due today
     } else {
-      return Colors.green.shade700; // Upcoming
+      return Theme.of(context).colorScheme.tertiary; // Upcoming
     }
   }
 

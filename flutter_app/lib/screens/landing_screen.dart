@@ -338,10 +338,7 @@ class _LandingScreenState extends State<LandingScreen>
                       // Header buttons
                       Row(
                         children: [
-                          // Theme Toggle (replace the dropdown)
-                          ThemeToggle(),
-
-                          const SizedBox(width: 16),
+                          // Theme toggle removed
 
                           // Dynamic button based on auth status and current page
                           if (authProvider.isSignedIn && !isOnProfilePage)

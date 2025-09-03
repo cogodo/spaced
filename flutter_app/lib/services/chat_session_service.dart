@@ -45,7 +45,7 @@ class ChatSessionService {
     // Coalesce if a save is already running
     if (_inFlightSaves.contains(key)) {
       _pendingSessions[key] = session;
-      _logger.info('Coalescing save for $key while in-flight');
+      _logger.debug('Coalescing save for $key while in-flight');
       return;
     }
 
@@ -54,7 +54,7 @@ class ChatSessionService {
     final last = _lastSaveAt[key];
     if (last != null && now.difference(last) < _minSaveInterval) {
       _pendingSessions[key] = session;
-      _logger.info('Throttling save for $key (scheduled)');
+      _logger.debug('Throttling save for $key (scheduled)');
       return;
     }
 
@@ -137,7 +137,7 @@ class ChatSessionService {
       // Schedule follow-up save if something changed during the in-flight save
       final pending = _pendingSessions.remove(key);
       if (pending != null) {
-        _logger.info('Scheduling follow-up save for $key');
+        _logger.debug('Scheduling follow-up save for $key');
         Future.delayed(_minSaveInterval, () => saveSession(userId, pending));
       }
     }

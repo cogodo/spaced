@@ -36,6 +36,7 @@ dependencies:
   provider: ^6.1.1
   shared_preferences: ^2.0.0
   intl: ^0.20.2
+  google_fonts: ^6.2.1
   firebase_core: ^3.13.1
   firebase_auth: ^5.5.4
   cloud_firestore: ^5.6.8
@@ -84,18 +85,7 @@ flutter:
   assets:
     - assets/images/
 
-  # Custom fonts
-  fonts:
-    - family: ChironSungHK
-      fonts:
-        - asset: assets/fonts/chiron_sung_hk/ChironSungHK-Light.ttf
-          weight: 300
-        - asset: assets/fonts/chiron_sung_hk/ChironSungHK-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/chiron_sung_hk/ChironSungHK-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/chiron_sung_hk/ChironSungHK-Bold.ttf
-          weight: 700
+  # No custom fonts; using Google Fonts (Inter)
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

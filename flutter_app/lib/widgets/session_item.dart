@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../themes/design_tokens.dart';
 import '../models/chat_session.dart';
 import '../providers/chat_provider.dart';
 
@@ -181,11 +182,18 @@ class _SessionItemState extends State<SessionItem> {
           height: 36, // Smaller height
           child: Row(
             children: [
-              Icon(Icons.delete, size: 14, color: Colors.red), // Smaller icon
+              Icon(
+                Icons.delete,
+                size: 14,
+                color: Theme.of(context).colorScheme.error,
+              ), // Smaller icon
               const SizedBox(width: 8),
               Text(
                 'Delete',
-                style: TextStyle(fontSize: 13, color: Colors.red),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ), // Smaller text
             ],
           ),
@@ -208,15 +216,16 @@ class _SessionItemState extends State<SessionItem> {
 
   Color _getStatusColor(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = Theme.of(context).extension<SpacedTokens>();
     switch (widget.session.statusColorType) {
       case 'progress':
-        return Colors.blue;
+        return colorScheme.secondary;
       case 'success':
-        return Colors.green;
+        return tokens?.success ?? colorScheme.tertiary;
       case 'error':
         return colorScheme.error;
       case 'warning':
-        return Colors.orange;
+        return tokens?.warning ?? colorScheme.secondary;
       case 'neutral':
       default:
         return colorScheme.outline;

@@ -14,6 +14,7 @@ import 'providers/settings_provider.dart';
 import 'routing/app_router.dart';
 import 'services/logger_service.dart';
 import 'firebase_options.dart';
+import 'themes/design_tokens.dart';
 
 // Global key for showing snackbars from anywhere in the app
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
@@ -109,30 +110,45 @@ class MyApp extends StatelessWidget {
         theme: themeNotifier.currentTheme,
         home: Scaffold(
           backgroundColor: themeNotifier.currentTheme.scaffoldBackgroundColor,
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.psychology,
-                  size: 64,
-                  color: themeNotifier.currentTheme.colorScheme.primary,
+          body: Builder(
+            builder: (context) {
+              final tokens = Theme.of(context).extension<SpacedTokens>();
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: tokens?.brandGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'Spaced',
-                  style: themeNotifier.currentTheme.textTheme.headlineMedium
-                      ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: themeNotifier.currentTheme.colorScheme.primary,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.psychology,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Spaced',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      CircularProgressIndicator(
+                        color: Theme.of(context).colorScheme.secondary,
+                        strokeWidth: 3,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                CircularProgressIndicator(
-                  color: themeNotifier.currentTheme.colorScheme.primary,
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       );

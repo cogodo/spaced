@@ -69,6 +69,7 @@ class ChatProvider extends ChangeNotifier {
   StreamSubscription<DocumentSnapshot>? _sessionSubscription;
 
   bool _isEndingSession = false; // Add flag to prevent double ending
+  String? _loadingToken; // Prevent duplicate/in-flight loads by token
 
   ChatProvider() {
     String backendUrl;
@@ -505,6 +506,19 @@ class ChatProvider extends ChangeNotifier {
       throw Exception('User not authenticated');
     }
 
+    // Skip if already current or already loading the same token
+    if (_currentSession?.token == token || _currentSessionId == token) {
+      _logger.debug(
+        'Skipping loadSessionByToken for already-current token: $token',
+      );
+      return;
+    }
+    if (_loadingToken == token) {
+      _logger.debug('Skipping duplicate in-flight load for token: $token');
+      return;
+    }
+    _loadingToken = token;
+
     _logger.info('Loading session by token: $token for user: $_userId');
     _setLoading(true);
 
@@ -544,6 +558,9 @@ class ChatProvider extends ChangeNotifier {
       rethrow; // Re-throw to let the UI handle the error
     } finally {
       _setLoading(false);
+      if (_loadingToken == token) {
+        _loadingToken = null;
+      }
     }
   }
 
@@ -1174,7 +1191,7 @@ class ChatProvider extends ChangeNotifier {
 
     _sessionSubscription = sessionRef.snapshots().listen((doc) {
       if (!doc.exists) return;
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       if (data == null) return;
 
       final String? stateStr = data['state']?.toString();
@@ -1189,6 +1206,15 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> _handleBackendSessionCompleted() async {
+    // If we are already marked completed very recently, skip redundant work
+    if (_sessionState == SessionState.completed &&
+        _currentSession?.isCompleted == true) {
+      final updatedAt = _currentSession?.updatedAt;
+      if (updatedAt != null &&
+          DateTime.now().difference(updatedAt) < const Duration(seconds: 3)) {
+        return;
+      }
+    }
     if (_sessionState != SessionState.completed) {
       _sessionState = SessionState.completed;
     }

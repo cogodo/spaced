@@ -77,8 +77,12 @@ class _ChatScreenState extends State<ChatScreen> {
       chatProvider.setAutoScrollCallback(_scrollToBottomWithDelay);
 
       if (widget.sessionToken != null) {
-        // Load specific session by token
-        _loadSessionByToken(widget.sessionToken!);
+        // Load specific session by token if not already loaded
+        final alreadyLoaded =
+            chatProvider.currentSessionToken == widget.sessionToken;
+        if (!alreadyLoaded) {
+          _loadSessionByToken(widget.sessionToken!);
+        }
       } else {
         // Check if there's an active session and redirect to its token URL
         final currentToken = chatProvider.currentSessionToken;
@@ -279,7 +283,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.sessionToken != oldWidget.sessionToken) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (widget.sessionToken != null) {
-          _loadSessionByToken(widget.sessionToken!);
+          final chatProvider = Provider.of<ChatProvider>(
+            context,
+            listen: false,
+          );
+          final alreadyLoaded =
+              chatProvider.currentSessionToken == widget.sessionToken;
+          if (!alreadyLoaded) {
+            _loadSessionByToken(widget.sessionToken!);
+          }
         }
       });
     }

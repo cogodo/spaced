@@ -23,64 +23,39 @@ class ChatBubble extends StatelessWidget {
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          mainAxisAlignment:
-              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isUser) ...[
-              // AI avatar
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  color:
-                      message.isSystem
-                          ? theme.colorScheme.secondaryContainer
-                          : theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.symmetric(horizontal: 80),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalGutter = 16.0;
+            final availableWidth =
+                constraints.maxWidth - (horizontalGutter * 2);
+            final userMaxWidth = availableWidth * 0.7;
+            final userIndent = availableWidth * 0.33;
+            return Row(
+              mainAxisAlignment:
+                  isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: horizontalGutter),
+                Flexible(
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: isUser ? userMaxWidth : availableWidth,
+                    ),
+                    margin:
+                        isUser
+                            ? EdgeInsets.only(left: userIndent)
+                            : EdgeInsets.zero,
+                    child:
+                        isUser
+                            ? _buildUserBubble(context, theme)
+                            : _buildAiBubble(context, theme),
+                  ),
                 ),
-                child: Icon(
-                  message.isSystem ? Icons.info : Icons.smart_toy,
-                  size: 18,
-                  color:
-                      message.isSystem
-                          ? theme.colorScheme.onSecondaryContainer
-                          : theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ],
-            Flexible(
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.7,
-                ),
-                child:
-                    isUser
-                        ? _buildUserBubble(context, theme)
-                        : _buildAiBubble(context, theme),
-              ),
-            ),
-            if (isUser) ...[
-              // User avatar
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(left: 12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  Icons.person,
-                  size: 18,
-                  color: theme.colorScheme.onPrimary,
-                ),
-              ),
-            ],
-          ],
+                SizedBox(width: horizontalGutter),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -98,16 +73,16 @@ class ChatBubble extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Markdown content for user messages
-          _buildMarkdownContent(context, theme, TextAlign.right, isUser: true),
+          _buildMarkdownContent(context, theme, TextAlign.left, isUser: true),
           const SizedBox(height: 4),
           // Timestamp
           Text(
             formatTimestamp(message.timestamp),
             style: theme.textTheme.bodySmall?.copyWith(letterSpacing: 0.3),
-            textAlign: TextAlign.right,
+            textAlign: TextAlign.left,
           ),
         ],
       ),

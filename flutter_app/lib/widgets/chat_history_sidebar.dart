@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../themes/design_tokens.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
@@ -89,6 +90,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
     final selectedIndex = _getSelectedIndex(currentPath);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final tokens = theme.extension<SpacedTokens>();
 
     final navigationItems = [
       {'icon': Icons.home, 'label': 'Today', 'index': 0},
@@ -116,17 +118,16 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                       decoration: BoxDecoration(
                         color:
                             isSelected
-                                ? colorScheme.primaryContainer.withValues(
-                                  alpha: 0.3,
-                                )
+                                ? (tokens?.brandPrimary ?? colorScheme.primary)
+                                    .withValues(alpha: 0.15)
                                 : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         border:
                             isSelected
                                 ? Border.all(
-                                  color: colorScheme.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
+                                  color: (tokens?.brandPrimary ??
+                                          colorScheme.primary)
+                                      .withValues(alpha: 0.35),
                                   width: 1,
                                 )
                                 : null,
@@ -136,7 +137,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                         size: 24,
                         color:
                             isSelected
-                                ? colorScheme.primary
+                                ? (tokens?.brandPrimary ?? colorScheme.primary)
                                 : colorScheme.onSurface,
                       ),
                     ),
@@ -164,17 +165,16 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     decoration: BoxDecoration(
                       color:
                           isSelected
-                              ? colorScheme.primaryContainer.withValues(
-                                alpha: 0.3,
-                              )
+                              ? (tokens?.brandPrimary ?? colorScheme.primary)
+                                  .withValues(alpha: 0.15)
                               : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border:
                           isSelected
                               ? Border.all(
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.3,
-                                ),
+                                color: (tokens?.brandPrimary ??
+                                        colorScheme.primary)
+                                    .withValues(alpha: 0.35),
                                 width: 1,
                               )
                               : null,
@@ -186,7 +186,8 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                           size: 20,
                           color:
                               isSelected
-                                  ? colorScheme.primary
+                                  ? (tokens?.brandPrimary ??
+                                      colorScheme.primary)
                                   : colorScheme.onSurface,
                         ),
                         const SizedBox(width: 12),
@@ -195,7 +196,8 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                           style: TextStyle(
                             color:
                                 isSelected
-                                    ? colorScheme.primary
+                                    ? (tokens?.brandPrimary ??
+                                        colorScheme.primary)
                                     : colorScheme.onSurface,
                             fontWeight:
                                 isSelected ? FontWeight.w600 : FontWeight.w500,

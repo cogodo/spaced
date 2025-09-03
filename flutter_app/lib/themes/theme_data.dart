@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
+import 'package:google_fonts/google_fonts.dart';
 import 'design_tokens.dart';
 
 // Class to hold theme data along with metadata
@@ -15,14 +16,14 @@ class ThemeMetadata {
   });
 }
 
-// Create text theme with Chiron Sung HK font
+// Create text theme with Google Fonts (Inter)
 TextTheme _createChironSungTextTheme(Color textColor, Brightness brightness) {
   final Color secondaryTextColor =
       brightness == Brightness.light
           ? textColor.withValues(alpha: 208 / 255.0)
           : textColor.withValues(alpha: 230 / 255.0);
 
-  const String fontFamily = 'ChironSungHK';
+  final String fontFamily = GoogleFonts.inter().fontFamily ?? 'Inter';
 
   return TextTheme(
     // Headings - using Chiron Sung HK for elegant look
@@ -153,18 +154,18 @@ final Map<String, ThemeMetadata> appThemes = {
     name: 'Light',
     data: ThemeData(
       brightness: Brightness.light,
-      // Use ColorScheme.fromSeed with the same purple seed as dark theme
+      // Use ColorScheme.fromSeed with paler violet seed
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6750A4), // Same deep purple as dark theme
+        seedColor: const Color(0xFFE6DAFF),
         brightness: Brightness.light,
       ),
       extensions: <ThemeExtension<dynamic>>[
         const SpacedTokens(
-          brandPrimary: Color(0xFF6750A4),
-          brandSecondary: Color(0xFF7B68EE),
-          brandAccent: Color(0xFF9A86FD),
+          brandPrimary: Color(0xFFF2ECFF),
+          brandSecondary: Color(0xFFD7F1FF),
+          brandAccent: Color(0xFFFFDEE5),
           brandOnPrimary: Colors.white,
-          success: Color(0xFF2E7D32),
+          success: Color(0xFFD1FAE5),
           warning: Color(0xFFF9A825),
           error: Color(0xFFD32F2F),
           info: Color(0xFF0288D1),
@@ -172,36 +173,37 @@ final Map<String, ThemeMetadata> appThemes = {
           surface: Color(0xFFFFFFFF),
           surfaceAlt: Color(0xFFF7F7FB),
           surfaceElevated: Color(0xFFF0EFF7),
-          onBackground: Colors.black87,
-          onSurface: Colors.black87,
-          outline: Color(0x1A6750A4),
+          onBackground: Color(0xFF0E0E13),
+          onSurface: Color(0xFF0E0E13),
+          outline: Color(0x1AF2ECFF),
         ),
       ],
-      // Apply our custom text theme with dark text for readability
-      textTheme: _createChironSungTextTheme(Colors.black87, Brightness.light),
+      // TEMP: use white text to verify full-black background wiring
+      textTheme: _createChironSungTextTheme(Colors.white, Brightness.light),
       primaryTextTheme: _createChironSungTextTheme(
         Colors.white,
         Brightness.light,
       ),
 
       // System UI overlay
-      appBarTheme: AppBarTheme(
-        systemOverlayStyle:
-            SystemUiOverlayStyle.dark, // Dark status bar for light theme
-        backgroundColor: const Color(0xFF6750A4), // Purple app bar
+      appBarTheme: const AppBarTheme(
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
 
-      // White background with purple accents
-      cardColor: Colors.white,
-      scaffoldBackgroundColor: Colors.white, // Pure white background
-      // Purple buttons matching dark theme
+      // Backgrounds (test: force full black to verify wiring)
+      cardColor: Colors.black,
+      scaffoldBackgroundColor: Colors.black,
+      // Pale-accent buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6750A4), // Same purple as dark theme
-          foregroundColor: Colors.white, // White text for contrast
-          elevation: 1, // Slight elevation
+          backgroundColor: const Color(0xFFF2ECFF),
+          foregroundColor: Colors.white,
+          elevation: 2,
+          shadowColor: const Color(0x80F2ECFF),
           textStyle: TextStyle(
-            fontFamily: 'ChironSungHK',
+            fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -215,13 +217,13 @@ final Map<String, ThemeMetadata> appThemes = {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF6750A4), // Purple text
+          foregroundColor: const Color(0xFFF2ECFF),
           side: const BorderSide(
-            color: Color(0xFF6750A4),
+            color: Color(0xFFF2ECFF),
             width: 1.5,
           ), // Purple border
           textStyle: TextStyle(
-            fontFamily: 'ChironSungHK',
+            fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -260,7 +262,7 @@ final Map<String, ThemeMetadata> appThemes = {
         hintStyle: TextStyle(
           color: const Color(0xFF6750A4).withValues(alpha: 0.6),
           fontStyle: FontStyle.italic,
-          fontFamily: 'ChironSungHK',
+          fontFamily: GoogleFonts.inter().fontFamily,
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -268,11 +270,9 @@ final Map<String, ThemeMetadata> appThemes = {
         ),
       ),
 
-      // Purple dividers and icons
-      dividerColor: const Color(
-        0xFF6750A4,
-      ).withValues(alpha: 0.2), // Light purple divider
-      iconTheme: const IconThemeData(color: Color(0xFF6750A4)), // Purple icons
+      // Dividers and icons
+      dividerColor: const Color(0xFFF2ECFF).withValues(alpha: 0.2),
+      iconTheme: const IconThemeData(color: Color(0xFFF2ECFF)),
       // Component themes (Light)
       cardTheme: CardThemeData(
         color: Colors.white,
@@ -323,28 +323,28 @@ final Map<String, ThemeMetadata> appThemes = {
     name: 'Dark',
     data: ThemeData(
       brightness: Brightness.dark,
-      // Use ColorScheme.fromSeed for more cohesive colors
+      // Use ColorScheme.fromSeed with paler violet seed
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6750A4), // Deep purple seed color
+        seedColor: const Color(0xFFE6DAFF),
         brightness: Brightness.dark,
       ),
       extensions: <ThemeExtension<dynamic>>[
         const SpacedTokens(
-          brandPrimary: Color(0xFF9A86FD),
-          brandSecondary: Color(0xFF7B68EE),
-          brandAccent: Color(0xFFB4A9FF),
+          brandPrimary: Color(0xFFF2ECFF),
+          brandSecondary: Color(0xFFD7F1FF),
+          brandAccent: Color(0xFFFFDEE5),
           brandOnPrimary: Colors.white,
-          success: Color(0xFF4CAF50),
+          success: Color(0xFFD1FAE5),
           warning: Color(0xFFFFB300),
           error: Color(0xFFEF5350),
           info: Color(0xFF4FC3F7),
-          background: Color(0xFF1E1E2E),
-          surface: Color(0xFF2D2D40),
-          surfaceAlt: Color(0xFF242433),
-          surfaceElevated: Color(0xFF34344A),
-          onBackground: Colors.white,
-          onSurface: Colors.white,
-          outline: Color(0x333D3A50),
+          background: Color(0xFF0B0B11),
+          surface: Color(0xFF11111A),
+          surfaceAlt: Color(0xFF0D0D14),
+          surfaceElevated: Color(0xFF1A1A28),
+          onBackground: Color(0xFFF5F7FF),
+          onSurface: Color(0xFFF2F3F7),
+          outline: Color(0x333C3C50),
         ),
       ],
       // Apply our custom text theme for dark mode
@@ -355,19 +355,21 @@ final Map<String, ThemeMetadata> appThemes = {
       ),
 
       // Apply system overlay style for status bar icons
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         systemOverlayStyle: SystemUiOverlayStyle.light,
-        backgroundColor: const Color(0xFF1E1E2E), // Dark surface color
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
 
-      // Rich deep purple buttons
+      // Pale-accent buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF9A86FD), // Lighter purple
-          foregroundColor: Colors.white, // White text for better contrast
-          elevation: 0, // Flat design
+          backgroundColor: const Color(0xFFF2ECFF),
+          foregroundColor: Colors.white,
+          elevation: 3,
+          shadowColor: const Color(0x80F2ECFF),
           textStyle: TextStyle(
-            fontFamily: 'ChironSungHK',
+            fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -383,12 +385,10 @@ final Map<String, ThemeMetadata> appThemes = {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(
-            0xFFB4A9FF,
-          ), // Light purple for outlined buttons
-          side: const BorderSide(color: Color(0xFF7B68EE), width: 1.5),
+          foregroundColor: const Color(0xFFD7F1FF),
+          side: const BorderSide(color: Color(0xFFD7F1FF), width: 1.5),
           textStyle: TextStyle(
-            fontFamily: 'ChironSungHK',
+            fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -399,9 +399,9 @@ final Map<String, ThemeMetadata> appThemes = {
         ),
       ),
 
-      // Improved card & scaffold backgrounds
-      cardColor: const Color(0xFF2D2D40),
-      scaffoldBackgroundColor: const Color(0xFF1E1E2E),
+      // Backgrounds (test: force full black to verify wiring)
+      cardColor: Colors.black,
+      scaffoldBackgroundColor: Colors.black,
 
       // Input decoration matching the theme
       inputDecorationTheme: InputDecorationTheme(
@@ -426,7 +426,7 @@ final Map<String, ThemeMetadata> appThemes = {
         hintStyle: TextStyle(
           color: Colors.grey[400],
           fontStyle: FontStyle.italic,
-          fontFamily: 'ChironSungHK',
+          fontFamily: GoogleFonts.inter().fontFamily,
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -438,7 +438,7 @@ final Map<String, ThemeMetadata> appThemes = {
       dividerColor: const Color(0xFF3D3A50),
 
       // Add icon theme
-      iconTheme: const IconThemeData(color: Color(0xFF9A86FD)),
+      iconTheme: const IconThemeData(color: Color(0xFFCBB6FF)),
 
       // Component themes (Dark)
       cardTheme: CardThemeData(

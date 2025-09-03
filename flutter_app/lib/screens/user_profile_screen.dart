@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
-import '../widgets/theme_toggle.dart';
+// Theme toggle removed
 
 /// User profile screen showing account information and settings
 class UserProfileScreen extends StatefulWidget {
@@ -63,10 +63,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Theme Settings Section
-                  _buildThemeSettingsSection(context),
-
-                  const SizedBox(height: 32),
+                  // Theme Settings Section removed
+                  const SizedBox(height: 0),
 
                   // Voice Settings Section - Disabled due to RAM constraints
                   // _buildVoiceSettingsSection(context),
@@ -96,6 +94,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   ) {
     return Card(
       elevation: 2,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -221,27 +227,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildThemeSettingsSection(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Theme Settings',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const ThemeToggle(),
-          ],
-        ),
-      ),
-    );
-  }
+  // Theme settings section removed
 
   // Widget _buildVoiceSettingsSection(BuildContext context) {
   //   return Consumer<SettingsProvider>(
@@ -315,6 +301,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       builder: (context, settingsProvider, child) {
         return Card(
           elevation: 2,
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.15),
+              width: 1,
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -366,6 +362,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       onChanged: (bool value) {
                         settingsProvider.setSttEnabled(value);
                       },
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      activeTrackColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.35),
+                      inactiveThumbColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      inactiveTrackColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.2),
                     ),
                   ],
                 ),
@@ -383,6 +389,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   ) {
     return Card(
       elevation: 2,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(

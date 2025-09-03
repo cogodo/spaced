@@ -58,6 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: theme.colorScheme.onPrimary,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
                       textStyle: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
