@@ -4,7 +4,6 @@ import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/typing_indicator_widget.dart';
 import '../widgets/topic_selection_widget.dart';
-import '../widgets/session_type_selection_widget.dart';
 import '../widgets/due_topics_selection_widget.dart';
 import '../widgets/question_generation_loading_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +13,6 @@ import '../services/audio_player_service.dart';
 import '../services/stt_service.dart';
 // import '../services/auth_service.dart';
 import '../services/logger_service.dart';
-import '../utils/time_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? sessionToken;
@@ -325,93 +323,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _loadDueTasks() async {
-    setState(() {
-      _isLoadingDueTasks = true;
-    });
+  // Removed old _loadDueTasks helper (no longer referenced)
 
-    try {
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-      await chatProvider.fetchDueTopics();
-
-      if (chatProvider.dueTopics != null) {
-        final dueTopics = chatProvider.dueTopics!;
-        final recentlyReviewed = chatProvider.recentlyReviewedTopicIds;
-
-        // Perform client-side categorization based on local time (same as today's reviews)
-        final now = SystemTimeProvider().nowUtc().toLocal();
-        final today = DateTime(now.year, now.month, now.day);
-
-        final allTopics =
-            dueTopics.topics.where((topic) {
-              if (recentlyReviewed.contains(topic.id)) {
-                return false; // Filter out recently reviewed
-              }
-              if (topic.nextReviewAt == null) {
-                return false; // Filter out topics with no review date
-              }
-              // Compare using the local timezone
-              final reviewDateLocal = topic.nextReviewAt!.toLocal();
-              final reviewDay = DateTime(
-                reviewDateLocal.year,
-                reviewDateLocal.month,
-                reviewDateLocal.day,
-              );
-              return reviewDay.isBefore(today) ||
-                  reviewDay.isAtSameMomentAs(today);
-            }).toList();
-
-        // Convert to the format expected by the widget
-        final dueTasks =
-            allTopics
-                .map(
-                  (topic) => {
-                    'topic_id': topic.id,
-                    'topic_name': topic.name,
-                    'topic':
-                        topic, // Include the full topic object for rich display
-                  },
-                )
-                .toList();
-
-        setState(() {
-          _dueTasks = dueTasks;
-          _selectedTopics.clear();
-        });
-      } else {
-        setState(() {
-          _dueTasks = [];
-          _selectedTopics.clear();
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading due tasks: $e')));
-      }
-      setState(() {
-        _dueTasks = [];
-        _selectedTopics.clear();
-      });
-    } finally {
-      setState(() {
-        _isLoadingDueTasks = false;
-      });
-    }
-  }
-
-  void _startNewItemsSession() {
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.setSessionState(SessionState.collectingTopics);
-  }
-
-  void _startPastReviewsSession() {
-    _loadDueTasks();
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    chatProvider.loadPopularTopics();
-    chatProvider.setSessionState(SessionState.selectingDueTopics);
-  }
+  // Removed old start screen handlers
 
   void _startDueTopicsSession() {
     if (_selectedTopics.isEmpty) {
@@ -510,14 +424,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 return QuestionGenerationLoadingScreen(topicName: topicName);
               }
 
-              // Show session type selection if no active session and in initial state
-              if (!chatProvider.hasActiveSession &&
-                  chatProvider.sessionState == SessionState.initial) {
-                return SessionTypeSelectionWidget(
-                  onNewItemsPressed: _startNewItemsSession,
-                  onPastReviewsPressed: _startPastReviewsSession,
-                );
-              }
+              // Removed old session type selection screen to avoid random mounting on refresh
 
               // Show topic selection for new items
               if (chatProvider.sessionState == SessionState.collectingTopics) {
@@ -736,17 +643,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 10,
+                        vertical: 12,
                       ),
                       side: BorderSide(
                         color: theme.colorScheme.outline,
-                        width: 1,
+                        width: 1.5,
                       ),
                       foregroundColor: theme.colorScheme.onSurface,
                       disabledForegroundColor: theme.colorScheme.onSurface
                           .withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                   ),
@@ -799,17 +706,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 10,
+                        vertical: 12,
                       ),
                       side: BorderSide(
                         color: theme.colorScheme.error,
-                        width: 1,
+                        width: 1.5,
                       ),
                       foregroundColor: theme.colorScheme.error,
                       disabledForegroundColor: theme.colorScheme.error
                           .withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                   ),
@@ -884,22 +791,31 @@ class _ChatScreenState extends State<ChatScreen> {
                             letterSpacing: 0.2,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.outline,
+                              width: 1,
+                            ),
                           ),
-                          filled: true,
-                          fillColor: theme.scaffoldBackgroundColor,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.outline,
+                              width: 1,
+                            ),
                           ),
-                          // Add focus border for better visual feedback
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(
                               color: theme.colorScheme.primary,
-                              width: 2,
+                              width: 1.5,
                             ),
+                          ),
+                          filled: true,
+                          fillColor: theme.colorScheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
                           isDense: false,
                           // Show typing indicator in input when AI is thinking
@@ -974,7 +890,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         disabledForegroundColor: theme.colorScheme.onPrimary
                             .withValues(alpha: 0.7),
                         fixedSize: const Size(56, 56), // Consistent size
-                        shape: const CircleBorder(),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         elevation:
                             (chatProvider.isLoading ||
                                     chatProvider.isTyping ||
@@ -995,7 +913,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: theme.colorScheme.onPrimary,
                                 ),
                               )
-                              : const Icon(Icons.arrow_upward, size: 24),
+                              : const Icon(Icons.arrow_upward, size: 22),
                       tooltip: _isSending ? 'Sending...' : 'Send message',
                     ),
                   ],

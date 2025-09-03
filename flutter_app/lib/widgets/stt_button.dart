@@ -95,11 +95,18 @@ class _SttButtonState extends State<SttButton> {
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(8),
           color:
               _isRecording
                   ? theme.colorScheme.error
-                  : theme.colorScheme.surfaceContainerHighest,
+                  : theme.colorScheme.surface,
+          border: Border.all(
+            color:
+                _isRecording
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.outline,
+            width: 1,
+          ),
 
           boxShadow: [
             BoxShadow(

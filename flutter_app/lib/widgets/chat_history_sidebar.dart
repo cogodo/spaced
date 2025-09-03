@@ -557,10 +557,19 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                       ),
                     ),
                   )
-                  : Padding(
-                    key: const ValueKey('logo'),
-                    padding: const EdgeInsets.all(4.0),
-                    child: ThemeLogo(size: 24),
+                  : Tooltip(
+                    message: 'Go to landing',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        key: const ValueKey('logo'),
+                        onTap: () => context.go(Routes.landing),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4.0),
+                          child: ThemeLogo(size: 24),
+                        ),
+                      ),
+                    ),
                   ),
         ),
       ),
@@ -571,7 +580,19 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
     return Row(
       children: [
         // Logo (always visible)
-        Padding(padding: const EdgeInsets.all(4.0), child: ThemeLogo(size: 28)),
+        Tooltip(
+          message: 'Go to landing',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => context.go(Routes.landing),
+              child: const Padding(
+                padding: EdgeInsets.all(4.0),
+                child: ThemeLogo(size: 28),
+              ),
+            ),
+          ),
+        ),
 
         const Expanded(child: SizedBox.shrink()),
 
