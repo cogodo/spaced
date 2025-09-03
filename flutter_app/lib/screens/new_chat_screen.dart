@@ -26,7 +26,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
   Future<void> _startSession() async {
     final value = _topicController.text.trim();
     if (value.isEmpty) return;
-    context.go(Routes.appChat);
+    context.go(Routes.appNewChat);
     context.read<ChatProvider>().startNewSession([value]);
   }
 
@@ -77,7 +77,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
                               hintText:
                                   'Enter review topic, e.g. Llama grooming best practices',
                               filled: true,
-                              fillColor: theme.scaffoldBackgroundColor,
+                              fillColor: theme.hoverColor,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(

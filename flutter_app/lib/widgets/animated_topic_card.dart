@@ -6,6 +6,7 @@ class AnimatedTopicCard extends StatefulWidget {
   final Color borderColor;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback? onReview;
 
   const AnimatedTopicCard({
     super.key,
@@ -13,6 +14,7 @@ class AnimatedTopicCard extends StatefulWidget {
     required this.borderColor,
     required this.onTap,
     required this.onDelete,
+    this.onReview,
   });
 
   @override
@@ -63,6 +65,25 @@ class _AnimatedTopicCardState extends State<AnimatedTopicCard> {
                         style: theme.textTheme.titleLarge,
                       ),
                     ),
+                    if (widget.onReview != null) ...[
+                      ElevatedButton(
+                        onPressed: widget.onReview,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text('Review'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     IconButton(
                       icon: Icon(Icons.delete, color: theme.colorScheme.error),
                       onPressed: widget.onDelete,

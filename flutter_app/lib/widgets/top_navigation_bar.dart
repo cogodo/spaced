@@ -16,6 +16,9 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
     if (currentPath.startsWith('/app/chat')) {
       return 2;
     }
+    if (currentPath == Routes.appNewChat) {
+      return 2;
+    }
 
     switch (currentPath) {
       case Routes.appHome:
@@ -23,6 +26,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
       case Routes.appAll:
         return 1;
       case Routes.appChat:
+      case Routes.appNewChat:
         return 2;
       default:
         return 0;
@@ -34,7 +38,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
     final routes = [
       Routes.appHome, // /app
       Routes.appAll, // /app/all
-      Routes.appChat, // /app/chat
+      Routes.appNewChat, // /chat
     ];
     context.go(routes[index]);
   }
@@ -105,7 +109,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
         if (isDesktop) ...[
           // Desktop: Show all navigation as buttons
           _NavigationTab(
-            icon: Icons.home,
+            icon: Icons.calendar_today,
             label: 'Today',
             isSelected: selectedIndex == 0,
             onTap: () => _navigateToIndex(context, 0),
@@ -126,7 +130,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
         ] else if (isTablet) ...[
           // Tablet: Show icons only
           _NavigationTab(
-            icon: Icons.home,
+            icon: Icons.calendar_today,
             isSelected: selectedIndex == 0,
             onTap: () => _navigateToIndex(context, 0),
             showLabel: false,
@@ -181,7 +185,7 @@ class TopNavigationBar extends StatelessWidget implements PreferredSizeWidget {
               child: Row(
                 children: [
                   Icon(
-                    Icons.home,
+                    Icons.calendar_today,
                     color:
                         selectedIndex == 0
                             ? Theme.of(context).colorScheme.primary

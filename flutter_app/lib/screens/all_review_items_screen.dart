@@ -88,6 +88,12 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                         listen: false,
                       ).deleteTopic(topic.id);
                     },
+                    onReview: () async {
+                      await Provider.of<ChatProvider>(
+                        context,
+                        listen: false,
+                      ).startNewSession([topic.name]);
+                    },
                   );
                 },
               ),

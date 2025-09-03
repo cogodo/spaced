@@ -61,9 +61,9 @@ GoRouter createAppRouter(AuthProvider authProvider) {
             Routes.forgotPassword,
           ].contains(currentPath)) {
         _logger.info(
-          '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appChat}',
+          '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appNewChat}',
         );
-        return Routes.appChat;
+        return Routes.appNewChat;
       }
 
       // Redirect authenticated users from landing '/' to chat ONLY once per app session
@@ -74,7 +74,7 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         _logger.info(
           '🔄 One-time redirect: signed-in user from landing to chat',
         );
-        return Routes.appChat;
+        return Routes.appNewChat;
       }
 
       // PROTECT /app routes and /chat - redirect unsigned users to landing
@@ -135,7 +135,7 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.appHome,
         name: 'app-home',
-        redirect: (context, state) => Routes.appChat,
+        redirect: (context, state) => Routes.appNewChat,
       ),
 
       GoRoute(

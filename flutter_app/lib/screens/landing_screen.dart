@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
 import '../services/logger_service.dart';
 import '../providers/auth_provider.dart';
@@ -23,20 +22,23 @@ class _LandingScreenState extends State<LandingScreen>
   late AnimationController _aboutHeaderController;
   late AnimationController _aboutCardsController;
 
-  late Animation<double> _featuresHeaderAnimation;
-  late Animation<double> _featuresCardsAnimation;
+  // Removed features animations
   late Animation<double> _aboutHeaderAnimation;
   late Animation<double> _aboutCardsAnimation;
 
   // Keys to track section positions
   final GlobalKey _featuresSectionKey = GlobalKey();
   final GlobalKey _aboutSectionKey = GlobalKey();
+  final GlobalKey _backstorySectionKey = GlobalKey();
+  final GlobalKey _featureDemosSectionKey = GlobalKey();
 
   // Animation states
   bool _featuresHeaderAnimated = false;
   bool _featuresCardsAnimated = false;
   bool _aboutHeaderAnimated = false;
   bool _aboutCardsAnimated = false;
+  bool _backstoryAnimated = false;
+  bool _featureDemosAnimated = false;
 
   // Logo is static now (no animation)
 
@@ -49,11 +51,11 @@ class _LandingScreenState extends State<LandingScreen>
 
     // Initialize animation controllers
     _featuresHeaderController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1),
       vsync: this,
     );
     _featuresCardsController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1),
       vsync: this,
     );
     _aboutHeaderController = AnimationController(
@@ -66,14 +68,7 @@ class _LandingScreenState extends State<LandingScreen>
     );
 
     // Create animations
-    _featuresHeaderAnimation = CurvedAnimation(
-      parent: _featuresHeaderController,
-      curve: Curves.easeOutCubic,
-    );
-    _featuresCardsAnimation = CurvedAnimation(
-      parent: _featuresCardsController,
-      curve: Curves.easeOutCubic,
-    );
+    // No-op
     _aboutHeaderAnimation = CurvedAnimation(
       parent: _aboutHeaderController,
       curve: Curves.easeOutCubic,
@@ -81,6 +76,28 @@ class _LandingScreenState extends State<LandingScreen>
     _aboutCardsAnimation = CurvedAnimation(
       parent: _aboutCardsController,
       curve: Curves.easeOutCubic,
+    );
+  }
+
+  // Wraps a section and animates it once it scrolls into view
+  Widget _animateOnVisible({
+    required Key key,
+    required bool isVisible,
+    required Widget child,
+  }) {
+    return Container(
+      key: key,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOut,
+        opacity: isVisible ? 1.0 : 0.0,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOut,
+          offset: isVisible ? Offset.zero : const Offset(0, 0.06),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -138,6 +155,31 @@ class _LandingScreenState extends State<LandingScreen>
         }
       }
     }
+
+    // Backstory section
+    if (!_backstoryAnimated) {
+      final box =
+          _backstorySectionKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null) {
+        final pos = box.localToGlobal(Offset.zero);
+        if (pos.dy < screenHeight * 0.9) {
+          setState(() => _backstoryAnimated = true);
+        }
+      }
+    }
+
+    // Feature demos section
+    if (!_featureDemosAnimated) {
+      final box =
+          _featureDemosSectionKey.currentContext?.findRenderObject()
+              as RenderBox?;
+      if (box != null) {
+        final pos = box.localToGlobal(Offset.zero);
+        if (pos.dy < screenHeight * 0.9) {
+          setState(() => _featureDemosAnimated = true);
+        }
+      }
+    }
   }
 
   // Removed _onLogoTap and spin logic (logo is static)
@@ -186,8 +228,19 @@ class _LandingScreenState extends State<LandingScreen>
                   // Hero Section
                   _buildHeroSection(context, isDesktop, isMobile),
 
-                  // Features Section
-                  _buildFeaturesSection(context, isDesktop, isMobile),
+                  // Backstory Blurb
+                  _animateOnVisible(
+                    key: _backstorySectionKey,
+                    isVisible: _backstoryAnimated,
+                    child: _buildBackstorySection(context, isDesktop),
+                  ),
+
+                  // Feature Demos (screenshots placeholders)
+                  _animateOnVisible(
+                    key: _featureDemosSectionKey,
+                    isVisible: _featureDemosAnimated,
+                    child: _buildFeatureDemosSection(context, isDesktop),
+                  ),
 
                   // About Section
                   _buildAboutSection(context, isDesktop),
@@ -203,6 +256,152 @@ class _LandingScreenState extends State<LandingScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBackstorySection(BuildContext context, bool isDesktop) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 80 : 20,
+        vertical: isDesktop ? 80 : 48,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Column(
+          crossAxisAlignment:
+              isDesktop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+          children: [
+            Text(
+              'The backstory',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              textAlign: isDesktop ? TextAlign.left : TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'I stumbled into a simple truth: active recall and spaced repetition are a learning superpower. '
+              'But the reality was messy — getting a reliable system set up, keeping it organized, and actually sticking with it was harder than it should be. '
+              'So I built Spaced: a streamlined, intelligent companion that removes the friction and keeps you learning — consistently, effectively, and for the long term.',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                height: 1.6,
+                color: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.color?.withValues(alpha: 0.9),
+              ),
+              textAlign: isDesktop ? TextAlign.left : TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureDemosSection(BuildContext context, bool isDesktop) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 80 : 20,
+        vertical: isDesktop ? 80 : 56,
+      ),
+      child: Column(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _fadeIn(
+                _featureTile(
+                  context,
+                  'One-tap review sessions',
+                  'Jump straight into focused reviews with smart scheduling.',
+                ),
+              ),
+              const SizedBox(height: 24),
+              _fadeIn(
+                _featureTile(
+                  context,
+                  'Chat-based learning',
+                  'Explain, quiz, and iterate with an AI tutor that adapts to you.',
+                ),
+              ),
+              const SizedBox(height: 24),
+              _fadeIn(
+                _featureTile(
+                  context,
+                  'Topic organization',
+                  'Keep everything tidy with topics, due dates, and progress.',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _featureTile(BuildContext context, String title, String description) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Move text above the image and use brand light purple
+        Text(
+              title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            height: 1.5,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: Center(
+              child: Image.asset(
+                title.contains('One-tap')
+                    ? '../../assets/images/img1.png'
+                    : title.contains('Chat')
+                    ? '../../assets/images/img2.png'
+                    : '../../assets/images/img3.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Simple fade-in helper
+  Widget _fadeIn(Widget child) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOut,
+      builder:
+          (context, value, c) => Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, (1 - value) * 16),
+              child: c,
+            ),
+          ),
+      child: child,
     );
   }
 
@@ -247,7 +446,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                           // Login button only
                           OutlinedButton(
-                            onPressed: () => _handleHeaderButtonPress(context),
+                            onPressed: () => context.go(Routes.appNewChat),
                             child: Text(
                               authProvider.isSignedIn
                                   ? 'GET SPACED'
@@ -318,8 +517,7 @@ class _LandingScreenState extends State<LandingScreen>
                             )
                           else if (!authProvider.isSignedIn)
                             OutlinedButton(
-                              onPressed:
-                                  () => _handleHeaderButtonPress(context),
+                              onPressed: () => context.go(Routes.login),
                               child: const Text('Login'),
                             ),
                         ],
@@ -513,11 +711,7 @@ class _LandingScreenState extends State<LandingScreen>
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(buttonText),
-                const SizedBox(width: 12),
-                
-              ],
+              children: [Text(buttonText), const SizedBox(width: 12)],
             ),
           ),
         );
@@ -525,236 +719,9 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  Widget _buildFeaturesSection(
-    BuildContext context,
-    bool isDesktop,
-    bool isMobile,
-  ) {
-    final features = [
-      {
-        'icon': Icons.schedule,
-        'title': 'Smart Scheduling',
-        'description':
-            'AI-powered spaced repetition algorithm adapts to your learning pace.',
-      },
-      {
-        'icon': Icons.psychology,
-        'title': 'Memory Optimization',
-        'description':
-            'Scientific approach to maximize retention and minimize forgetting.',
-      },
-      {
-        'icon': Icons.chat_bubble_outline,
-        'title': 'Interactive Learning',
-        'description':
-            'Engage with an AI tutor that helps reinforce your knowledge.',
-      },
-      {
-        'icon': Icons.trending_up,
-        'title': 'Progress Tracking',
-        'description':
-            'Monitor your learning journey with detailed analytics and insights.',
-      },
-    ];
+  // Removed old features section
 
-    return Container(
-      key: _featuresSectionKey,
-      padding: EdgeInsets.symmetric(
-        horizontal: isDesktop ? 80 : 20,
-        vertical: 120, // Increased padding to push section down initially
-      ),
-      child: Column(
-        children: [
-          // Animated section header
-          RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _featuresHeaderAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, 30 * (1 - _featuresHeaderAnimation.value)),
-                  child: Opacity(
-                    opacity: _featuresHeaderAnimation.value,
-                    child: Column(
-                      children: [
-                        Text(
-                          'Why Choose Spaced?',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        Text(
-                          'Built on decades of cognitive science research',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            color: Theme.of(context).textTheme.bodyLarge?.color
-                                ?.withValues(alpha: 0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          const SizedBox(height: 60),
-
-          // Animated features grid
-          RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _featuresCardsAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, 40 * (1 - _featuresCardsAnimation.value)),
-                  child: Opacity(
-                    opacity: _featuresCardsAnimation.value,
-                    child:
-                        isDesktop
-                            ? Row(
-                              children:
-                                  features
-                                      .asMap()
-                                      .entries
-                                      .map(
-                                        (entry) => Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 20,
-                                            ),
-                                            child: _buildFeatureCard(
-                                              context,
-                                              entry.value,
-                                              entry.key,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                            )
-                            : Column(
-                              children:
-                                  features
-                                      .asMap()
-                                      .entries
-                                      .map(
-                                        (entry) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 30,
-                                          ),
-                                          child: _buildFeatureCard(
-                                            context,
-                                            entry.value,
-                                            entry.key,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                            ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-    BuildContext context,
-    Map<String, dynamic> feature,
-    int index,
-  ) {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(
-        milliseconds: 300 + (index * 100),
-      ), // Stagger animation
-      tween: Tween(begin: 0.0, end: _featuresCardsAnimation.value),
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 20 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: SizedBox(
-              height: 280, // Fixed height for consistent card sizing
-              child: Card(
-                elevation: 0,
-                color: Theme.of(context).cardColor.withValues(alpha: 0.7),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(30),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Icon(
-                          feature['icon'],
-                          size: 40,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      Text(
-                        feature['title'],
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Expanded(
-                        child: Text(
-                          feature['description'],
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).textTheme.bodyLarge?.color
-                                ?.withValues(alpha: 0.8),
-                            height: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // Removed feature card component
 
   Widget _buildAboutSection(BuildContext context, bool isDesktop) {
     return Container(
@@ -777,7 +744,7 @@ class _LandingScreenState extends State<LandingScreen>
                     child: Column(
                       children: [
                         Text(
-                          'Powered by Science',
+                          'Built on decades of cognitive science research',
                           style: Theme.of(
                             context,
                           ).textTheme.displaySmall?.copyWith(
@@ -788,31 +755,7 @@ class _LandingScreenState extends State<LandingScreen>
                         ),
 
                         const SizedBox(height: 16),
-
-                        Text(
-                          'Built on the Free Spaced Repetition Scheduler (FSRS)',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            color: Theme.of(context).textTheme.bodyLarge?.color
-                                ?.withValues(alpha: 0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-
                         const SizedBox(height: 32),
-
-                        Text(
-                          'FSRS is a cutting-edge, evidence-based algorithm developed by cognitive scientists and backed by extensive research. Unlike traditional spaced repetition systems, FSRS uses sophisticated mathematical models to predict when you\'ll forget information and schedules reviews at the optimal moment.',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).textTheme.bodyLarge?.color
-                                ?.withValues(alpha: 0.8),
-                            height: 1.6,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
                       ],
                     ),
                   ),
@@ -890,29 +833,6 @@ class _LandingScreenState extends State<LandingScreen>
                             ),
                           ],
                         ),
-
-                      const SizedBox(height: 40),
-
-                      // Learn more button
-                      OutlinedButton.icon(
-                        onPressed:
-                            () => _launchURL(
-                              'https://github.com/open-spaced-repetition/fsrs4anki/wiki',
-                            ),
-                        icon: const Icon(Icons.launch),
-                        label: const Text('Learn More About FSRS'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -975,19 +895,7 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  // Helper method to launch URLs
-  void _launchURL(String url) async {
-    try {
-      final Uri uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch $url';
-      }
-    } catch (e) {
-      // URL launching failed - silent fail for better UX
-    }
-  }
+  // Removed URL launcher helper
 
   Widget _buildCallToActionSection(BuildContext context, bool isDesktop) {
     return Container(
