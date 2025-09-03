@@ -26,10 +26,8 @@ class _NewChatScreenState extends State<NewChatScreen> {
   Future<void> _startSession() async {
     final value = _topicController.text.trim();
     if (value.isEmpty) return;
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    await chatProvider.startNewSession([value]);
-    if (!mounted) return;
     context.go(Routes.appChat);
+    context.read<ChatProvider>().startNewSession([value]);
   }
 
   @override
@@ -44,7 +42,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return SingleChildScrollView(
+          return Padding(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -109,42 +107,38 @@ class _NewChatScreenState extends State<NewChatScreen> {
                               ),
                               suffixIcon: Padding(
                                 padding: EdgeInsets.zero,
-                                child: Tooltip(
-                                  message:
-                                      'Enter review topic, e.g. Llama grooming best practices',
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints.tightFor(
-                                      width: 48,
-                                      height: 48,
-                                    ),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 40,
-                                        height: 40,
-                                        child: Material(
-                                          color:
-                                              _hasText
-                                                  ? theme.colorScheme.primary
-                                                  : theme.colorScheme.primary
-                                                      .withValues(alpha: 0.5),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
+
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 48,
+                                    height: 48,
+                                  ),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: Material(
+                                        color:
+                                            _hasText
+                                                ? theme.colorScheme.primary
+                                                : theme.colorScheme.primary
+                                                    .withValues(alpha: 0.5),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
                                           ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            onTap:
-                                                _hasText ? _startSession : null,
-                                            child: Icon(
-                                              Icons.arrow_upward,
-                                              size: 20,
-                                              color:
-                                                  theme.colorScheme.onPrimary,
-                                            ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          onTap:
+                                              _hasText ? _startSession : null,
+                                          child: Icon(
+                                            Icons.arrow_upward,
+                                            size: 20,
+                                            color: theme.colorScheme.onPrimary,
                                           ),
                                         ),
                                       ),

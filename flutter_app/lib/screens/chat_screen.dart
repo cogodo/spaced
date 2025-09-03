@@ -84,6 +84,13 @@ class _ChatScreenState extends State<ChatScreen> {
           _loadSessionByToken(widget.sessionToken!);
         }
       } else {
+        // If a session is being started or questions are being generated,
+        // let the loading screen render and avoid resetting state.
+        if (chatProvider.isStartingSession ||
+            chatProvider.isGeneratingQuestions) {
+          return;
+        }
+
         // Check if there's an active session and redirect to its token URL
         final currentToken = chatProvider.currentSessionToken;
         if (currentToken != null) {

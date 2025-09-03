@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => context.go(Routes.appChat),
+                    onPressed: () => context.go(Routes.appNewChat),
                     icon: const Icon(Icons.chat),
                     label: const Text('Start Learning'),
                     style: ElevatedButton.styleFrom(

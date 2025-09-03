@@ -199,8 +199,8 @@ class ApiService {
     final url = Uri.parse('$_baseUrl$_apiPrefix/chat/start');
     final body = jsonEncode({'topics': topics, 'chat_id': chatId});
 
-    // Chat start should be fast now (8 questions × 1 second = 8 seconds max)
-    final chatStartTimeout = const Duration(seconds: 30);
+    // Allow enough time for backend to generate questions (backend may take up to ~30s)
+    final chatStartTimeout = const Duration(seconds: 45);
 
     final response = await _breaker.execute(
       () => _makeRequestWithRetry(

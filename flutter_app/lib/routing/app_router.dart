@@ -64,8 +64,10 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         return Routes.appChat;
       }
 
-      // PROTECT /app routes - redirect unsigned users to landing
-      if (currentPath.startsWith('/app') && !isSignedIn) {
+      // PROTECT /app routes and /chat - redirect unsigned users to landing
+      if ((currentPath.startsWith('/app') ||
+              currentPath == Routes.appNewChat) &&
+          !isSignedIn) {
         _logger.info(
           '🔒 REDIRECTING unsigned user from $currentPath to landing page',
         );
@@ -145,12 +147,12 @@ GoRouter createAppRouter(AuthProvider authProvider) {
         },
       ),
 
-      // New Chat screen
+      // New Chat screen (now at /chat, not nested in /app)
       GoRoute(
         path: Routes.appNewChat,
-        name: 'app-new',
+        name: 'new-chat',
         builder: (context, state) {
-          _logger.info('🆕 Building app new chat route');
+          _logger.info('🆕 Building new chat route');
           return TabNavigationScreen(child: NewChatScreen());
         },
       ),

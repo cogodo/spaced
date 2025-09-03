@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 from app.config import settings
 from core.models import Question
 from core.models.llm_outputs import ClarificationImpact
+from core.models.profiles import CLARIFICATION
 from core.monitoring.logger import get_logger
 
 logger = get_logger(__name__)
@@ -88,20 +89,32 @@ GUIDELINES:
 Provide a direct, helpful response to their clarification request:"""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4.1-mini",  # Using cheaper model for testing
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=500,
-                temperature=0.7,
-            )
-
-            content = response.choices[0].message.content
+            used_model = settings.openai_model or "gpt-5-nano"
+            if "gpt-5" in used_model:
+                response = await self.openai_client.responses.create(
+                    model=used_model,
+                    instructions=(
+                        "You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions."
+                    ),
+                    input=prompt,
+                    reasoning={"effort": "low"},
+                    text={"verbosity": "low"},
+                    max_output_tokens=CLARIFICATION.max_completion_tokens,
+                )
+                content = getattr(response, "output_text", None)
+            else:
+                response = await self.openai_client.chat.completions.create(
+                    model=used_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=CLARIFICATION.max_completion_tokens,
+                )
+                content = response.choices[0].message.content
             if not content:
                 raise ValueError("OpenAI returned empty response for clarification")
 
@@ -151,21 +164,34 @@ Provide your assessment as a JSON object:
 }}"""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4.1-mini",  # Using cheaper model for testing
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an educational expert who assesses the impact of clarifications on learning. Always respond with valid JSON.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=500,
-                temperature=0.2,
-                response_format={"type": "json_object"},
-            )
-
-            content = response.choices[0].message.content
+            used_model = settings.openai_model or "gpt-5-nano"
+            if "gpt-5" in used_model:
+                response = await self.openai_client.responses.create(
+                    model=used_model,
+                    instructions=(
+                        "You are an educational expert who assesses the impact of clarifications on learning. "
+                        "Always respond with valid JSON."
+                    ),
+                    input=prompt,
+                    reasoning={"effort": "low"},
+                    text={"verbosity": "low"},
+                    max_output_tokens=CLARIFICATION.max_completion_tokens,
+                )
+                content = getattr(response, "output_text", None)
+            else:
+                response = await self.openai_client.chat.completions.create(
+                    model=used_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an educational expert who assesses the impact of clarifications on learning. Always respond with valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=CLARIFICATION.max_completion_tokens,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content
             if not content:
                 raise ValueError("OpenAI returned empty response for impact assessment")
 

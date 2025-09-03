@@ -15,7 +15,8 @@ class Routes {
   static const String appAdd = '/app/add'; // getspaced.app/app/add
   static const String appAll = '/app/all'; // getspaced.app/app/all
   static const String appTodays = '/app/today'; // getspaced.app/app/today
-  static const String appNewChat = '/app/new'; // getspaced.app/app/new
+  // New Chat is now at a top-level route
+  static const String appNewChat = '/chat'; // getspaced.app/chat
   static const String appChat = '/app/chat'; // getspaced.app/app/chat
   static const String appProfile = '/app/profile'; // getspaced.app/app/profile
 }

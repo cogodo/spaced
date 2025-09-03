@@ -7,6 +7,13 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 from core.models import Question, Topic
+from core.models.profiles import (
+    ANALYSIS,
+    GENERATION_BULK,
+    GENERATION_SINGLE,
+    REFINEMENT_BULK,
+)
+from core.monitoring.logger import get_logger
 from core.repositories import QuestionRepository
 
 
@@ -32,6 +39,7 @@ class QuestionService:
     def __init__(self):
         self.repository = QuestionRepository()
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.logger = get_logger("question_service")
 
     def get_topic_questions(
         self, topic_id: str, user_uid: str, limit: Optional[int] = None, randomize: bool = False
@@ -198,7 +206,10 @@ Requirements:
 - Incorporate the specified context/perspective naturally
 """
 
-        return await self._call_openai(prompt, max_tokens=500, temperature=1.2)
+        return await self._call_openai(
+            prompt,
+            max_completion_tokens=GENERATION_SINGLE.max_completion_tokens,
+        )
 
     async def _refine_question(self, initial_question: str, question_type: str, difficulty: int) -> str:
         """Refine a generated question for quality and clarity"""
@@ -218,7 +229,7 @@ NEVER include the answer to the question in your return
 NEVER include a heading like "improved question:" or "Question:" before the question in your return
 ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE ANYTHING THAT SAYS "ANSWER" and any follwing related text
 """
-        return await self._call_openai(prompt, temperature=0.8)
+        return await self._call_openai(prompt)
 
     async def _generate_basic_question(
         self, topic: Topic, template: str, difficulty: int, question_type: str
@@ -278,9 +289,8 @@ Example JSON shape (not content):
         # Bulk generation needs a longer timeout and higher token budget
         response = await self._call_openai(
             prompt,
-            max_tokens=2000,
-            temperature=0.9,
-            timeout=12.0,
+            max_completion_tokens=GENERATION_BULK.max_completion_tokens,
+            timeout=30.0,
         )
 
         # Robust JSON array extraction
@@ -374,9 +384,8 @@ No explanations.
 
         response = await self._call_openai(
             prompt,
-            max_tokens=1800,
-            temperature=0.7,
-            timeout=12.0,
+            max_completion_tokens=REFINEMENT_BULK.max_completion_tokens,
+            timeout=30.0,
         )
 
         start = response.find("[")
@@ -458,29 +467,100 @@ No explanations.
     async def _call_openai(
         self,
         prompt: str,
-        max_tokens: int = 500,
-        temperature: float = 1.0,
-        timeout: float = 1.0,
+        max_completion_tokens: int = GENERATION_SINGLE.max_completion_tokens,
+        timeout: float = 15.0,
         model: Optional[str] = None,
     ) -> str:
         """Make OpenAI API call with error handling and configurable timeout"""
         try:
-            response = await asyncio.wait_for(
-                self.openai_client.chat.completions.create(
-                    model=model or "gpt-5",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": ("You are an expert educator creating high-quality learning questions."),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                ),
-                timeout=timeout,
+            used_model = model or settings.openai_model or "gpt-4o"
+            # Log outgoing request (truncate prompt for safety)
+            self.logger.info(
+                "Preparing OpenAI request",
+                extra={
+                    "model": used_model,
+                    "max_tokens_or_max_output_tokens": max_completion_tokens,
+                    "timeout": timeout,
+                    "prompt_preview": (prompt[:200] + ("…" if len(prompt) > 200 else "")),
+                },
             )
-            return response.choices[0].message.content
+            # Use Responses API for GPT-5 models, else Chat Completions
+            if "gpt-5" in used_model:
+                response = await asyncio.wait_for(
+                    self.openai_client.responses.create(
+                        model=used_model,
+                        instructions="You are an expert educator creating high-quality learning questions.",
+                        input=prompt,
+                        reasoning={"effort": "low"},
+                        text={"verbosity": "low"},
+                        max_output_tokens=max_completion_tokens,
+                    ),
+                    timeout=timeout,
+                )
+
+                content = getattr(response, "output_text", None)
+
+                self.logger.info(
+                    "OpenAI Responses API response received",
+                    extra={
+                        "has_output": bool(content),
+                        "content_len": (len(content) if isinstance(content, str) else None),
+                        "content_preview": (
+                            content[:200] + ("…" if isinstance(content, str) and len(content) > 200 else "")
+                        )
+                        if isinstance(content, str)
+                        else None,
+                        "usage": getattr(response, "usage", None),
+                        "status": getattr(response, "status", None),
+                    },
+                )
+
+                if not content or not isinstance(content, str) or not content.strip():
+                    raise Exception("OpenAI Responses API returned empty output_text")
+
+                return content
+            else:
+                response = await asyncio.wait_for(
+                    self.openai_client.chat.completions.create(
+                        model=used_model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": ("You are an expert educator creating high-quality learning questions."),
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        # Correct parameter name for Chat Completions
+                        max_tokens=max_completion_tokens,
+                    ),
+                    timeout=timeout,
+                )
+                # Validate and log response
+                content = None
+                if response and getattr(response, "choices", None):
+                    choice0 = response.choices[0]
+                    if choice0 and getattr(choice0, "message", None):
+                        content = choice0.message.content
+
+                self.logger.info(
+                    "OpenAI Chat Completions response received",
+                    extra={
+                        "has_choices": bool(getattr(response, "choices", None)),
+                        "content_len": (len(content) if isinstance(content, str) else None),
+                        "content_preview": (
+                            content[:200] + ("…" if isinstance(content, str) and len(content) > 200 else "")
+                        )
+                        if isinstance(content, str)
+                        else None,
+                        "finish_reason": getattr(getattr(response, "choices", [None])[0], "finish_reason", None),
+                    },
+                )
+
+                if not content or not isinstance(content, str) or not content.strip():
+                    finish_reason = getattr(getattr(response, "choices", [None])[0], "finish_reason", None)
+                    raise Exception(f"OpenAI returned empty response content (finish_reason={finish_reason})")
+
+                return content
         except asyncio.TimeoutError:
             raise OpenAITimeoutError(f"OpenAI API call timed out after {timeout} seconds")
         except Exception as e:
@@ -564,7 +644,10 @@ Provide your analysis in this JSON format:
 """
 
         try:
-            response = await self._call_openai(analysis_prompt, max_tokens=500, temperature=0.6)
+            response = await self._call_openai(
+                analysis_prompt,
+                max_completion_tokens=ANALYSIS.max_completion_tokens,
+            )
 
             # Try to parse JSON response
             import json

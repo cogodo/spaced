@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from core.models import Question
+from core.models.profiles import SCORING
 
 
 class ScoringService:
@@ -64,27 +65,44 @@ class ScoringService:
         import asyncio
 
         try:
-            response = await asyncio.wait_for(
-                self.openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are an expert educator who provides fair, "
-                                "constructive feedback on student responses. Always "
-                                "respond with valid JSON."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=500,
-                    temperature=0.3,  # Lower temperature for more consistent scoring
-                    response_format={"type": "json_object"},  # Force JSON response
-                ),
-                timeout=10.0,  # 10 second timeout for scoring calls
-            )
-            return response.choices[0].message.content
+            used_model = settings.openai_model or "gpt-5-nano"
+            if "gpt-5" in used_model:
+                response = await asyncio.wait_for(
+                    self.openai_client.responses.create(
+                        model=used_model,
+                        instructions=(
+                            "You are an expert educator who provides fair, constructive feedback on student responses. "
+                            "Always respond with valid JSON."
+                        ),
+                        input=prompt,
+                        reasoning={"effort": "low"},
+                        text={"verbosity": "low"},
+                        max_output_tokens=SCORING.max_completion_tokens,
+                    ),
+                    timeout=10.0,
+                )
+                return getattr(response, "output_text", None) or ""
+            else:
+                response = await asyncio.wait_for(
+                    self.openai_client.chat.completions.create(
+                        model=used_model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are an expert educator who provides fair, "
+                                    "constructive feedback on student responses. Always "
+                                    "respond with valid JSON."
+                                ),
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        max_tokens=SCORING.max_completion_tokens,
+                        response_format={"type": "json_object"},
+                    ),
+                    timeout=10.0,
+                )
+                return response.choices[0].message.content
         except asyncio.TimeoutError:
             raise Exception("OpenAI scoring API call timed out after 10 seconds")
 

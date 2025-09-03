@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../routing/route_constants.dart';
-
 import '../utils/time_provider.dart';
 
 class TodaysReviewsScreen extends StatefulWidget {
@@ -188,7 +185,7 @@ class _TodaysReviewsScreenState extends State<TodaysReviewsScreen> {
                                 context,
                                 listen: false,
                               ).startNewSession([topic.name]);
-                              context.go(Routes.appChat);
+                              
                             },
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(

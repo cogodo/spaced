@@ -203,7 +203,7 @@ final Map<String, ThemeMetadata> appThemes = {
           elevation: 2,
           shadowColor: const Color(0x80F2ECFF),
           textStyle: TextStyle(
-            fontFamily: GoogleFonts.inter().fontFamily,
+            fontFamily: GoogleFonts.ibmPlexSans().fontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,

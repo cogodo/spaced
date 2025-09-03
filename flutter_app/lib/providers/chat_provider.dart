@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import '../routing/route_constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
@@ -210,8 +211,8 @@ class ChatProvider extends ChangeNotifier {
     _currentGeneratingTopic = null;
     _recentlyReviewedTopicIds.clear();
 
-    // Navigate to the clean chat screen to begin topic selection.
-    _router?.go('/app/chat');
+    // Navigate to the new chat screen route
+    _router?.go(Routes.appNewChat);
 
     notifyListeners();
     _logger.info('Reset session state for new chat flow.');
@@ -291,6 +292,8 @@ class ChatProvider extends ChangeNotifier {
         await _sessionService.saveSession(_userId!, _currentSession!);
         _listenToMessages(_userId!, _currentSessionId!);
         _listenToSession(_userId!, _currentSessionId!);
+        // Refresh sidebar history so new session appears immediately
+        await loadSessionHistory();
       }
       _router?.go('/app/chat/${_currentSession!.token}');
 

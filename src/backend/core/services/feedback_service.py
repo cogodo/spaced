@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from app.config import settings
 from core.models import Question
 from core.models.llm_outputs import FSRSScore
+from core.models.profiles import FEEDBACK
 from core.monitoring.logger import get_logger
 
 logger = get_logger(__name__)
@@ -105,20 +106,33 @@ Generate feedback that will help the student learn and stay motivated:"""
     async def _call_openai_for_feedback(self, prompt: str) -> str:
         """Makes the OpenAI API call for feedback generation."""
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-5-nano",  # Using cheaper model for testing
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are Spaced, a friendly AI tutor who provides encouraging and helpful feedback. Always respond with natural, conversational feedback.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=500,
-                temperature=0.7,  # Higher temperature for more natural conversation
-            )
-
-            content = response.choices[0].message.content
+            used_model = settings.openai_model or "gpt-5-nano"
+            if "gpt-5" in used_model:
+                response = await self.openai_client.responses.create(
+                    model=used_model,
+                    instructions=(
+                        "You are Spaced, a friendly AI tutor who provides encouraging and helpful feedback. "
+                        "Always respond with natural, conversational feedback."
+                    ),
+                    input=prompt,
+                    reasoning={"effort": "low"},
+                    text={"verbosity": "low"},
+                    max_output_tokens=FEEDBACK.max_completion_tokens,
+                )
+                content = getattr(response, "output_text", None)
+            else:
+                response = await self.openai_client.chat.completions.create(
+                    model=used_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are Spaced, a friendly AI tutor who provides encouraging and helpful feedback. Always respond with natural, conversational feedback.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=FEEDBACK.max_completion_tokens,
+                )
+                content = response.choices[0].message.content
             if not content:
                 raise ValueError("OpenAI returned empty response")
 

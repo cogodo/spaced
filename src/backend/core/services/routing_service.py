@@ -4,6 +4,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from core.models.llm_outputs import NextAction, RoutingDecision
+from core.models.profiles import ROUTING
 from core.monitoring.logger import get_logger
 
 logger = get_logger(__name__)
@@ -87,21 +88,34 @@ Respond with a JSON object containing exactly this field:
     async def _call_openai_for_routing(self, prompt: str) -> str:
         """Makes the OpenAI API call for intent classification."""
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-5-nano",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at classifying user intent in educational conversations. Always respond with valid JSON containing a 'next_action' field.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=500,
-                temperature=0.4,  # Very low temperature for consistent classification
-                response_format={"type": "json_object"},
-            )
-
-            content = response.choices[0].message.content
+            used_model = "gpt-5-nano"
+            if "gpt-5" in used_model:
+                response = await self.openai_client.responses.create(
+                    model=used_model,
+                    instructions=(
+                        "You are an expert at classifying user intent in educational conversations. "
+                        "Always respond with valid JSON containing a 'next_action' field."
+                    ),
+                    input=prompt,
+                    reasoning={"effort": "low"},
+                    text={"verbosity": "low"},
+                    max_output_tokens=ROUTING.max_completion_tokens,
+                )
+                content = getattr(response, "output_text", None)
+            else:
+                response = await self.openai_client.chat.completions.create(
+                    model=used_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert at classifying user intent in educational conversations. Always respond with valid JSON containing a 'next_action' field.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=ROUTING.max_completion_tokens,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content
             if not content:
                 raise ValueError("OpenAI returned empty response")
 

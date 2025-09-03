@@ -9,6 +9,7 @@ from core.models.conversation import (
     Turn,
 )
 from core.models.llm_outputs import NextAction
+from core.models.profiles import CONVERSATION_STEP, CONVERSATION_SUMMARY
 from core.models.session import Session, SessionState, TurnState
 from core.monitoring.logger import get_logger
 from core.repositories.question_repository import QuestionRepository
@@ -366,8 +367,7 @@ class ConversationService:
                     {"role": "system", "content": "You are Spaced, a friendly and motivational learning tutor."},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=500,
-                temperature=0.5,
+                max_completion_tokens=CONVERSATION_SUMMARY.max_completion_tokens,
             )
             content = response.choices[0].message.content
             return content.strip() if content else "Great job! Keep up the consistent practice."
@@ -476,13 +476,23 @@ Return your entire response as a single JSON object with two keys:
     async def _call_llm(self, prompt: str) -> str:
         """Helper to call the LLM and return the text content."""
         try:
-            response = await self.openai_client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048,  # Explicitly set a higher token limit
-                temperature=0.3,
-            )
-            content = response.choices[0].message.content
+            used_model = settings.openai_model
+            if used_model and "gpt-5" in used_model:
+                response = await self.openai_client.responses.create(
+                    model=used_model,
+                    input=prompt,
+                    reasoning={"effort": "low"},
+                    text={"verbosity": "low"},
+                    max_output_tokens=CONVERSATION_STEP.max_completion_tokens,
+                )
+                content = getattr(response, "output_text", None)
+            else:
+                response = await self.openai_client.chat.completions.create(
+                    model=used_model or "gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=CONVERSATION_STEP.max_completion_tokens,
+                )
+                content = response.choices[0].message.content
             if not content:
                 raise ValueError("LLM returned empty content.")
             return content
