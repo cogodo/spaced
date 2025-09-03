@@ -7,7 +7,6 @@ import '../providers/auth_provider.dart';
 import '../widgets/theme_logo.dart';
 import '../widgets/theme_toggle.dart';
 import '../routing/route_constants.dart';
-import 'dart:math' as math;
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -23,7 +22,6 @@ class _LandingScreenState extends State<LandingScreen>
   late AnimationController _featuresCardsController;
   late AnimationController _aboutHeaderController;
   late AnimationController _aboutCardsController;
-  late AnimationController _logoSpinController;
 
   late Animation<double> _featuresHeaderAnimation;
   late Animation<double> _featuresCardsAnimation;
@@ -40,10 +38,7 @@ class _LandingScreenState extends State<LandingScreen>
   bool _aboutHeaderAnimated = false;
   bool _aboutCardsAnimated = false;
 
-  // Logo interaction
-  double _baseRotation = 0.0; // Current settled rotation
-  double _additionalRotation = 0.0; // New rotation being animated
-  final math.Random _random = math.Random();
+  // Logo is static now (no animation)
 
   @override
   void initState() {
@@ -69,22 +64,6 @@ class _LandingScreenState extends State<LandingScreen>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
-    _logoSpinController = AnimationController(
-      duration: const Duration(
-        milliseconds: 1500,
-      ), // Longer duration for more natural feel
-      vsync: this,
-    );
-
-    // Listen for animation completion to update base rotation
-    _logoSpinController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() {
-          _baseRotation += _additionalRotation;
-          _additionalRotation = 0.0;
-        });
-      }
-    });
 
     // Create animations
     _featuresHeaderAnimation = CurvedAnimation(
@@ -112,7 +91,6 @@ class _LandingScreenState extends State<LandingScreen>
     _featuresCardsController.dispose();
     _aboutHeaderController.dispose();
     _aboutCardsController.dispose();
-    _logoSpinController.dispose();
     super.dispose();
   }
 
@@ -162,21 +140,7 @@ class _LandingScreenState extends State<LandingScreen>
     }
   }
 
-  void _onLogoTap() {
-    // If animation is running, calculate current position and use as new base
-    if (_logoSpinController.isAnimating) {
-      final curvedValue = Curves.easeOutQuart.transform(
-        _logoSpinController.value,
-      );
-      _baseRotation += (_additionalRotation * curvedValue);
-    }
-
-    // Generate very small random rotation between 0.2-0.5 rotations (keep under 2 total)
-    _additionalRotation = 0.2 + (_random.nextDouble() * 0.3);
-
-    _logoSpinController.reset();
-    _logoSpinController.forward();
-  }
+  // Removed _onLogoTap and spin logic (logo is static)
 
   /// Handle header button press based on authentication state
   void _handleHeaderButtonPress(BuildContext context) {
@@ -209,20 +173,7 @@ class _LandingScreenState extends State<LandingScreen>
         selectionControls: materialTextSelectionControls,
         child: Container(
           decoration: BoxDecoration(
-            gradient:
-                isMobile
-                    ? null // Remove gradient on mobile for better performance
-                    : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).scaffoldBackgroundColor,
-                        Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.1),
-                      ],
-                    ),
-            color: isMobile ? Theme.of(context).scaffoldBackgroundColor : null,
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
           child: SafeArea(
             child: SingleChildScrollView(
@@ -299,8 +250,8 @@ class _LandingScreenState extends State<LandingScreen>
                             onPressed: () => _handleHeaderButtonPress(context),
                             child: Text(
                               authProvider.isSignedIn
-                                  ? 'Back to App'
-                                  : 'Login / Sign Up',
+                                  ? 'GET SPACED'
+                                  : 'GET SPACED',
                             ),
                           ),
                         ],
@@ -488,120 +439,42 @@ class _LandingScreenState extends State<LandingScreen>
 
     return SizedBox(
       height: containerHeight,
-      child: Center(child: _buildAnimatedLogo(context)),
+      child: Center(child: _buildStaticLogo(context)),
     );
   }
 
-  Widget _buildAnimatedLogo(BuildContext context) {
-    return _buildRotatingLogoAnimation(context);
-  }
-
-  Widget _buildRotatingLogoAnimation(BuildContext context) {
+  Widget _buildStaticLogo(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final double logoSize = isMobile ? 300.0 : 500.0;
 
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(
-        milliseconds: 3000,
-      ), // Total: 1s appear + 0.5s wait + 1.5s rotate
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutBack,
-      builder: (context, animationValue, child) {
-        // Phase 1 (0-0.33): Logo appears and scales up
-        // Phase 2 (0.33-0.5): Logo waits in static position (0.5s)
-        // Phase 3 (0.5-1.0): Logo rotates
-
-        double opacity;
-        double logoScale;
-        double rotationProgress;
-
-        if (animationValue <= 0.33) {
-          // Phase 1: Appearing (1s)
-          final phaseProgress = animationValue / 0.33;
-          opacity = phaseProgress;
-          logoScale = 0.2 + (phaseProgress * 0.8);
-          rotationProgress = 0.0;
-        } else if (animationValue <= 0.5) {
-          // Phase 2: Waiting (0.5s)
-          opacity = 1.0;
-          logoScale = 1.0;
-          rotationProgress = 0.0;
-        } else {
-          // Phase 3: Rotating (1.5s)
-          final phaseProgress = (animationValue - 0.5) / 0.5;
-          opacity = 1.0;
-          logoScale = 1.0;
-          rotationProgress = phaseProgress * 1.0; // 1 full rotation
-        }
-
-        return AnimatedBuilder(
-          animation: _logoSpinController,
-          builder: (context, child) {
-            // Apply deceleration curve to the interactive spin for natural slowdown
-            final curvedValue = Curves.easeOutQuart.transform(
-              _logoSpinController.value,
-            );
-            final totalRotation =
-                rotationProgress +
-                _baseRotation +
-                (_additionalRotation * curvedValue);
-
-            // Smaller logo size on mobile to prevent clipping
-            final logoSize = isMobile ? 300.0 : 500.0;
-
-            return GestureDetector(
-              onTap: _onLogoTap,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Transform.scale(
-                  scale: logoScale,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // More efficient glow using Container with minimal shadow
-                      if (!isMobile) // Only show glow on desktop
-                        Opacity(
-                          opacity:
-                              opacity * 0.6, // Reduced opacity for subtlety
-                          child: Container(
-                            width: logoSize + 40,
-                            height: logoSize + 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              // Single, optimized shadow instead of heavy blur
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.2),
-                                  blurRadius: 20, // Reduced from 30
-                                  spreadRadius:
-                                      0, // Removed spread for performance
-                                  offset: Offset.zero,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      // Rotating logo
-                      Transform.rotate(
-                        angle: totalRotation * 2 * math.pi,
-                        origin: Offset(
-                          -5,
-                          10,
-                        ), // Use final coordinates (-5, 10)
-                        child: Opacity(
-                          opacity: opacity,
-                          child: ThemeLogo(size: logoSize),
-                        ),
-                      ),
-                    ],
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Keep subtle glow around the logo (desktop only)
+        if (!isMobile)
+          Opacity(
+            opacity: 0.6,
+            child: Container(
+              width: logoSize + 40,
+              height: logoSize + 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.2),
+                    blurRadius: 20,
+                    spreadRadius: 0,
+                    offset: Offset.zero,
                   ),
-                ),
+                ],
               ),
-            );
-          },
-        );
-      },
+            ),
+          ),
+        // Static logo (no rotation/scale animation)
+        ThemeLogo(size: logoSize),
+      ],
     );
   }
 
@@ -609,10 +482,7 @@ class _LandingScreenState extends State<LandingScreen>
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final buttonText =
-            authProvider.isSignedIn ? 'BACK TO APP' : 'GET SPACED';
-        final iconData =
-            authProvider.isSignedIn ? Icons.arrow_back : Icons.arrow_forward;
-
+            authProvider.isSignedIn ? 'GET SPACED' : 'GET SPACED';
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
@@ -646,7 +516,7 @@ class _LandingScreenState extends State<LandingScreen>
               children: [
                 Text(buttonText),
                 const SizedBox(width: 12),
-                Icon(iconData, size: 24),
+                
               ],
             ),
           ),

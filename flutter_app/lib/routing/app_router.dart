@@ -10,7 +10,6 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/privacy_policy_screen.dart';
 import '../screens/tab_navigation_screen.dart';
-import '../screens/home_screen.dart';
 import '../screens/all_review_items_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/todays_reviews_screen.dart';
@@ -22,6 +21,9 @@ import '../widgets/loading_screen.dart';
 import 'route_constants.dart';
 
 /// Create router with auth provider context
+// One-time flag to avoid always redirecting authenticated users away from landing
+bool _authedLandingRedirectDone = false;
+
 GoRouter createAppRouter(AuthProvider authProvider) {
   final _logger = getLogger('AppRouter');
 
@@ -60,6 +62,17 @@ GoRouter createAppRouter(AuthProvider authProvider) {
           ].contains(currentPath)) {
         _logger.info(
           '🔄 REDIRECTING signed-in user from $currentPath to ${Routes.appChat}',
+        );
+        return Routes.appChat;
+      }
+
+      // Redirect authenticated users from landing '/' to chat ONLY once per app session
+      if (isSignedIn &&
+          currentPath == Routes.landing &&
+          !_authedLandingRedirectDone) {
+        _authedLandingRedirectDone = true;
+        _logger.info(
+          '🔄 One-time redirect: signed-in user from landing to chat',
         );
         return Routes.appChat;
       }
@@ -118,14 +131,11 @@ GoRouter createAppRouter(AuthProvider authProvider) {
 
       // ===== APP ROUTES (Protected by redirect above) =====
 
-      // Today's Reviews screen
+      // /app -> redirect to chat as the base page
       GoRoute(
         path: Routes.appHome,
         name: 'app-home',
-        builder: (context, state) {
-          _logger.info('🏠 Building app home route');
-          return TabNavigationScreen(child: HomeScreen());
-        },
+        redirect: (context, state) => Routes.appChat,
       ),
 
       GoRoute(
