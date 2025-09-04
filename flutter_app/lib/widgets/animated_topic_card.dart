@@ -51,6 +51,7 @@ class _AnimatedTopicCardState extends State<AnimatedTopicCard> {
                       : widget.borderColor.withValues(alpha: 0.35),
               width: 1,
             ),
+            boxShadow: null,
           ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
