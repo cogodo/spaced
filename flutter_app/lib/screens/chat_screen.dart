@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/rendering.dart';
 import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/typing_indicator_widget.dart';
@@ -307,6 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       await chatProvider.loadSessionByToken(token);
+      _attachScrollListenerOnce();
     } catch (e) {
       // Handle session not found or error
       if (mounted) {
@@ -321,6 +323,20 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     }
+  }
+
+  bool _scrollListenerAttached = false;
+  void _attachScrollListenerOnce() {
+    if (_scrollListenerAttached) return;
+    _scrollListenerAttached = true;
+    _scrollController.addListener(() {
+      if (_scrollController.offset <= 60 &&
+          _scrollController.position.userScrollDirection ==
+              ScrollDirection.forward) {
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        chatProvider.loadOlderMessagesIfAvailable();
+      }
+    });
   }
 
   // Removed old _loadDueTasks helper (no longer referenced)

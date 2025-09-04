@@ -13,7 +13,7 @@ class ChatSessionService {
   final _logger = getLogger('ChatSessionService');
 
   // Coalescing/throttling to reduce Firestore load
-  static const Duration _minSaveInterval = Duration(milliseconds: 1200);
+  static const Duration _minSaveInterval = Duration(seconds: 4);
   final Map<String, ChatSession> _pendingSessions = {};
   final Set<String> _inFlightSaves = <String>{};
   final Map<String, DateTime> _lastSaveAt = {};
@@ -84,41 +84,67 @@ class ChatSessionService {
       };
 
       final sessionRef = _getUserSessionsCollection(userId).doc(session.id);
-      batch.set(sessionRef, sessionData, SetOptions(merge: true));
 
-      // Only rewrite messages when changed since last save
+      // Only update session metadata when message count/last message changed
       final currentLastMsgAt =
           session.messages.isNotEmpty ? session.messages.last.timestamp : null;
       final lastCount = _lastSavedMessageCount[key];
       final lastLastMsgAt = _lastSavedLastMessageAt[key];
-      final shouldRewriteMessages =
+
+      final bool shouldUpdateSessionDoc =
           !(lastCount != null &&
               lastCount == session.messages.length &&
               lastLastMsgAt == currentLastMsgAt);
 
-      if (shouldRewriteMessages) {
-        final messagesCollection = _getSessionMessagesCollection(
-          userId,
-          session.id,
-        );
+      if (shouldUpdateSessionDoc) {
+        batch.set(sessionRef, sessionData, SetOptions(merge: true));
+      }
 
-        final existingMessages = await messagesCollection.get();
-        for (final doc in existingMessages.docs) {
-          batch.delete(doc.reference);
-        }
+      // Append-only message writes; delete extras only when list shrinks
+      final messagesCollection = _getSessionMessagesCollection(
+        userId,
+        session.id,
+      );
 
-        for (int i = 0; i < session.messages.length; i++) {
-          final message = session.messages[i];
-          final messageData = {
-            'text': message.text,
-            'isUser': message.isUser,
-            'isSystem': message.isSystem,
-            'timestamp': Timestamp.fromDate(message.timestamp),
-            'messageIndex': i,
-          };
+      final int previousSavedCount = lastCount ?? 0;
+      final int currentCount = session.messages.length;
+
+      if (currentCount < previousSavedCount) {
+        // Session messages shrank; delete stale trailing docs without a read
+        for (int i = currentCount; i < previousSavedCount; i++) {
           final messageRef = messagesCollection.doc('msg_$i');
-          batch.set(messageRef, messageData);
+          batch.delete(messageRef);
         }
+      }
+
+      // Write only new messages since last save
+      for (int i = previousSavedCount; i < currentCount; i++) {
+        final message = session.messages[i];
+        final messageData = {
+          'text': message.text,
+          'isUser': message.isUser,
+          'isSystem': message.isSystem,
+          'timestamp': Timestamp.fromDate(message.timestamp),
+          'messageIndex': i,
+        };
+        final messageRef = messagesCollection.doc('msg_$i');
+        batch.set(messageRef, messageData);
+      }
+
+      // If no new messages but last message changed, update just that doc
+      if (previousSavedCount == currentCount &&
+          currentCount > 0 &&
+          lastLastMsgAt != currentLastMsgAt) {
+        final int lastIndex = currentCount - 1;
+        final message = session.messages[lastIndex];
+        final messageRef = messagesCollection.doc('msg_$lastIndex');
+        batch.set(messageRef, {
+          'text': message.text,
+          'isUser': message.isUser,
+          'isSystem': message.isSystem,
+          'timestamp': Timestamp.fromDate(message.timestamp),
+          'messageIndex': lastIndex,
+        }, SetOptions(merge: true));
       }
 
       await batch.commit();

@@ -360,23 +360,53 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
                     );
                   }
 
-                  // Simple list of all sessions (with scrollbars disabled)
-                  return ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(
-                      context,
-                    ).copyWith(scrollbars: false),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      itemCount: filteredSessions.length,
-                      itemBuilder: (context, index) {
-                        final session = filteredSessions[index];
-                        final isSelected =
-                            session.token == widget.selectedSessionToken;
-                        return SessionItem(
-                          session: session,
-                          isSelected: isSelected,
-                        );
-                      },
+                  // List with infinite scroll to load more when near top
+                  return NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification.metrics.pixels <= 80 &&
+                          notification is ScrollUpdateNotification) {
+                        // Load more from provider if available
+                        if (!chatProvider.isLoadingHistory) {
+                          chatProvider.loadMoreSessionHistory();
+                        }
+                      }
+                      return false;
+                    },
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(
+                        context,
+                      ).copyWith(scrollbars: false),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        itemCount: filteredSessions.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            // Top loader indicator if more history available
+                            return chatProvider.isLoadingHistory
+                                ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                : const SizedBox.shrink();
+                          }
+
+                          final session = filteredSessions[index - 1];
+                          final isSelected =
+                              session.token == widget.selectedSessionToken;
+                          return SessionItem(
+                            session: session,
+                            isSelected: isSelected,
+                          );
+                        },
+                      ),
                     ),
                   );
                 },

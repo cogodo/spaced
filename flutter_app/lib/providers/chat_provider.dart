@@ -21,6 +21,10 @@ class ChatProvider extends ChangeNotifier {
   ChatSession? _currentSession;
   SessionState _sessionState = SessionState.initial;
   List<ChatMessage> _messages = [];
+  // Pagination state for messages (backward)
+  static const int _messagesPageSize = 10;
+  int _messagesFirstIndexLoaded = -1;
+  bool _isLoadingOlderMessages = false;
   String? _currentSessionId;
   String? _currentTopicId;
   bool _isLoading = false;
@@ -290,11 +294,16 @@ class ChatProvider extends ChangeNotifier {
 
       if (_userId != null && _currentSession != null) {
         await _sessionService.saveSession(_userId!, _currentSession!);
-        _listenToMessages(_userId!, _currentSessionId!);
-        _listenToSession(_userId!, _currentSessionId!);
+        _listenToMessages(
+          _userId!,
+          _currentSessionId!,
+          initialLimit: _messagesPageSize,
+        );
+        _listenToSessionGated(_userId!, _currentSessionId!);
         // Refresh sidebar history so new session appears immediately
         await loadSessionHistory();
       }
+      // Already navigated to chat from NewChatScreen before starting; ensure URL reflects token when ready
       _router?.go('/app/chat/${_currentSession!.token}');
 
       _autoScrollCallback?.call();
@@ -485,9 +494,9 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
-      // Start listening to messages and session doc
-      _listenToMessages(_userId!, sessionId);
-      _listenToSession(_userId!, sessionId);
+      // Start listening to messages and gate the session doc listener
+      _listenToMessages(_userId!, sessionId, initialLimit: _messagesPageSize);
+      _listenToSessionGated(_userId!, sessionId);
 
       notifyListeners();
       _logger.info('Successfully loaded session $sessionId');
@@ -545,9 +554,9 @@ class ChatProvider extends ChangeNotifier {
       _messages = List.from(session.messages);
       _finalScores = session.finalScores;
 
-      // Start listening to messages and session doc for the loaded session
-      _listenToMessages(_userId!, session.id);
-      _listenToSession(_userId!, session.id);
+      // Start listening to messages and gate the session doc listener
+      _listenToMessages(_userId!, session.id, initialLimit: _messagesPageSize);
+      _listenToSessionGated(_userId!, session.id);
 
       notifyListeners();
       _logger.info('Successfully loaded session by token $token');
@@ -1141,9 +1150,14 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  void _listenToMessages(String userId, String sessionId) {
+  void _listenToMessages(
+    String userId,
+    String sessionId, {
+    int initialLimit = 100,
+  }) {
     _messagesSubscription?.cancel();
-    final messagesRef = FirebaseFirestore.instance
+
+    final baseQuery = FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .collection('sessions')
@@ -1151,8 +1165,9 @@ class ChatProvider extends ChangeNotifier {
         .collection('messages')
         .orderBy('messageIndex');
 
-    _messagesSubscription = messagesRef.snapshots().listen((snapshot) {
-      final firestoreMessages =
+    // Initial limited load to cap reads
+    baseQuery.limitToLast(initialLimit).get().then((snapshot) {
+      final initialMessages =
           snapshot.docs.map((doc) {
             final data = doc.data();
             return ChatMessage(
@@ -1164,24 +1179,123 @@ class ChatProvider extends ChangeNotifier {
             );
           }).toList();
 
-      // Remove any pending user message that is not in Firestore
-      _messages.removeWhere(
-        (pending) =>
-            pending.isUser &&
-            pending.isVoice &&
-            !firestoreMessages.any(
-              (m) =>
-                  m.text == pending.text &&
-                  m.isUser == pending.isUser &&
-                  m.isVoice == pending.isVoice,
-            ),
-      );
-
-      // Replace with Firestore messages
-      _messages = List.from(firestoreMessages);
+      _messages = List.from(initialMessages);
+      if (snapshot.docs.isNotEmpty) {
+        final firstDoc = snapshot.docs.first;
+        _messagesFirstIndexLoaded =
+            (firstDoc.data()['messageIndex'] as int?) ?? 0;
+      } else {
+        _messagesFirstIndexLoaded = -1;
+      }
       notifyListeners();
-      _autoScrollCallback?.call(); // Notify UI to auto-scroll
+      _autoScrollCallback?.call();
+
+      // Tail-only realtime listener based on actual last messageIndex
+      final int lastIndex =
+          snapshot.docs.isNotEmpty
+              ? ((snapshot.docs.last.data()['messageIndex'] as int?) ??
+                  (initialMessages.length - 1))
+              : -1;
+      final tailQuery =
+          lastIndex >= 0 ? baseQuery.startAfter([lastIndex]) : baseQuery;
+
+      _messagesSubscription = tailQuery.snapshots().listen((snap) {
+        if (snap.docChanges.isEmpty && snap.docs.isEmpty) {
+          return;
+        }
+
+        // Apply incremental changes
+        for (final change in snap.docChanges) {
+          final data = change.doc.data();
+          if (data == null) continue;
+          final idx = data['messageIndex'] as int?;
+          if (idx == null) continue;
+
+          final newMsg = ChatMessage(
+            text: data['text'] ?? '',
+            isUser: data['isUser'] ?? false,
+            timestamp: (data['timestamp'] as Timestamp).toDate(),
+            isSystem: data['isSystem'] ?? false,
+            isVoice: data['isVoice'] ?? false,
+          );
+
+          // Ensure list size
+          if (_messages.length <= idx) {
+            _messages.length = idx + 1;
+          }
+
+          _messages[idx] = newMsg;
+        }
+
+        // Remove any pending user message that is not in Firestore tail
+        _messages.removeWhere(
+          (pending) =>
+              pending.isUser &&
+              pending.isVoice &&
+              !_messages.any(
+                (m) =>
+                    m.text == pending.text &&
+                    m.isUser == pending.isUser &&
+                    m.isVoice == pending.isVoice,
+              ),
+        );
+
+        notifyListeners();
+        _autoScrollCallback?.call();
+      });
     });
+  }
+
+  /// Load older messages when scrolled to top
+  Future<void> loadOlderMessagesIfAvailable() async {
+    if (_isLoadingOlderMessages) return;
+    if (_userId == null || _currentSessionId == null) return;
+    if (_messagesFirstIndexLoaded <= 0) return;
+
+    _isLoadingOlderMessages = true;
+    try {
+      final userId = _userId!;
+      final sessionId = _currentSessionId!;
+      final messagesRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('sessions')
+          .doc(sessionId)
+          .collection('messages');
+
+      final snapshot =
+          await messagesRef
+              .orderBy('messageIndex', descending: true)
+              .where('messageIndex', isLessThan: _messagesFirstIndexLoaded)
+              .limit(_messagesPageSize)
+              .get();
+
+      if (snapshot.docs.isEmpty) {
+        _messagesFirstIndexLoaded = 0;
+        return;
+      }
+
+      final older =
+          snapshot.docs.reversed.map((doc) {
+            final data = doc.data();
+            return ChatMessage(
+              text: data['text'] ?? '',
+              isUser: data['isUser'] ?? false,
+              timestamp: (data['timestamp'] as Timestamp).toDate(),
+              isSystem: data['isSystem'] ?? false,
+              isVoice: data['isVoice'] ?? false,
+            );
+          }).toList();
+
+      final lastDoc = snapshot.docs.last; // lowest index
+      _messagesFirstIndexLoaded =
+          (lastDoc.data()['messageIndex'] as int?) ?? _messagesFirstIndexLoaded;
+
+      _messages.insertAll(0, older);
+      notifyListeners();
+    } finally {
+      _isLoadingOlderMessages = false;
+    }
   }
 
   void _listenToSession(String userId, String sessionId) {
@@ -1204,7 +1318,26 @@ class ChatProvider extends ChangeNotifier {
 
       if (isCompleted) {
         _handleBackendSessionCompleted();
+        // Auto-detach session listener once completion detected
+        _sessionSubscription?.cancel();
+        _sessionSubscription = null;
       }
+    });
+  }
+
+  Timer? _sessionListenerTimer;
+  void _listenToSessionGated(
+    String userId,
+    String sessionId, {
+    Duration maxDuration = const Duration(seconds: 30),
+  }) {
+    if (_sessionSubscription != null) return; // Already listening
+    if (_sessionState == SessionState.completed) return; // No need if done
+    _listenToSession(userId, sessionId);
+    _sessionListenerTimer?.cancel();
+    _sessionListenerTimer = Timer(maxDuration, () {
+      _sessionSubscription?.cancel();
+      _sessionSubscription = null;
     });
   }
 
@@ -1243,6 +1376,11 @@ class ChatProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+    // Ensure session listener is detached once completed
+    _sessionSubscription?.cancel();
+    _sessionSubscription = null;
+    _sessionListenerTimer?.cancel();
+    _sessionListenerTimer = null;
   }
 
   void _stopListeningToMessages() {

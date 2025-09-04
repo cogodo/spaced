@@ -26,7 +26,8 @@ class _NewChatScreenState extends State<NewChatScreen> {
   Future<void> _startSession() async {
     final value = _topicController.text.trim();
     if (value.isEmpty) return;
-    context.go(Routes.appNewChat);
+    // Navigate to chat screen so the generating overlay can render
+    context.go(Routes.appChat);
     context.read<ChatProvider>().startNewSession([value]);
   }
 
