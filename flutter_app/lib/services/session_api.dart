@@ -158,7 +158,7 @@ class ApiService {
     required String baseUrl,
     this.timeout = const Duration(seconds: 60),
   }) : _baseUrl = baseUrl {
-    _breaker = ServiceCircuitBreakers.getBreaker('api_service');
+    _breaker = ServiceCircuitBreakers.getBreaker('session_api');
   }
 
   Future<Map<String, String>> _getHeaders() async {

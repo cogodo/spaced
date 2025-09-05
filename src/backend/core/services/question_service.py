@@ -119,11 +119,27 @@ class QuestionService:
         """
         Generate a set of questions (10 questions).
         """
+        # Attempt bulk generation with retries only
+        items: List[Dict[str, Any]] = []
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.logger.info(f"Bulk generation attempt {attempt}/{max_attempts} for topic '{topic.name}'")
+                items = await self._bulk_generate_questions(topic, count=10)
+                if items:
+                    break
+            except Exception as e:
+                self.logger.warning(
+                    f"Bulk generation attempt {attempt} failed: {e}",
+                )
+                if attempt < max_attempts:
+                    # Backoff before retrying
+                    await asyncio.sleep(0.75 * attempt)
 
-        try:
-            items = await self._bulk_generate_questions(topic, count=10)
-        except Exception as e:
-            raise QuestionGenerationError(f"Failed to bulk-generate initial questions for topic '{topic.name}': {e}")
+        if not items:
+            raise QuestionGenerationError(
+                f"Failed to bulk-generate initial questions for topic '{topic.name}' after {max_attempts} attempts"
+            )
 
         questions: List[Question] = []
         existing_question_texts: List[str] = []
@@ -271,18 +287,28 @@ You are generating exactly {count} diverse learning questions for the topic "{to
 Topic description:
 {topic.description}
 
-Rules:
-- Return STRICT JSON ONLY. No prose.
-- JSON must be an array of exactly {count} objects.
-- Each object keys: "text" (string), "type" (short free-form descriptor), "difficulty" (1, 2, or 3).
+STRICT OUTPUT REQUIREMENTS:
+- Output MUST be valid JSON parseable by Python json.loads.
+- Output MUST be ONLY a JSON array of exactly {count} objects. No prose, no explanations, no comments.
+- DO NOT include Markdown code fences (no ``` or ```json). DO NOT include any text before or after the array.
+- The first character of your output MUST be '[' and the last character MUST be ']'.
+- No trailing commas. Use double quotes for all strings.
+
+Each object MUST contain these keys:
+- "text": string (the question),
+- "type": string (a short free-form descriptor),
+- "difficulty": integer (1, 2, or 3).
+- Optionally you MAY include "tags": array of strings.
+
+Quality rules:
 - Write clear, high-quality questions that do NOT include answers.
 - Ensure diversity of question style and depth across the set.
 - Avoid redundancy and overly similar phrasing.
 
-Example JSON shape (not content):
+Example JSON SHAPE (illustrative only):
 [
-  {{"text": "...", "type": "concept_check",  "difficulty": 2}},
-  {{"text": "...", "type": "why_how",  ["analysis"], "difficulty": 3}}
+  {{"text": "...", "type": "concept_check", "difficulty": 2, "tags": ["fundamentals"]}},
+  {{"text": "...", "type": "why_how", "difficulty": 3, "tags": ["analysis"]}}
 ]
 """
 
@@ -290,7 +316,7 @@ Example JSON shape (not content):
         response = await self._call_openai(
             prompt,
             max_completion_tokens=GENERATION_BULK.max_completion_tokens,
-            timeout=30.0,
+            timeout=40.0,
         )
 
         # Robust JSON array extraction

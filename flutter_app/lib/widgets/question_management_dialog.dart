@@ -227,6 +227,7 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
     return Dialog(
+      backgroundColor: theme.colorScheme.surface,
       child: Container(
         width: isDesktop ? 1000 : double.infinity,
         height: isDesktop ? 700 : MediaQuery.of(context).size.height * 0.9,
@@ -271,7 +272,7 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: theme.colorScheme.onSurface),
                 ),
               ],
             ),
@@ -332,6 +333,11 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
               ),
               child: TabBar(
                 controller: _tabController,
+                labelColor: theme.colorScheme.onSurface,
+                unselectedLabelColor: theme.colorScheme.onSurface.withValues(
+                  alpha: 0.7,
+                ),
+                indicatorColor: theme.colorScheme.primary,
                 tabs: [
                   Tab(
                     icon: const Icon(Icons.quiz_outlined),
@@ -386,16 +392,19 @@ class _QuestionManagementDialogState extends State<QuestionManagementDialog>
                                 color: theme.colorScheme.scrim.withValues(
                                   alpha: 0.3,
                                 ),
-                                child: const Center(
+                                child: Center(
                                   child: Card(
                                     child: Padding(
-                                      padding: EdgeInsets.all(16.0),
+                                      padding: const EdgeInsets.all(16.0),
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          CircularProgressIndicator(),
-                                          SizedBox(height: 8),
-                                          Text('Processing...'),
+                                          const CircularProgressIndicator(),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Processing...',
+                                            style: theme.textTheme.bodyMedium,
+                                          ),
                                         ],
                                       ),
                                     ),

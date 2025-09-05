@@ -40,6 +40,8 @@
   <!-- Material Design Icons with better fallback handling -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Inter to match Flutter app text theme -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Primary Material Icons - load asynchronously for better performance -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=swap" rel="stylesheet">
   <!-- Additional variants can load asynchronously -->
@@ -60,7 +62,9 @@
     body {
       margin: 0;
       padding: 0;
-      font-family: 'ChironSungHK', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #0B0B11;
+      /* Match app dark scaffold background */
     }
 
     /* Ensure Material Icons load properly with comprehensive fallbacks */
@@ -174,23 +178,16 @@
       top: 0;
       left: 0;
       z-index: 9999;
-      background: #1E1E2E;
+      background: #0B0B11;
+      /* Match app dark */
       color: #ffffff;
-      font-family: 'ChironSungHK', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    /* Auto-detect system theme */
-    @media (prefers-color-scheme: light) {
-      .loading-container {
-        background: #8b5cf6;
-        color: #ffffff;
-      }
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .logo-text {
       font-size: 3rem;
-      font-weight: 700;
-      font-family: 'ChironSungHK', serif;
+      font-weight: 600;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: #ffffff;
       margin-bottom: 2rem;
     }
@@ -215,7 +212,7 @@
       text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
       opacity: 0;
       animation: fadeInUp 0.8s ease-out forwards;
-      font-family: 'ChironSungHK', serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .subtitle {
@@ -224,7 +221,7 @@
       margin-top: 1.5rem;
       font-weight: 300;
       text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
-      font-family: 'ChironSungHK', serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     @keyframes fadeInUp {
