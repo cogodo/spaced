@@ -98,7 +98,7 @@ class _ChatHistorySidebarState extends State<ChatHistorySidebar> {
 
     final navigationItems = [
       {'icon': Icons.add, 'label': 'New Chat', 'index': -1},
-      {'icon': Icons.home, 'label': 'Today', 'index': 0},
+      {'icon': Icons.calendar_today, 'label': 'Today', 'index': 0},
       {'icon': Icons.list, 'label': 'All Items', 'index': 1},
     ];
 

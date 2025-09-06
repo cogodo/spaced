@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/chat_provider.dart';
 import '../utils/time_provider.dart';
+import '../routing/route_constants.dart';
 
 class TodaysReviewsScreen extends StatefulWidget {
   const TodaysReviewsScreen({super.key});
@@ -53,22 +55,12 @@ class _TodaysReviewsScreenState extends State<TodaysReviewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Consumer<ChatProvider>(
-          builder: (context, chatProvider, child) {
-            final lastReviewed = chatProvider.dueTopics?.lastReviewedAt;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Today's Reviews"),
-                if (lastReviewed != null)
-                  Text(
-                    'Last reviewed: ${_formatDate(lastReviewed)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            );
-          },
-        ),
+        title: const Text("Today's Reviews"),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
       ),
       body: Consumer<ChatProvider>(
         builder: (context, chatProvider, child) {
@@ -126,6 +118,10 @@ class _TodaysReviewsScreenState extends State<TodaysReviewsScreen> {
                 context,
               ).copyWith(scrollbars: false),
               child: ListView.builder(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 itemCount: allTopics.length,
                 itemBuilder: (context, index) {
                   final topic = allTopics[index];
@@ -181,11 +177,17 @@ class _TodaysReviewsScreenState extends State<TodaysReviewsScreen> {
                           const SizedBox(height: 16),
                           OutlinedButton(
                             onPressed: () {
-                              Provider.of<ChatProvider>(
+                              // Navigate to chat so the generating overlay can render immediately
+                              context.go(Routes.appChat);
+                              final chat = Provider.of<ChatProvider>(
                                 context,
                                 listen: false,
-                              ).startNewSession([topic.name]);
-                              
+                              );
+                              chat.startNewSession(
+                                [topic.name],
+                                availableQuestionCount: topic.questionCount,
+                                currentQuestionIndex: 0,
+                              );
                             },
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(

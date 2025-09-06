@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/chat_provider.dart';
 import '../utils/time_provider.dart';
 import '../widgets/question_management_dialog.dart';
 import '../widgets/animated_topic_card.dart';
 import '../services/session_api.dart';
+import '../routing/route_constants.dart';
 
 class AllReviewItemsScreen extends StatefulWidget {
   const AllReviewItemsScreen({super.key});
@@ -74,6 +76,10 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                 context,
               ).copyWith(scrollbars: false),
               child: ListView.builder(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 itemCount: topics.length,
                 itemBuilder: (context, index) {
                   final topic = topics[index];
@@ -89,10 +95,17 @@ class _AllReviewItemsScreenState extends State<AllReviewItemsScreen> {
                       ).deleteTopic(topic.id);
                     },
                     onReview: () async {
-                      await Provider.of<ChatProvider>(
+                      // Navigate to chat so the generating overlay can render immediately
+                      context.go(Routes.appChat);
+                      final chat = Provider.of<ChatProvider>(
                         context,
                         listen: false,
-                      ).startNewSession([topic.name]);
+                      );
+                      await chat.startNewSession(
+                        [topic.name],
+                        availableQuestionCount: topic.questionCount,
+                        currentQuestionIndex: 0,
+                      );
                     },
                   );
                 },

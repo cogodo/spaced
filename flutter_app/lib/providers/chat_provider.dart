@@ -23,6 +23,8 @@ class ChatProvider extends ChangeNotifier {
   List<ChatMessage> _messages = [];
   // Pagination state for messages (backward)
   static const int _messagesPageSize = 10;
+  // Max questions per session (used for generation checks and progress)
+  static const int questionsPerSession = 5;
   int _messagesFirstIndexLoaded = -1;
   bool _isLoadingOlderMessages = false;
   String? _currentSessionId;
@@ -228,7 +230,12 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Initialize a new chat session
-  Future<void> startNewSession(List<String> topics) async {
+  Future<void> startNewSession(
+    List<String> topics, {
+    int? availableQuestionCount,
+    int currentQuestionIndex = 0,
+    int? questionsPerSessionOverride,
+  }) async {
     _logger.info('Starting new chat session with topics: $topics');
 
     // Clear any existing messages to prevent cross-contamination
@@ -238,14 +245,23 @@ class ChatProvider extends ChangeNotifier {
     // Stop listening to any previous session's messages
     _stopListeningToMessages();
 
+    // Decide if we need to generate questions based on available count
+    final int perSession =
+        questionsPerSessionOverride ?? ChatProvider.questionsPerSession;
+    final bool requiresGeneration =
+        availableQuestionCount == null
+            ? true
+            : (currentQuestionIndex + perSession) > availableQuestionCount;
+
     _setLoadingWithTyping(
       true,
       typingMessage: "Preparing your learning session...",
-      generatingQuestions: true,
+      generatingQuestions: requiresGeneration,
     );
     _isStartingSession = true;
-    _isGeneratingQuestions = true;
-    _currentGeneratingTopic = topics.isNotEmpty ? topics.first : null;
+    _isGeneratingQuestions = requiresGeneration;
+    _currentGeneratingTopic =
+        requiresGeneration && topics.isNotEmpty ? topics.first : null;
     notifyListeners();
 
     try {
