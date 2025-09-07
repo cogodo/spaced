@@ -14,11 +14,9 @@ from core.models.session import Session, SessionState, TurnState
 from core.monitoring.logger import get_logger
 from core.repositories.question_repository import QuestionRepository
 from core.repositories.topic_repository import TopicRepository
-from core.services.clarification_service import ClarificationService
-from core.services.evaluation_service import EvaluationError, EvaluationService
-from core.services.feedback_service import FeedbackError, FeedbackService
+from core.services.combined_policy import enforce_after_hint_cap
+from core.services.combined_service import CombinedService, CombinedServiceError
 from core.services.question_service import QuestionService
-from core.services.routing_service import RoutingService
 from core.services.session_service import SessionService
 
 # from infrastructure.redis.session_manager import RedisSessionManager  # Commented out Redis
@@ -47,10 +45,8 @@ class ConversationService:
         self.topic_repo = TopicRepository()
         self.question_repo = QuestionRepository()
         self.session_service = SessionService()
-        self.evaluation_service = EvaluationService()
-        self.feedback_service = FeedbackService()
-        self.routing_service = RoutingService()
-        self.clarification_service = ClarificationService()
+        self.combined_service = CombinedService()
+        # Clarification and routing handled inline without external services
 
     async def process_turn(self, chat_id: str, user_uid: str, user_input: str) -> str:
         """
@@ -84,12 +80,9 @@ class ConversationService:
                 return await self._handle_next_action(session, user_input)
             else:
                 raise ValueError(f"Invalid turn state: {session.turnState}")
-        except (EvaluationError, FeedbackError) as e:
-            # Catch specific, known errors and log them.
-            # These are errors that are part of the expected "unhappy path"
-            logger.error(f"A service error occurred during turn processing for chat {chat_id}: {e}", exc_info=True)
-            # We can raise a specific error that the endpoint can then handle
-            raise ConversationServiceError(f"Failed to process turn: {e}") from e
+        except Exception as e:
+            logger.error(f"Error during turn processing for chat {chat_id}: {e}", exc_info=True)
+            raise ConversationServiceError("Failed to process turn") from e
         except Exception as e:
             # Catch any other, unexpected errors.
             logger.error(f"An unexpected error occurred processing turn for chat {chat_id}", exc_info=True)
@@ -105,28 +98,49 @@ class ConversationService:
             return f"It looks like we've run out of questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
         try:
-            score = await self.evaluation_service.score_answer(question, user_input, after_hint=False)
-            feedback = await self.feedback_service.generate_feedback(question, user_input, score)
+            try:
+                result = await self.combined_service.evaluate_turn(
+                    question, user_input, after_hint=False, initial_score=None
+                )
+                user_facing = result.get("user_facing_response", "")
+                su = result.get("state_update", {})
+                score_value = int(su.get("score", 3))
 
-            if score.score >= 4:
-                # Good answer, move to next question prompt
-                session.scores[question.id] = score.score
-                session.turnState = TurnState.AWAITING_NEXT_ACTION
-                self.session_service.repository.update(session.id, session.userUid, session.dict())
+                # Drive state by LLM next_action directly
+                next_action = su.get("next_action")
+                next_action_value = next_action.value if next_action and hasattr(next_action, "value") else None
 
-                # Check if we've answered 5 questions
-                answered_questions = len(session.scores)
-                if answered_questions >= 5:
+                if next_action_value == "next_question":
+                    session.scores[question.id] = score_value
+                    session.turnState = TurnState.AWAITING_NEXT_ACTION
+                    self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+                    answered_questions = len(session.scores)
+                    if answered_questions >= 5:
+                        summary = await self.end_session(session)
+                        return f"{user_facing}\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+
+                    return user_facing or "Got it. Ready for the next question?"
+                elif next_action_value == "clarification":
+                    session.initialScore = score_value
+                    session.turnState = TurnState.AWAITING_FOLLOW_UP
+                    self.session_service.repository.update(session.id, session.userUid, session.dict())
+                    return user_facing or "Thanks for the attempt. Want to try a follow-up?"
+                elif next_action_value == "end_chat":
                     summary = await self.end_session(session)
-                    return f"{feedback}\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
-
-                return f"{feedback}\n\nReady for the next question, or do you have any questions about this one?"
-            else:
-                # Poor answer, await follow-up
-                session.initialScore = score.score
-                session.turnState = TurnState.AWAITING_FOLLOW_UP
-                self.session_service.repository.update(session.id, session.userUid, session.dict())
-                return feedback
+                    return f"{user_facing}\n\nSession ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+                else:
+                    # Default: behave like threshold route
+                    if score_value >= 4:
+                        session.scores[question.id] = score_value
+                        session.turnState = TurnState.AWAITING_NEXT_ACTION
+                    else:
+                        session.initialScore = score_value
+                        session.turnState = TurnState.AWAITING_FOLLOW_UP
+                    self.session_service.repository.update(session.id, session.userUid, session.dict())
+                    return user_facing or "Got it."
+            except CombinedServiceError:
+                raise ValueError("Combined service failed to evaluate turn")
 
         except ValueError as e:
             logger.error(f"Error processing initial answer: {str(e)}")
@@ -141,23 +155,29 @@ class ConversationService:
             return f"Error: Could not find the current question. Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
         try:
-            # Re-evaluate the answer, this time noting it's after a hint
-            second_score = await self.evaluation_service.score_answer(question, user_input, after_hint=True)
+            try:
+                result = await self.combined_service.evaluate_turn(
+                    question, user_input, after_hint=True, initial_score=session.initialScore
+                )
+                user_facing = result.get("user_facing_response", "")
+                su = result.get("state_update", {})
+                final_score = int(su.get("score", 3))
+                final_score = enforce_after_hint_cap(final_score, after_hint=True)
+                session.scores[question.id] = final_score
+                session.turnState = TurnState.AWAITING_NEXT_ACTION
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
 
-            # Average the scores
-            final_score = round((session.initialScore + second_score.score) / 2)
-            session.scores[question.id] = final_score
-            session.turnState = TurnState.AWAITING_NEXT_ACTION
+                answered_questions = len(session.scores)
+                if answered_questions >= 5:
+                    summary = await self.end_session(session)
+                    return f"{user_facing}\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
-            self.session_service.repository.update(session.id, session.userUid, session.dict())
-
-            # Check if we've answered 5 questions
-            answered_questions = len(session.scores)
-            if answered_questions >= 5:
-                summary = await self.end_session(session)
-                return f"Thanks for the clarification! I've recorded a score of {final_score} for that question.\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
-
-            return f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
+                return (
+                    user_facing
+                    or f"Thanks for the clarification! I've recorded a score of {final_score} for that question. Ready for the next one?"
+                )
+            except CombinedServiceError:
+                raise ValueError("Combined service failed to evaluate follow-up")
 
         except ValueError as e:
             logger.error(f"Error processing follow-up answer: {str(e)}")
@@ -166,9 +186,16 @@ class ConversationService:
     async def _handle_next_action(self, session: Session, user_input: str) -> str:
         """Handles the user's response when prompted for the next action."""
         try:
-            decision = await self.routing_service.determine_next_action(user_input)
+            # Simple inline classification for next action
+            text = user_input.lower().strip()
+            if any(k in text for k in ["stop", "end", "quit", "goodbye", "done"]):
+                next_action = NextAction.END_CHAT
+            elif any(k in text for k in ["next", "continue", "ready", "yes"]):
+                next_action = NextAction.MOVE_TO_NEXT_QUESTION
+            else:
+                next_action = NextAction.AWAIT_CLARIFICATION
 
-            if decision.next_action == NextAction.MOVE_TO_NEXT_QUESTION:
+            if next_action == NextAction.MOVE_TO_NEXT_QUESTION:
                 session.questionIdx += 1
                 session.initialScore = None
                 session.turnState = TurnState.AWAITING_INITIAL_ANSWER
@@ -187,40 +214,19 @@ class ConversationService:
                     return f"You've completed all the questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
                 return f"Great, let's move on. Here is your next question:\n\n{next_question.text}"
 
-            elif decision.next_action == NextAction.END_CHAT:
+            elif next_action == NextAction.END_CHAT:
                 summary = await self.end_session(session)
                 return f"Session ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
-            elif decision.next_action == NextAction.AWAIT_CLARIFICATION:
+            elif next_action == NextAction.AWAIT_CLARIFICATION:
                 _, question = self.session_service.get_current_question(session.id, session.userUid)
                 if not question:
                     # End session if we run out of questions
                     summary = await self.end_session(session)
                     return f"Error: Could not find the current question. Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
 
-                try:
-                    answer, impact = await self.clarification_service.handle_clarification(question, user_input)
-
-                    # If the clarification was very helpful, penalize score and move on
-                    if impact.adjusted_score == 1:
-                        session.scores[question.id] = 1
-                        session.turnState = TurnState.AWAITING_NEXT_ACTION
-                        self.session_service.repository.update(session.id, session.userUid, session.dict())
-
-                        # Check if we've answered 5 questions
-                        answered_questions = len(session.scores)
-                        if answered_questions >= 5:
-                            summary = await self.end_session(session)
-                            return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later.\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
-
-                        return f"{answer}\n\nSince that explanation was very direct, I've marked this question as needing more review later. Ready for the next question?"
-                    else:
-                        # Otherwise, just provide the info and wait for another attempt
-                        return f"{answer}\n\nDoes that help clarify things? Feel free to try answering the original question again."
-
-                except ValueError as e:
-                    logger.error(f"Error handling clarification: {str(e)}")
-                    return f"I'm having trouble providing clarification right now. {str(e)}"
+                # Provide a light nudge; next evaluation happens on follow-up
+                return "No problem—try again focusing on the core concept. What do you think now?"
 
         except ValueError as e:
             logger.error(f"Error determining next action: {str(e)}")

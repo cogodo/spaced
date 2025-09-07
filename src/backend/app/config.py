@@ -28,7 +28,15 @@ class Settings(BaseSettings):
 
     # OpenAI API Key
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
-    openai_model: str = Field("gpt-5", env="OPENAI_MODEL")
+    openai_model: str = Field("gpt-4o", env="OPENAI_MODEL")
+
+    # Feature Flags
+    use_combined_llm: bool = Field(False, env="USE_COMBINED_LLM")
+    use_responses_api: bool = Field(True, env="USE_RESPONSES_API")
+
+    # OpenAI request settings
+    openai_request_timeout_seconds: int = Field(12, env="OPENAI_REQUEST_TIMEOUT_SECONDS")
+    openai_max_retries: int = Field(2, env="OPENAI_MAX_RETRIES")
 
     # Cartesia API Key for TTS
     cartesia_api_key: Optional[str] = Field(None, env="CARTESIA_API_KEY")

@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +29,23 @@ class NextAction(str, Enum):
     MOVE_TO_NEXT_QUESTION = "next_question"
     AWAIT_CLARIFICATION = "clarification"
     END_CHAT = "end_chat"
+
+
+class CombinedStateUpdate(BaseModel):
+    """Validated state update returned by CombinedService."""
+
+    score: int = Field(..., ge=1, le=5, description="The final score (1..5)")
+    reasoning: str = Field(..., max_length=200, description="Brief justification, <=200 chars")
+    hint_given: bool = Field(..., description="True if a hint or leading question was given")
+    misconception: Optional[str] = Field(None, description="Brief misconception summary or null")
+    next_action: NextAction = Field(..., description="Next action classification")
+
+
+class CombinedTurnPayload(BaseModel):
+    """Validated payload returned by CombinedService."""
+
+    user_facing_response: str = Field(..., max_length=800)
+    state_update: CombinedStateUpdate
 
 
 class RoutingDecision(BaseModel):
