@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+.eggs
+*.egg-info
+dist
+build
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+
+# Local env files (use docker secrets or env vars instead)
+.env
+.env.*
+!.env.example
+
+# Firebase credentials (mount as volume or use secrets)
+firebase_service_account.json
+**/firebase_service_account.json
+
+# Misc
+*.log
+.DS_Store

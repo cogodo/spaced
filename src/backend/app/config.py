@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     cors_origins: List[str] = Field(
         default=[
             "https://getspaced.app",
+            "https://www.getspaced.app",
+            "https://app.getspaced.app",
             "https://staging.getspaced.app",
             "https://api.getspaced.app",
             "http://localhost:3000",

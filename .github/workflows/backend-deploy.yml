@@ -1,42 +1,29 @@
-name: Deploy Backend to EC2
+name: Deploy Backend
 
 on:
   push:
     branches:
-      - staging
       - main
+    paths:
+      - 'src/backend/**'
+      - 'deploy.sh'
+      - '.github/workflows/backend-deploy.yml'
 
 jobs:
-  deploy-staging:
-    if: github.ref == 'refs/heads/staging'
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Staging EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script: |
-            sudo /opt/bootstrap.sh
-            echo "Deployment to staging complete!"
-
-  deploy-production:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Production EC2
+      - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PRODUCTION_EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            sudo /opt/bootstrap.sh
-            echo "Deployment to production complete!" 
+            cd /home/ec2-user/spaced
+            git fetch origin main
+            git reset --hard origin/main
+            cd src/backend
+            docker compose down
+            docker compose up -d --build
+            docker compose ps 
