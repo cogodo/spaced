@@ -2,10 +2,9 @@ import asyncio
 import uuid
 from typing import Any, Dict, List, Optional
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
-from app.config import settings
+from core.llm import get_llm_provider
 from core.models import Question, Topic
 from core.models.profiles import (
     ANALYSIS,
@@ -17,8 +16,8 @@ from core.monitoring.logger import get_logger
 from core.repositories import QuestionRepository
 
 
-class OpenAITimeoutError(Exception):
-    """Custom exception for OpenAI API timeouts."""
+class LLMTimeoutError(Exception):
+    """Custom exception for LLM API timeouts."""
 
     pass
 
@@ -38,7 +37,8 @@ class QuestionGenerationError(QuestionServiceError):
 class QuestionService:
     def __init__(self):
         self.repository = QuestionRepository()
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.llm_provider = get_llm_provider("default")
+        self.fast_llm_provider = get_llm_provider("fast")
         self.logger = get_logger("question_service")
 
     def get_topic_questions(
@@ -103,7 +103,7 @@ class QuestionService:
                 type=q_type,
                 difficulty=difficulty_val,
                 metadata={
-                    "generated_by": "openai_bulk_refined",
+                    "generated_by": "llm_bulk_refined",
                     "topic_name": topic.name,
                     "generation_version": "bulk_1.0",
                 },
@@ -171,7 +171,7 @@ class QuestionService:
                 type=q_type,
                 difficulty=difficulty_val,
                 metadata={
-                    "generated_by": "openai_initial_bulk",
+                    "generated_by": "llm_initial_bulk",
                     "topic_name": topic.name,
                     "generation_version": "initial_bulk_1.0",
                 },
@@ -222,7 +222,7 @@ Requirements:
 - Incorporate the specified context/perspective naturally
 """
 
-        return await self._call_openai(
+        return await self._call_llm(
             prompt,
             max_completion_tokens=GENERATION_SINGLE.max_completion_tokens,
         )
@@ -245,7 +245,7 @@ NEVER include the answer to the question in your return
 NEVER include a heading like "improved question:" or "Question:" before the question in your return
 ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE ANYTHING THAT SAYS "ANSWER" and any follwing related text
 """
-        return await self._call_openai(prompt)
+        return await self._call_llm(prompt, use_fast=True)
 
     async def _generate_basic_question(
         self, topic: Topic, template: str, difficulty: int, question_type: str
@@ -257,7 +257,7 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
             prompt += f"\nDifficulty level: {difficulty}/3"
             prompt += "\n\nReturn only the question text, no additional formatting."
 
-            response = await self._call_openai(prompt)
+            response = await self._call_llm(prompt)
 
             question = Question(
                 id=str(uuid.uuid4()),
@@ -265,7 +265,7 @@ ONLY return the question itself when you return and NOT EVER THE ANSWER DELETE A
                 text=response.strip(),
                 type=question_type,
                 difficulty=difficulty,
-                metadata={"generated_by": "openai_basic", "topic_name": topic.name},
+                metadata={"generated_by": "llm_basic", "topic_name": topic.name},
             )
 
             self.repository.create(question, topic.ownerUid)
@@ -313,7 +313,7 @@ Example JSON SHAPE (illustrative only):
 """
 
         # Bulk generation needs a longer timeout and higher token budget
-        response = await self._call_openai(
+        response = await self._call_llm(
             prompt,
             max_completion_tokens=GENERATION_BULK.max_completion_tokens,
             timeout=40.0,
@@ -408,10 +408,11 @@ Return STRICT JSON ONLY: an array of objects with keys "index" (int) and "text" 
 No explanations.
 """
 
-        response = await self._call_openai(
+        response = await self._call_llm(
             prompt,
             max_completion_tokens=REFINEMENT_BULK.max_completion_tokens,
             timeout=30.0,
+            use_fast=True,
         )
 
         start = response.find("[")
@@ -490,109 +491,60 @@ No explanations.
                 return True
         return False
 
-    async def _call_openai(
+    async def _call_llm(
         self,
         prompt: str,
         max_completion_tokens: int = GENERATION_SINGLE.max_completion_tokens,
         timeout: float = 15.0,
-        model: Optional[str] = None,
+        use_fast: bool = False,
     ) -> str:
-        """Make OpenAI API call with error handling and configurable timeout"""
+        """Make LLM API call with error handling and configurable timeout.
+
+        Args:
+            prompt: The prompt to send.
+            max_completion_tokens: Maximum tokens in response.
+            timeout: Request timeout in seconds.
+            use_fast: If True, use the fast (Haiku) model for lighter tasks.
+
+        Returns:
+            The generated text response.
+        """
         try:
-            used_model = model or settings.openai_model or "gpt-4o"
-            # Log outgoing request (truncate prompt for safety)
+            provider = self.fast_llm_provider if use_fast else self.llm_provider
             self.logger.info(
-                "Preparing OpenAI request",
+                "Preparing LLM request",
                 extra={
-                    "model": used_model,
-                    "max_tokens_or_max_output_tokens": max_completion_tokens,
+                    "use_fast": use_fast,
+                    "max_tokens": max_completion_tokens,
                     "timeout": timeout,
                     "prompt_preview": (prompt[:200] + ("…" if len(prompt) > 200 else "")),
                 },
             )
-            # Use Responses API for GPT-5 models, else Chat Completions
-            if "gpt-5" in used_model:
-                response = await asyncio.wait_for(
-                    self.openai_client.responses.create(
-                        model=used_model,
-                        instructions="You are an expert educator creating high-quality learning questions.",
-                        input=prompt,
-                        reasoning={"effort": "low"},
-                        text={"verbosity": "low"},
-                        max_output_tokens=max_completion_tokens,
-                    ),
-                    timeout=timeout,
-                )
 
-                content = getattr(response, "output_text", None)
+            content = await provider.complete(
+                prompt=prompt,
+                system_prompt="You are an expert educator creating high-quality learning questions.",
+                max_tokens=max_completion_tokens,
+                timeout=timeout,
+            )
 
-                self.logger.info(
-                    "OpenAI Responses API response received",
-                    extra={
-                        "has_output": bool(content),
-                        "content_len": (len(content) if isinstance(content, str) else None),
-                        "content_preview": (
-                            content[:200] + ("…" if isinstance(content, str) and len(content) > 200 else "")
-                        )
-                        if isinstance(content, str)
-                        else None,
-                        "usage": getattr(response, "usage", None),
-                        "status": getattr(response, "status", None),
-                    },
-                )
+            self.logger.info(
+                "LLM response received",
+                extra={
+                    "content_len": len(content) if content else 0,
+                    "content_preview": (content[:200] + ("…" if len(content) > 200 else "")) if content else None,
+                },
+            )
 
-                if not content or not isinstance(content, str) or not content.strip():
-                    raise Exception("OpenAI Responses API returned empty output_text")
+            if not content or not content.strip():
+                raise Exception("LLM returned empty response")
 
-                return content
-            else:
-                response = await asyncio.wait_for(
-                    self.openai_client.chat.completions.create(
-                        model=used_model,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": ("You are an expert educator creating high-quality learning questions."),
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        # Correct parameter name for Chat Completions
-                        max_tokens=max_completion_tokens,
-                    ),
-                    timeout=timeout,
-                )
-                # Validate and log response
-                content = None
-                if response and getattr(response, "choices", None):
-                    choice0 = response.choices[0]
-                    if choice0 and getattr(choice0, "message", None):
-                        content = choice0.message.content
-
-                self.logger.info(
-                    "OpenAI Chat Completions response received",
-                    extra={
-                        "has_choices": bool(getattr(response, "choices", None)),
-                        "content_len": (len(content) if isinstance(content, str) else None),
-                        "content_preview": (
-                            content[:200] + ("…" if isinstance(content, str) and len(content) > 200 else "")
-                        )
-                        if isinstance(content, str)
-                        else None,
-                        "finish_reason": getattr(getattr(response, "choices", [None])[0], "finish_reason", None),
-                    },
-                )
-
-                if not content or not isinstance(content, str) or not content.strip():
-                    finish_reason = getattr(getattr(response, "choices", [None])[0], "finish_reason", None)
-                    raise Exception(f"OpenAI returned empty response content (finish_reason={finish_reason})")
-
-                return content
+            return content
         except asyncio.TimeoutError:
-            raise OpenAITimeoutError(f"OpenAI API call timed out after {timeout} seconds")
+            raise LLMTimeoutError(f"LLM API call timed out after {timeout} seconds")
         except Exception as e:
-            # Escape curly braces in error message to prevent f-string formatting errors
             safe_error = str(e).replace("{", "{{").replace("}", "}}")
-            raise Exception(f"OpenAI API error: {safe_error}")
+            raise Exception(f"LLM API error: {safe_error}")
 
     def get_question(self, question_id: str, user_uid: str, topic_id: str) -> Optional[Question]:
         """Get a specific question by ID from user's topic subcollection"""
@@ -670,9 +622,10 @@ Provide your analysis in this JSON format:
 """
 
         try:
-            response = await self._call_openai(
+            response = await self._call_llm(
                 analysis_prompt,
                 max_completion_tokens=ANALYSIS.max_completion_tokens,
+                use_fast=True,
             )
 
             # Try to parse JSON response

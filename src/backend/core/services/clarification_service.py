@@ -1,9 +1,8 @@
 import json
 from typing import Tuple
 
-from openai import AsyncOpenAI
-
 from app.config import settings
+from core.llm import get_llm_provider
 from core.models import Question
 from core.models.llm_outputs import ClarificationImpact
 from core.models.profiles import CLARIFICATION
@@ -19,7 +18,8 @@ class ClarificationService:
     """
 
     def __init__(self):
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        # Use fast model (Haiku) for all clarification tasks
+        self.llm_provider = get_llm_provider("fast")
 
     async def handle_clarification(
         self, original_question: Question, user_clarification_request: str
@@ -89,36 +89,14 @@ GUIDELINES:
 Provide a direct, helpful response to their clarification request:"""
 
         try:
-            used_model = settings.openai_model or "gpt-5-nano"
-            if "gpt-5" in used_model:
-                response = await self.openai_client.responses.create(
-                    model=used_model,
-                    instructions=(
-                        "You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions."
-                    ),
-                    input=prompt,
-                    reasoning={"effort": "low"},
-                    text={"verbosity": "low"},
-                    max_output_tokens=CLARIFICATION.max_completion_tokens,
-                )
-                content = getattr(response, "output_text", None)
-            else:
-                response = await self.openai_client.chat.completions.create(
-                    model=used_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=CLARIFICATION.max_completion_tokens,
-                )
-                content = response.choices[0].message.content
-            if not content:
-                raise ValueError("OpenAI returned empty response for clarification")
+            answer = await self.llm_provider.complete(
+                prompt=prompt,
+                system_prompt="You are Spaced, a helpful AI tutor. Provide clear, educational responses to student questions.",
+                max_tokens=CLARIFICATION.max_completion_tokens,
+                timeout=float(settings.anthropic_request_timeout_seconds),
+            )
 
-            answer = content.strip()
+            answer = answer.strip()
 
             # Validate that we got meaningful clarification
             if len(answer) < 20:
@@ -164,38 +142,24 @@ Provide your assessment as a JSON object:
 }}"""
 
         try:
-            used_model = settings.openai_model or "gpt-5-nano"
-            if "gpt-5" in used_model:
-                response = await self.openai_client.responses.create(
-                    model=used_model,
-                    instructions=(
-                        "You are an educational expert who assesses the impact of clarifications on learning. "
-                        "Always respond with valid JSON."
-                    ),
-                    input=prompt,
-                    reasoning={"effort": "low"},
-                    text={"verbosity": "low"},
-                    max_output_tokens=CLARIFICATION.max_completion_tokens,
-                )
-                content = getattr(response, "output_text", None)
-            else:
-                response = await self.openai_client.chat.completions.create(
-                    model=used_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an educational expert who assesses the impact of clarifications on learning. Always respond with valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=CLARIFICATION.max_completion_tokens,
-                    response_format={"type": "json_object"},
-                )
-                content = response.choices[0].message.content
-            if not content:
-                raise ValueError("OpenAI returned empty response for impact assessment")
+            content = await self.llm_provider.complete(
+                prompt=prompt,
+                system_prompt=(
+                    "You are an educational expert who assesses the impact of clarifications on learning. "
+                    "Always respond with valid JSON only, no other text."
+                ),
+                max_tokens=CLARIFICATION.max_completion_tokens,
+                timeout=float(settings.anthropic_request_timeout_seconds),
+            )
 
             # Parse and validate the response
+            # Try to extract JSON if there's extra text
+            content = content.strip()
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end > start:
+                content = content[start:end]
+
             data = json.loads(content)
 
             if "adjusted_score" not in data or "reasoning" not in data:

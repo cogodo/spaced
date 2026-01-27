@@ -58,9 +58,14 @@ def create_app() -> FastAPI:
         print(f"Server starting in '{settings.environment}' mode.")
 
         # --- Configuration Checks ---
-        if not settings.openai_api_key:
-            logger.critical("FATAL: OPENAI_API_KEY is not set. The application cannot start.")
-            raise ValueError("OPENAI_API_KEY is not set. Please configure your environment.")
+        if settings.use_anthropic:
+            if not settings.anthropic_api_key:
+                logger.critical("FATAL: ANTHROPIC_API_KEY is not set. The application cannot start.")
+                raise ValueError("ANTHROPIC_API_KEY is not set. Please configure your environment.")
+        else:
+            if not settings.openai_api_key:
+                logger.critical("FATAL: OPENAI_API_KEY is not set. The application cannot start.")
+                raise ValueError("OPENAI_API_KEY is not set. Please configure your environment.")
 
         # --- Initializations ---
         try:

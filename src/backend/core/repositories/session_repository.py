@@ -152,6 +152,8 @@ class SessionRepository:
             data["questionIdx"] = 0
         if "scores" not in data:
             data["scores"] = {}
+        if "currentQuestionHistory" not in data:
+            data["currentQuestionHistory"] = []
 
         # Session state management
         if "state" not in data:

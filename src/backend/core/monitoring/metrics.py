@@ -106,13 +106,13 @@ class MetricsCollector:
         self.counter("questions_skipped_total")
 
         # Service Metrics
-        self.counter("openai_requests_total")
+        self.counter("llm_requests_total")
         self.counter("firebase_requests_total")
         self.counter("redis_requests_total")
 
         # Performance Metrics
         self.histogram("api_request_duration_seconds")
-        self.histogram("openai_request_duration_seconds")
+        self.histogram("llm_request_duration_seconds")
         self.histogram("firebase_request_duration_seconds")
         self.histogram("question_generation_duration_seconds")
         self.histogram("response_scoring_duration_seconds")

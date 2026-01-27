@@ -46,6 +46,8 @@ class Session(BaseModel):
     questionIds: List[str] = Field(default_factory=list, description="List of question IDs for the session")
     questionIdx: int = Field(0, description="Index of the current question")
     scores: Dict[str, int] = Field(default_factory=dict, description="Scores for each question (questionId -> score)")
+    # Transcript for the current question only (alternating lines like "Human: ...", "AI: ...")
+    currentQuestionHistory: List[str] = Field(default_factory=list, description="Transcript lines for current question")
 
     # Session state management
     state: SessionState = Field(SessionState.INITIAL, description="Frontend UI state")
