@@ -20,10 +20,15 @@ backend.egg-info/entry_points.txt
 backend.egg-info/requires.txt
 backend.egg-info/top_level.txt
 core/__init__.py
+core/llm/__init__.py
+core/llm/anthropic.py
+core/llm/base.py
+core/llm/factory.py
 core/models/__init__.py
 core/models/conversation.py
 core/models/llm_outputs.py
 core/models/message.py
+core/models/profiles.py
 core/models/question.py
 core/models/session.py
 core/models/topic.py
@@ -41,13 +46,11 @@ core/repositories/session_repository.py
 core/repositories/topic_repository.py
 core/services/__init__.py
 core/services/clarification_service.py
+core/services/combined_policy.py
+core/services/combined_service.py
 core/services/conversation_service.py
-core/services/evaluation_service.py
-core/services/feedback_service.py
 core/services/fsrs_service.py
 core/services/question_service.py
-core/services/routing_service.py
-core/services/scoring_service.py
 core/services/session_service.py
 core/services/topic_service.py
 infrastructure/__init__.py
@@ -62,3 +65,5 @@ middleware/__init__.py
 middleware/logging.py
 middleware/performance.py
 middleware/rate_limiting.py
+tests/test_combined_service.py
+tests/test_llm_providers.py
