@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'src/backend/**'
-      - 'deploy.sh'
       - '.github/workflows/backend-deploy.yml'
 
 jobs:
@@ -24,6 +23,8 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cd src/backend
-            docker compose down
-            docker compose up -d --build
-            docker compose ps 
+            source .venv/bin/activate
+            pip install -e . --quiet
+            sudo systemctl restart backend
+            sleep 2
+            sudo systemctl status backend --no-pager 

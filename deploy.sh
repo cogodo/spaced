@@ -1,27 +1,22 @@
 #!/bin/bash
 set -e
 
-# Simple Docker deployment script
-# Run once manually to set up, then GitHub Actions calls it on push
-
+# Simple deploy script - git pull + restart
 APP_DIR="/home/ec2-user/spaced"
 BACKEND_DIR="$APP_DIR/src/backend"
 
-echo "=== Deploying Spaced Backend ==="
+echo "=== Deploying ==="
 
-# Pull latest code
 cd "$APP_DIR"
 git fetch origin main
 git reset --hard origin/main
 
-# Build and restart
 cd "$BACKEND_DIR"
-docker compose down
-docker compose up -d --build
+source .venv/bin/activate
+pip install -e . --quiet
 
-# Show status
-echo ""
-echo "=== Deployment Complete ==="
-docker compose ps
-echo ""
-echo "Logs: docker compose logs -f"
+sudo systemctl restart backend
+sleep 2
+
+echo "=== Status ==="
+sudo systemctl status backend --no-pager | head -20

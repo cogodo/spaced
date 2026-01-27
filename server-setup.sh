@@ -1,47 +1,61 @@
 #!/bin/bash
 set -e
 
-# ONE-TIME server setup script
-# Run this manually once on a fresh server
+# ONE-TIME server setup - no Docker, just Python + systemd
+# Run: curl -sL https://raw.githubusercontent.com/cogodo/spaced/main/server-setup.sh | bash
 
 DOMAIN="getspaced.app"
 CERTBOT_EMAIL="cogo@umich.edu"
 APP_DIR="/home/ec2-user/spaced"
+BACKEND_DIR="$APP_DIR/src/backend"
 
-echo "=== One-time Server Setup ==="
+echo "=== Spaced Server Setup (Simple) ==="
 
-# 1. Install Docker
-echo "Installing Docker..."
+# 1. Install system packages
+echo "[1/6] Installing system packages..."
 sudo yum update -y
-sudo yum install -y docker git
-sudo systemctl enable docker
-sudo systemctl start docker
-sudo usermod -aG docker ec2-user
+sudo yum install -y python3 python3-pip git nginx certbot python3-certbot-nginx
 
-# Install docker-compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+# 2. Clone repo
+echo "[2/6] Cloning repository..."
+if [ -d "$APP_DIR" ]; then
+    cd "$APP_DIR" && git pull origin main
+else
+    git clone https://github.com/cogodo/spaced.git "$APP_DIR"
+fi
 
-# 2. Install nginx + certbot
-echo "Installing Nginx..."
-sudo yum install -y nginx certbot python3-certbot-nginx
-sudo systemctl enable nginx
+# 3. Setup Python virtual environment
+echo "[3/6] Setting up Python environment..."
+cd "$BACKEND_DIR"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e .
 
-# 3. Clone repo
-echo "Cloning repository..."
-git clone https://github.com/cogodo/spaced.git "$APP_DIR" || (cd "$APP_DIR" && git pull)
+# 4. Create systemd service
+echo "[4/6] Creating systemd service..."
+sudo tee /etc/systemd/system/backend.service > /dev/null << EOF
+[Unit]
+Description=Spaced Backend
+After=network.target
 
-# 4. Copy your secrets (do this manually)
-echo ""
-echo "=== MANUAL STEPS REQUIRED ==="
-echo "1. Copy your .env file to: $APP_DIR/src/backend/.env"
-echo "2. Copy firebase_service_account.json to: $APP_DIR/src/backend/"
-echo ""
-echo "Then run: $APP_DIR/deploy.sh"
-echo ""
+[Service]
+User=ec2-user
+WorkingDirectory=$BACKEND_DIR
+EnvironmentFile=$BACKEND_DIR/.env
+ExecStart=$BACKEND_DIR/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable backend
 
 # 5. Setup nginx
-echo "Setting up Nginx..."
+echo "[5/6] Configuring Nginx..."
 sudo tee /etc/nginx/conf.d/api.conf > /dev/null << EOF
 server {
     listen 80;
@@ -53,19 +67,28 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 120s;
     }
 }
 EOF
 
-sudo nginx -t && sudo systemctl restart nginx
+sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
 
-# 6. Get SSL cert
-echo "Getting SSL certificate..."
-sudo certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" -d "api.$DOMAIN" || echo "Certbot failed - you may need to run it manually"
-
-# 7. Make deploy script executable
-chmod +x "$APP_DIR/deploy.sh"
+# 6. SSL certificate
+echo "[6/6] Getting SSL certificate..."
+sudo certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" -d "api.$DOMAIN" || echo "Certbot failed - run manually: sudo certbot --nginx -d api.$DOMAIN"
 
 echo ""
 echo "=== Setup Complete ==="
-echo "After copying .env and firebase credentials, run: $APP_DIR/deploy.sh"
+echo ""
+echo "NEXT STEPS:"
+echo "1. Copy your secrets from local machine:"
+echo "   scp src/backend/.env lightsail:$BACKEND_DIR/"
+echo "   scp src/backend/firebase_service_account.json lightsail:$BACKEND_DIR/"
+echo ""
+echo "2. Start the backend:"
+echo "   sudo systemctl start backend"
+echo ""
+echo "3. Check status:"
+echo "   sudo systemctl status backend"
+echo "   curl http://localhost:8000/api/v1/"
