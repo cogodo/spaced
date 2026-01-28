@@ -78,7 +78,15 @@ class LiveKitVoiceService {
   Future<Map<String, dynamic>> createVoiceRoom(String chatId) async {
     try {
       final url = '$_baseUrl/api/v1/voice/create-room';
-      final requestBody = {'chat_id': chatId};
+
+      // Get auth token to pass to voice agent for backend calls
+      final user = FirebaseAuth.instance.currentUser;
+      final authToken = user != null ? await user.getIdToken() : '';
+
+      final requestBody = {
+        'chat_id': chatId,
+        'auth_token': authToken,
+      };
 
       final response = await _makeAuthenticatedRequest(
         (headers) => http

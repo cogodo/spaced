@@ -17,6 +17,7 @@ class CreateRoomRequest(BaseModel):
     """Request model for creating a new voice chat room."""
 
     chat_id: str  # Link to existing chat session
+    auth_token: str = ""  # Auth token for voice agent to call backend APIs
 
 
 class JoinRoomResponse(BaseModel):
@@ -120,10 +121,11 @@ async def create_voice_room(
 
         user_uid = current_user["uid"]
 
-        # Lightweight metadata - chat_id only (authentication will be handled differently)
+        # Room metadata passed to voice agent
         room_metadata = {
             "chat_id": request.chat_id,
             "user_id": user_uid,
+            "auth_token": request.auth_token,
         }
 
         # Generate unique room name with chat ID for easier debugging

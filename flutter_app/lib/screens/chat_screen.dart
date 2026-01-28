@@ -10,9 +10,10 @@ import '../widgets/question_generation_loading_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/stt_button.dart';
+import '../widgets/voice_button.dart';
 import '../services/audio_player_service.dart';
 import '../services/stt_service.dart';
-// import '../services/auth_service.dart';
+import '../services/auth_service.dart';
 import '../services/logger_service.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -50,9 +51,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Voice chat state
   LiveKitVoiceService? _voiceService;
-  // bool _isVoiceConnecting = false;
-  // bool _isVoiceConnected = false;
-  // bool _isSpeaking = false;
+  bool _isVoiceConnecting = false;
+  bool _isVoiceConnected = false;
+  bool _isSpeaking = false;
   String? _currentTranscript;
 
   // STT service
@@ -141,8 +142,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.info('Voice connected');
       if (mounted) {
         setState(() {
-          // _isVoiceConnected = true;
-          // _isVoiceConnecting = false;
+          _isVoiceConnected = true;
+          _isVoiceConnecting = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -157,8 +158,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.info('Voice disconnected');
       if (mounted) {
         setState(() {
-          // _isVoiceConnected = false;
-          // _isSpeaking = false;
+          _isVoiceConnected = false;
+          _isSpeaking = false;
         });
       }
     };
@@ -167,8 +168,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _logger.severe('Voice error: $error');
       if (mounted) {
         setState(() {
-          // _isVoiceConnecting = false;
-          // _isVoiceConnected = false;
+          _isVoiceConnecting = false;
+          _isVoiceConnected = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -182,7 +183,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _voiceService!.onLocalSpeakingChanged = (isSpeaking) {
       if (mounted) {
         setState(() {
-          // _isSpeaking = isSpeaking;
+          _isSpeaking = isSpeaking;
         });
         _logger.info('Speaking status changed: $isSpeaking');
       }
@@ -202,84 +203,84 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // Future<void> _toggleVoiceChat() async {
-  //   if (_isVoiceConnecting) return;
+  Future<void> _toggleVoiceChat() async {
+    if (_isVoiceConnecting) return;
 
-  //   if (_isVoiceConnected) {
-  //     // Disconnect voice
-  //     await _voiceService?.disconnect();
-  //     setState(() {
-  //       _isVoiceConnected = false;
-  //       _isSpeaking = false;
-  //     });
-  //   } else {
-  //     // Connect to voice
-  //     setState(() {
-  //       _isVoiceConnecting = true;
-  //     });
+    if (_isVoiceConnected) {
+      // Disconnect voice
+      await _voiceService?.disconnect();
+      setState(() {
+        _isVoiceConnected = false;
+        _isSpeaking = false;
+      });
+    } else {
+      // Connect to voice
+      setState(() {
+        _isVoiceConnecting = true;
+      });
 
-  //     // Get current chat session ID and capture context
-  //     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-  //     String? chatId = chatProvider.currentSessionId;
-  //     final mounted = this.mounted;
-  //     final scaffoldMessenger = ScaffoldMessenger.of(context);
-  //     final theme = Theme.of(context);
+      // Get current chat session ID and capture context
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      String? chatId = chatProvider.currentSessionId;
+      final mounted = this.mounted;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      final theme = Theme.of(context);
 
-  //     try {
-  //       // Get user ID
-  //       final authService = AuthService();
-  //       final user = authService.currentUser;
-  //       if (user == null) {
-  //         throw Exception('User not authenticated');
-  //       }
+      try {
+        // Get user ID
+        final authService = AuthService();
+        final user = authService.currentUser;
+        if (user == null) {
+          throw Exception('User not authenticated');
+        }
 
-  //       // Request microphone permission
-  //       final hasMicPermission =
-  //           await _voiceService!.requestMicrophonePermission();
-  //       if (!hasMicPermission) {
-  //         throw Exception('Microphone permission denied');
-  //       }
+        // Request microphone permission
+        final hasMicPermission =
+            await _voiceService!.requestMicrophonePermission();
+        if (!hasMicPermission) {
+          throw Exception('Microphone permission denied');
+        }
 
-  //       // Require a valid chat ID for voice
-  //       if (chatId == null || chatId.isEmpty) {
-  //         throw Exception(
-  //           'No active session found. Please start a chat session first.',
-  //         );
-  //       }
+        // Require a valid chat ID for voice
+        if (chatId == null || chatId.isEmpty) {
+          throw Exception(
+            'No active session found. Please start a chat session first.',
+          );
+        }
 
-  //       // Check voice service health before starting
-  //       final isHealthy = await _voiceService!.checkVoiceServiceHealth();
-  //       if (!mounted) return;
-  //       if (!isHealthy) {
-  //         throw Exception(
-  //           'Voice service is not healthy. Please try again later.',
-  //         );
-  //       }
+        // Check voice service health before starting
+        final isHealthy = await _voiceService!.checkVoiceServiceHealth();
+        if (!mounted) return;
+        if (!isHealthy) {
+          throw Exception(
+            'Voice service is not healthy. Please try again later.',
+          );
+        }
 
-  //       // Start voice session with chat ID only
-  //       await _voiceService!.startVoiceSession(chatId, user.uid);
+        // Start voice session with chat ID only
+        await _voiceService!.startVoiceSession(chatId, user.uid);
 
-  //       // Unlock audio playback on web after user gesture
-  //       if (mounted) {
-  //         await _voiceService!.startAudioPlayback();
-  //       }
-  //     } catch (e) {
-  //       _logger.severe('Failed to start voice chat: $e');
-  //       if (mounted) {
-  //         setState(() {
-  //           _isVoiceConnecting = false;
-  //           _isVoiceConnected = false;
-  //         });
-  //         scaffoldMessenger.showSnackBar(
-  //           SnackBar(
-  //             content: Text('Failed to start voice chat: $e'),
-  //             backgroundColor: theme.colorScheme.error,
-  //           ),
-  //         );
-  //       }
-  //     }
-  //   }
-  // }
+        // Unlock audio playback on web after user gesture
+        if (mounted) {
+          await _voiceService!.startAudioPlayback();
+        }
+      } catch (e) {
+        _logger.severe('Failed to start voice chat: $e');
+        if (mounted) {
+          setState(() {
+            _isVoiceConnecting = false;
+            _isVoiceConnected = false;
+          });
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Failed to start voice chat: $e'),
+              backgroundColor: theme.colorScheme.error,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
@@ -760,18 +761,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Voice-to-voice button - Disabled due to RAM constraints
-                    // if (chatProvider.sessionState == SessionState.active &&
-                    //     settingsProvider.voiceEnabled) ...[
-                    //   VoiceButton(
-                    //     isConnecting: _isVoiceConnecting,
-                    //     isVoiceConnected: _isVoiceConnected,
-                    //     isSpeaking: _isSpeaking,
-                    //     onTap: _toggleVoiceChat,
-                    //     size: 56.0, // Match the send button size
-                    //   ),
-                    //   const SizedBox(width: 12),
-                    // ],
+                    // Voice-to-voice button
+                    if (chatProvider.sessionState == SessionState.active &&
+                        settingsProvider.voiceEnabled) ...[
+                      VoiceButton(
+                        isConnecting: _isVoiceConnecting,
+                        isVoiceConnected: _isVoiceConnected,
+                        isSpeaking: _isSpeaking,
+                        onTap: _toggleVoiceChat,
+                        size: 56.0, // Match the send button size
+                      ),
+                      const SizedBox(width: 12),
+                    ],
 
                     // STT button (only show when session is active AND STT is enabled)
                     if (chatProvider.sessionState == SessionState.active &&

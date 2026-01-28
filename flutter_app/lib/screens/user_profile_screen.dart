@@ -66,10 +66,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   // Theme Settings Section removed
                   const SizedBox(height: 0),
 
-                  // Voice Settings Section - Disabled due to RAM constraints
-                  // _buildVoiceSettingsSection(context),
+                  // Voice Settings Section
+                  _buildVoiceSettingsSection(context),
 
-                  // const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
                   // STT Settings Section
                   _buildSttSettingsSection(context),
@@ -223,72 +223,79 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   // Theme settings section removed
 
-  // Widget _buildVoiceSettingsSection(BuildContext context) {
-  //   return Consumer<SettingsProvider>(
-  //     builder: (context, settingsProvider, child) {
-  //       return Card(
-  //         elevation: 2,
-  //         child: Padding(
-  //           padding: const EdgeInsets.all(20.0),
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.start,
-  //             children: [
-  //               Text(
-  //                 'Voice Settings',
-  //                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-  //                   fontWeight: FontWeight.bold,
-  //                 ),
-  //               ),
-  //               const SizedBox(height: 16),
-  //               Row(
-  //                 children: [
-  //                   Icon(
-  //                     Icons.headphones,
-  //                     size: 20,
-  //                     color:
-  //                         settingsProvider.voiceEnabled
-  //                             ? Theme.of(context).colorScheme.primary
-  //                             : Theme.of(
-  //                               context,
-  //                             ).colorScheme.onSurface.withValues(alpha: 0.5),
-  //                   ),
-  //                   const SizedBox(width: 12),
-  //                   Expanded(
-  //                     child: Column(
-  //                       crossAxisAlignment: CrossAxisAlignment.start,
-  //                       children: [
-  //                         Text(
-  //                           'Voice-to-Voice Chat',
-  //                           style: Theme.of(context).textTheme.bodyLarge,
-  //                         ),
-  //                         Text(
-  //                           'Enable microphone button for voice conversations',
-  //                           style: Theme.of(
-  //                             context,
-  //                           ).textTheme.bodySmall?.copyWith(
-  //                             color: Theme.of(
-  //                               context,
-  //                             ).colorScheme.onSurface.withValues(alpha: 0.7),
-  //                           ),
-  //                         ),
-  //                       ],
-  //                     ),
-  //                   ),
-  //                   Switch(
-  //                     value: settingsProvider.voiceEnabled,
-  //                     onChanged: (bool value) {
-  //                       settingsProvider.setVoiceEnabled(value);
-  //                     },
-  //                   ),
-  //                 ],
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //       );
-  //     },
-  //   );
-  // }
+  Widget _buildVoiceSettingsSection(BuildContext context) {
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        return Card(
+          elevation: 0,
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Voice Settings',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.headphones,
+                      size: 20,
+                      color:
+                          settingsProvider.voiceEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Voice-to-Voice Chat',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          Text(
+                            'Enable microphone button for voice conversations',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: settingsProvider.voiceEnabled,
+                      onChanged: (bool value) {
+                        settingsProvider.setVoiceEnabled(value);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildSttSettingsSection(BuildContext context) {
     return Consumer<SettingsProvider>(
