@@ -26,6 +26,7 @@ dependencies = [
     "requests",
     "fsrs",
     "httpx",
+    "psutil",
 ]
 
 [project.optional-dependencies]
