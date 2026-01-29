@@ -95,8 +95,11 @@ def create_app() -> FastAPI:
     # The main API router for version 1
     app.include_router(api_router, prefix="/api/v1")
 
-    # Note: The /monitoring router is now the primary source for health checks.
-    # The old health_router has been removed.
+    # Root-level health check for Railway/load balancers
+    @app.get("/health")
+    async def health_check():
+        """Simple health check for Railway and load balancers."""
+        return {"status": "healthy", "service": "spaced-backend"}
 
     return app
 

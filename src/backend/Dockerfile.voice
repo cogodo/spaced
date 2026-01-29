@@ -1,0 +1,22 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install system dependencies (voice needs more)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY pyproject.toml .
+
+# Install Python dependencies WITH voice extras
+RUN pip install --no-cache-dir -e ".[voice]"
+
+# Copy application code
+COPY . .
+
+# Voice agent connects to LiveKit, doesn't need a port
+CMD ["python", "voice_agent_worker.py", "start"]
