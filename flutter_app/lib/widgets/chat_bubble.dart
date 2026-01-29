@@ -4,23 +4,62 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/chat_screen.dart';
 
-class ChatBubble extends StatelessWidget {
+class ChatBubble extends StatefulWidget {
   final ChatMessage message;
   final String Function(DateTime) formatTimestamp;
+  final bool isStreaming;
 
   const ChatBubble({
     super.key,
     required this.message,
     required this.formatTimestamp,
+    this.isStreaming = false,
   });
 
   @override
+  State<ChatBubble> createState() => _ChatBubbleState();
+}
+
+class _ChatBubbleState extends State<ChatBubble>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _fadeController;
+  String _previousText = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _previousText = widget.message.text;
+    _fadeController.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(ChatBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Trigger subtle animation when text updates during streaming
+    if (widget.isStreaming && widget.message.text != _previousText) {
+      _previousText = widget.message.text;
+      // Quick pulse for smooth streaming effect
+      _fadeController.forward(from: 0.9);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
+    final isUser = widget.message.isUser;
     final theme = Theme.of(context);
 
     return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: widget.message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 80),
@@ -75,12 +114,10 @@ class ChatBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Markdown content for user messages
           _buildMarkdownContent(context, theme, TextAlign.left, isUser: true),
           const SizedBox(height: 4),
-          // Timestamp
           Text(
-            formatTimestamp(message.timestamp),
+            widget.formatTimestamp(widget.message.timestamp),
             style: theme.textTheme.bodySmall?.copyWith(letterSpacing: 0.3),
             textAlign: TextAlign.left,
           ),
@@ -90,20 +127,29 @@ class ChatBubble extends StatelessWidget {
   }
 
   Widget _buildAiBubble(BuildContext context, ThemeData theme) {
-    return Column(
+    // Wrap in FadeTransition for smooth streaming animation
+    Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Markdown content for AI messages
         _buildMarkdownContent(context, theme, TextAlign.left, isUser: false),
         const SizedBox(height: 4),
-        // Timestamp
         Text(
-          formatTimestamp(message.timestamp),
+          widget.formatTimestamp(widget.message.timestamp),
           style: theme.textTheme.bodySmall?.copyWith(letterSpacing: 0.3),
           textAlign: TextAlign.left,
         ),
       ],
     );
+
+    // Apply subtle fade animation during streaming
+    if (widget.isStreaming) {
+      return FadeTransition(
+        opacity: _fadeController,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   Widget _buildMarkdownContent(
@@ -112,7 +158,6 @@ class ChatBubble extends StatelessWidget {
     TextAlign textAlign, {
     required bool isUser,
   }) {
-    // Custom markdown style sheet for user vs AI messages
     final markdownStyleSheet = MarkdownStyleSheet(
       p: theme.textTheme.bodyLarge?.copyWith(
         height: 1.5,
@@ -206,7 +251,7 @@ class ChatBubble extends StatelessWidget {
       onLongPress: () => _showCopyMenu(context),
       child: SelectionArea(
         child: MarkdownBody(
-          data: message.text,
+          data: widget.message.text,
           styleSheet: markdownStyleSheet,
           selectable: true,
           onTapLink: (text, href, title) async {
@@ -234,7 +279,7 @@ class ChatBubble extends StatelessWidget {
                 leading: const Icon(Icons.copy),
                 title: const Text('Copy Message'),
                 onTap: () {
-                  Clipboard.setData(ClipboardData(text: message.text));
+                  Clipboard.setData(ClipboardData(text: widget.message.text));
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -248,7 +293,7 @@ class ChatBubble extends StatelessWidget {
                 leading: const Icon(Icons.text_fields),
                 title: const Text('Copy as Plain Text'),
                 onTap: () {
-                  final plainText = _stripMarkdown(message.text);
+                  final plainText = _stripMarkdown(widget.message.text);
                   Clipboard.setData(ClipboardData(text: plainText));
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -266,24 +311,17 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  // Helper method to strip markdown formatting for plain text copy
   String _stripMarkdown(String markdown) {
     return markdown
-        // Remove bold/italic markers
         .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
         .replaceAll(RegExp(r'\*(.*?)\*'), r'$1')
         .replaceAll(RegExp(r'__(.*?)__'), r'$1')
         .replaceAll(RegExp(r'_(.*?)_'), r'$1')
-        // Remove code markers
         .replaceAll(RegExp(r'`(.*?)`'), r'$1')
         .replaceAll(RegExp(r'```[\s\S]*?```'), '')
-        // Remove links but keep text
         .replaceAll(RegExp(r'\[([^\]]*)\]\([^)]*\)'), r'$1')
-        // Remove headers
         .replaceAll(RegExp(r'^#+\s*', multiLine: true), '')
-        // Remove blockquotes
         .replaceAll(RegExp(r'^>\s*', multiLine: true), '')
-        // Clean up extra whitespace
         .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }

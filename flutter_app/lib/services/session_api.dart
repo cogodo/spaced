@@ -247,6 +247,83 @@ class ApiService {
     }
   }
 
+  /// Stream a conversation turn using Server-Sent Events.
+  /// Yields text chunks as they arrive from the backend for real-time display.
+  Stream<String> handleTurnStreaming(String chatId, String userInput) async* {
+    final url = Uri.parse('$_baseUrl$_apiPrefix/chat/completions');
+    final headers = await _getHeaders();
+    headers['Accept'] = 'text/event-stream';
+
+    final body = jsonEncode({
+      'messages': [
+        {
+          'role': 'system',
+          'content': 'chat_id:$chatId',
+        },
+        {
+          'role': 'user',
+          'content': userInput,
+        },
+      ],
+      'stream': true,
+    });
+
+    final request = http.Request('POST', url);
+    request.headers.addAll(headers);
+    request.body = body;
+
+    final client = http.Client();
+    try {
+      final streamedResponse = await client.send(request);
+
+      if (streamedResponse.statusCode != 200) {
+        throw ApiException(
+          'Streaming request failed',
+          streamedResponse.statusCode,
+        );
+      }
+
+      // Parse SSE stream
+      String buffer = '';
+      await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+        buffer += chunk;
+
+        // Process complete SSE messages (separated by double newlines)
+        while (buffer.contains('\n\n')) {
+          final messageEnd = buffer.indexOf('\n\n');
+          final message = buffer.substring(0, messageEnd);
+          buffer = buffer.substring(messageEnd + 2);
+
+          // Parse SSE data line
+          for (final line in message.split('\n')) {
+            if (line.startsWith('data: ')) {
+              final data = line.substring(6);
+              if (data == '[DONE]') {
+                return;
+              }
+
+              try {
+                final json = jsonDecode(data);
+                final choices = json['choices'] as List?;
+                if (choices != null && choices.isNotEmpty) {
+                  final delta = choices[0]['delta'] as Map<String, dynamic>?;
+                  final content = delta?['content'] as String?;
+                  if (content != null && content.isNotEmpty) {
+                    yield content;
+                  }
+                }
+              } catch (e) {
+                // Skip malformed JSON chunks
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      client.close();
+    }
+  }
+
   // --- Topic Endpoints ---
 
   Future<List<Topic>> getTopics({String? view}) async {

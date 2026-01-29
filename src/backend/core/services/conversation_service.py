@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional
+from dataclasses import dataclass
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple
 
 from core.llm import get_llm_provider
 from core.models.conversation import (
@@ -6,6 +7,7 @@ from core.models.conversation import (
     LLMResponse,
     Turn,
 )
+from core.models.llm_outputs import NextAction
 from core.models.profiles import CONVERSATION_STEP, CONVERSATION_SUMMARY
 from core.models.session import Session, SessionState, TurnState
 from core.monitoring.logger import get_logger
@@ -14,6 +16,18 @@ from core.repositories.topic_repository import TopicRepository
 from core.services.combined_service import CombinedService, CombinedServiceError
 from core.services.question_service import QuestionService
 from core.services.session_service import SessionService
+
+
+@dataclass
+class StreamingTurnResult:
+    """Final result from streaming turn processing."""
+
+    full_response: str
+    state_update: Dict[str, Any]
+    next_question_text: Optional[str] = None
+    session_ended: bool = False
+    summary: Optional[Dict[str, Any]] = None
+
 
 # from infrastructure.redis.session_manager import RedisSessionManager  # Commented out Redis
 
@@ -77,6 +91,175 @@ class ConversationService:
             logger.error(f"An unexpected error occurred processing turn for chat {chat_id}", exc_info=True)
             # Re-raise a generic error to be handled by the endpoint
             raise ConversationServiceError("An unexpected internal error occurred.") from e
+
+    async def process_turn_streaming(
+        self, chat_id: str, user_uid: str, user_input: str
+    ) -> AsyncGenerator[Tuple[str, Optional[StreamingTurnResult]], None]:
+        """
+        Stream the conversation turn response for low-latency TTS.
+
+        Yields text chunks (sentences) as they're generated, then yields
+        the final StreamingTurnResult with state updates.
+
+        Yields:
+            Tuple of (text_chunk, result). text_chunk is a sentence for TTS.
+            The final yield has result populated with StreamingTurnResult.
+            All intermediate yields have result as None.
+        """
+        try:
+            logger.info(f"Processing streaming turn for chat {chat_id}")
+            session = self.session_service.get_session(chat_id, user_uid)
+            if not session:
+                yield ("Chat session not found.", None)
+                return
+
+            # Check if session is already completed
+            if session.state == SessionState.COMPLETED or session.isCompleted:
+                msg = "This session has already been completed. You can start a new session to continue learning!"
+                yield (msg, StreamingTurnResult(full_response=msg, state_update={}, session_ended=True))
+                return
+
+            # Handle direct actions (skip/end) - these don't stream
+            user_input_lower = user_input.lower().strip()
+            if user_input_lower in ["skip", "skip question", "skip this question"]:
+                response = await self._handle_skip_question(session)
+                yield (response, StreamingTurnResult(full_response=response, state_update={}))
+                return
+            elif user_input_lower in ["end", "end session", "end chat", "quit", "stop"]:
+                summary = await self.end_session(session)
+                response = f"Session ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+                yield (
+                    response,
+                    StreamingTurnResult(full_response=response, state_update={}, session_ended=True, summary=summary),
+                )
+                return
+
+            # Stream the answer handling
+            async for text_chunk, result in self._handle_initial_answer_streaming(session, user_input):
+                yield (text_chunk, result)
+
+        except Exception as e:
+            logger.error(f"Error during streaming turn processing for chat {chat_id}: {e}", exc_info=True)
+            error_msg = "I encountered an error processing your message. Please try again."
+            yield (error_msg, StreamingTurnResult(full_response=error_msg, state_update={}))
+
+    async def _handle_initial_answer_streaming(
+        self, session: Session, user_input: str
+    ) -> AsyncGenerator[Tuple[str, Optional[StreamingTurnResult]], None]:
+        """Stream the initial answer handling."""
+        _, question = self.session_service.get_current_question(session.id, session.userUid)
+        if not question:
+            summary = await self.end_session(session)
+            response = f"It looks like we've run out of questions! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+            yield (
+                response,
+                StreamingTurnResult(full_response=response, state_update={}, session_ended=True, summary=summary),
+            )
+            return
+
+        try:
+            # Build per-question history context
+            history_lines = list(session.currentQuestionHistory or [])
+            history_lines.append(f"Human: {user_input}")
+            history_block = "\n".join(history_lines)
+
+            # Collect text chunks and state from streaming
+            full_text = ""
+            state_update = None
+
+            async for text_chunk, state in self.combined_service.evaluate_turn_streaming(
+                question, history_block, after_hint=False, initial_score=None
+            ):
+                if text_chunk:
+                    full_text += text_chunk
+                    yield (text_chunk, None)
+                if state is not None:
+                    state_update = state
+
+            if state_update is None:
+                state_update = {
+                    "score": 3,
+                    "reasoning": "No state returned",
+                    "hint_given": False,
+                    "misconception": None,
+                    "next_action": NextAction.CLARIFICATION,
+                }
+
+            # Update session history
+            try:
+                history_lines.append(f"AI: {full_text}")
+                session.currentQuestionHistory = history_lines
+            except Exception:
+                pass
+
+            # Handle next_action
+            next_action = state_update.get("next_action")
+            next_action_value = next_action.value if next_action and hasattr(next_action, "value") else None
+            score_value = int(state_update.get("score", 3))
+
+            next_question_text = None
+            session_ended = False
+            summary = None
+
+            if next_action_value == "next_question":
+                session.scores[question.id] = score_value
+                session.questionIdx += 1
+                session.initialScore = None
+                session.turnState = TurnState.AWAITING_INITIAL_ANSWER
+                session.currentQuestionHistory = []
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+                answered_questions = len(session.scores)
+                if answered_questions >= 5:
+                    summary = await self.end_session(session)
+                    session_ended = True
+                    # Append summary to full text for the result
+                    summary_text = f"\n\nSession completed! You've answered 5 questions.\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+                    yield (summary_text, None)
+                    full_text += summary_text
+                else:
+                    _, next_q = self.session_service.get_current_question(session.id, session.userUid)
+                    if not next_q:
+                        summary = await self.end_session(session)
+                        session_ended = True
+                        summary_text = f"\n\nYou've completed all the questions!\n\nHere's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+                        yield (summary_text, None)
+                        full_text += summary_text
+                    else:
+                        next_question_text = next_q.text
+                        next_q_text = f"\n\nNext question:\n\n{next_q.text}"
+                        yield (next_q_text, None)
+                        full_text += next_q_text
+
+            elif next_action_value == "clarification":
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+            elif next_action_value == "end_chat":
+                summary = await self.end_session(session)
+                session_ended = True
+                summary_text = f"\n\nSession ended! Here's your summary:\nQuestions Answered: {summary['questions_answered']}\nAverage Score: {summary['average_score']:.2f}\n\n{summary['message']}"
+                yield (summary_text, None)
+                full_text += summary_text
+
+            else:
+                self.session_service.repository.update(session.id, session.userUid, session.dict())
+
+            # Yield final result
+            yield (
+                "",
+                StreamingTurnResult(
+                    full_response=full_text,
+                    state_update=state_update,
+                    next_question_text=next_question_text,
+                    session_ended=session_ended,
+                    summary=summary,
+                ),
+            )
+
+        except CombinedServiceError as e:
+            logger.error(f"CombinedService error in streaming: {e}")
+            error_msg = "I'm having trouble processing that. Could you try rephrasing?"
+            yield (error_msg, StreamingTurnResult(full_response=error_msg, state_update={}))
 
     async def _handle_initial_answer(self, session: Session, user_input: str) -> str:
         """Handles the user's first answer to a question."""
