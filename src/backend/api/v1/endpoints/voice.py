@@ -28,6 +28,12 @@ class JoinRoomResponse(BaseModel):
     server_url: str
 
 
+class EndVoiceSessionRequest(BaseModel):
+    """Request to end a voice session."""
+
+    room_name: str
+
+
 @router.get("/health")
 async def voice_health_check():
     """Health check for voice services."""
@@ -185,3 +191,42 @@ async def create_voice_room(
     except Exception as e:
         logger.error(f"Failed to create voice room for chat {request.chat_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create voice room: {str(e)}")
+
+
+@router.post("/end-session")
+async def end_voice_session(
+    request: EndVoiceSessionRequest,
+    settings: Settings = Depends(get_settings),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    End a voice session by deleting the LiveKit room.
+    This will automatically disconnect all participants including the voice agent.
+    """
+    try:
+        from livekit import api
+
+        if not settings.livekit_api_key or not settings.livekit_api_secret:
+            raise HTTPException(
+                status_code=500,
+                detail="LiveKit credentials not configured.",
+            )
+
+        livekit_server_url = settings.livekit_server_url or "wss://your-livekit-server.com"
+
+        lkapi = api.LiveKitAPI(
+            url=livekit_server_url,
+            api_key=settings.livekit_api_key,
+            api_secret=settings.livekit_api_secret,
+        )
+
+        # Delete the room - this disconnects all participants
+        await lkapi.room.delete_room(api.DeleteRoomRequest(room=request.room_name))
+        await lkapi.aclose()
+
+        logger.info(f"Deleted voice room {request.room_name}")
+        return {"status": "success", "message": f"Voice session ended for room {request.room_name}"}
+
+    except Exception as e:
+        logger.error(f"Failed to end voice session for room {request.room_name}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to end voice session: {str(e)}")

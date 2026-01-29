@@ -160,8 +160,10 @@ class ConversationService:
         try:
             # Build per-question history context
             history_lines = list(session.currentQuestionHistory or [])
+            logger.info(f"Loaded {len(history_lines)} history lines for question {question.id}")
             history_lines.append(f"Human: {user_input}")
             history_block = "\n".join(history_lines)
+            logger.debug(f"History block for LLM:\n{history_block}")
 
             # Collect text chunks and state from streaming
             full_text = ""

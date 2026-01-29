@@ -119,24 +119,39 @@ class _ChatScreenState extends State<ChatScreen> {
     };
 
     _voiceService!.onFinalTranscriptReceived = (transcript) {
-      _logger.info('Final transcript: $transcript');
+      _logger.info('Final transcript received: $transcript');
       _currentTranscript = null;
       _messageController.clear();
 
-      if (transcript.isNotEmpty && mounted) {
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      // Messages are written to Firestore by the backend, which triggers the
+      // Firestore listener to update the UI. No need to add manually here
+      // to avoid duplicate messages.
 
-        // Send transcript through regular chat flow (not voice-specific)
-        chatProvider.handleVoiceTranscript(transcript);
-
-        // Auto-scroll with delay for consistency
+      if (mounted) {
         _scrollToBottomWithDelay();
-
-        _logger.info('Voice transcript sent to regular chat API');
+        _logger.info('Voice transcript will appear from Firestore sync');
       }
     };
 
-    // Note: onAgentResponse may not be used in new flow since voice agent handles TTS directly
+    // Handle streaming response chunks from voice agent (for real-time display)
+    _voiceService!.onAgentResponseChunk = (chunk) {
+      _logger.info('Agent response chunk: $chunk');
+      // Response chunks are nice-to-have for real-time display
+      // The full message will also come from Firestore
+      if (mounted) {
+        _scrollToBottomWithDelay();
+      }
+    };
+
+    // Handle complete response from voice agent
+    _voiceService!.onAgentResponse = (response) {
+      _logger.info('Voice agent response complete: ${response.length} chars');
+      // The message is written to Firestore by the backend
+      // Firestore listener will update the UI
+      if (mounted) {
+        _scrollToBottomWithDelay();
+      }
+    };
 
     _voiceService!.onConnected = () {
       _logger.info('Voice connected');
@@ -725,6 +740,17 @@ class _ChatScreenState extends State<ChatScreen> {
                               );
 
                               if (confirmed == true) {
+                                if (_isVoiceConnected) {
+                                  // Voice is active - disconnect voice which ends the room
+                                  _logger.info('Ending session via voice disconnect');
+                                  await _voiceService?.disconnect();
+                                  if (mounted) {
+                                    setState(() {
+                                      _isVoiceConnected = false;
+                                    });
+                                  }
+                                }
+                                // End the session via text API
                                 await chatProvider.endCurrentSession();
                               }
                             },

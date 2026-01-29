@@ -69,6 +69,7 @@ class ChatProvider extends ChangeNotifier {
   bool _isStartingSession = false;
   String? _currentGeneratingTopic; // Track the topic being generated
   int? _streamingMessageIndex; // Track which message is currently streaming
+  bool _isLocalStreaming = false; // True when frontend is streaming (skip Firestore updates)
 
   // Auto-scroll callback (set by chat screen)
   VoidCallback? _autoScrollCallback;
@@ -631,6 +632,9 @@ class ChatProvider extends ChangeNotifier {
       processingAnswer: true,
     );
 
+    // Mark that we're streaming locally - skip Firestore listener updates
+    _isLocalStreaming = true;
+
     try {
       // Use streaming for reactive UX - text appears as it's generated
       String fullResponse = '';
@@ -661,8 +665,9 @@ class ChatProvider extends ChangeNotifier {
         _autoScrollCallback?.call();
       }
 
-      // Clear streaming index when done
+      // Clear streaming state when done
       _streamingMessageIndex = null;
+      _isLocalStreaming = false;
 
       // Check if the response indicates session completion
       if (fullResponse.contains("Session completed!") ||
@@ -705,8 +710,9 @@ class ChatProvider extends ChangeNotifier {
         typingMessage: null,
         processingAnswer: false,
       );
-      // Reset the ending session flag
+      // Reset flags
       _isEndingSession = false;
+      _isLocalStreaming = false;
     }
   }
 
@@ -844,11 +850,44 @@ class ChatProvider extends ChangeNotifier {
   void addAIMessage(String message, {bool isVoice = false}) {
     _addAIMessage(message, isVoice: isVoice);
 
+    // Track streaming index for voice messages too
+    if (isVoice) {
+      _streamingMessageIndex = _messages.length - 1;
+    }
+
     // Auto-save to Firebase when voice messages are added
     if (isVoice && _userId != null && _currentSession != null) {
       _autoSaveSession();
     }
 
+    notifyListeners();
+  }
+
+  /// Append text to the currently streaming message (for voice streaming)
+  void appendToStreamingMessage(String chunk, {bool isVoice = false}) {
+    if (_streamingMessageIndex != null && _streamingMessageIndex! < _messages.length) {
+      final currentMessage = _messages[_streamingMessageIndex!];
+      _messages[_streamingMessageIndex!] = ChatMessage(
+        text: currentMessage.text + chunk,
+        isUser: false,
+        timestamp: currentMessage.timestamp,
+        isVoice: isVoice,
+      );
+      notifyListeners();
+      _autoScrollCallback?.call();
+    } else {
+      // No streaming message yet, create one
+      addAIMessage(chunk, isVoice: isVoice);
+    }
+  }
+
+  /// Finalize the streaming message (clear streaming index)
+  void finalizeStreamingMessage() {
+    if (_streamingMessageIndex != null && _userId != null && _currentSession != null) {
+      _updateCurrentSession();
+      _autoSaveSession();
+    }
+    _streamingMessageIndex = null;
     notifyListeners();
   }
 
@@ -1203,7 +1242,7 @@ class ChatProvider extends ChangeNotifier {
   }) {
     _messagesSubscription?.cancel();
 
-    final baseQuery = FirebaseFirestore.instance
+    final messagesRef = FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .collection('sessions')
@@ -1211,84 +1250,61 @@ class ChatProvider extends ChangeNotifier {
         .collection('messages')
         .orderBy('messageIndex');
 
-    // Initial limited load to cap reads
-    baseQuery.limitToLast(initialLimit).get().then((snapshot) {
-      final initialMessages =
-          snapshot.docs.map((doc) {
-            final data = doc.data();
-            return ChatMessage(
-              text: data['text'] ?? '',
-              isUser: data['isUser'] ?? false,
-              timestamp: (data['timestamp'] as Timestamp).toDate(),
-              isSystem: data['isSystem'] ?? false,
-              isVoice: data['isVoice'] ?? false,
-            );
-          }).toList();
+    // Use a simple full-collection listener for reliability
+    // This ensures voice messages are always received in realtime
+    _messagesSubscription = messagesRef.snapshots().listen((snapshot) {
+      _logger.info('Firestore messages snapshot: ${snapshot.docs.length} docs, ${snapshot.docChanges.length} changes');
 
-      _messages = List.from(initialMessages);
-      if (snapshot.docs.isNotEmpty) {
-        final firstDoc = snapshot.docs.first;
-        _messagesFirstIndexLoaded =
-            (firstDoc.data()['messageIndex'] as int?) ?? 0;
-      } else {
-        _messagesFirstIndexLoaded = -1;
+      // Skip Firestore updates while frontend is streaming locally
+      // This prevents the user's message from flickering during text chat
+      if (_isLocalStreaming) {
+        _logger.info('Skipping Firestore update - local streaming in progress');
+        return;
       }
-      notifyListeners();
-      _autoScrollCallback?.call();
 
-      // Tail-only realtime listener based on actual last messageIndex
-      final int lastIndex =
-          snapshot.docs.isNotEmpty
-              ? ((snapshot.docs.last.data()['messageIndex'] as int?) ??
-                  (initialMessages.length - 1))
-              : -1;
-      final tailQuery =
-          lastIndex >= 0 ? baseQuery.startAfter([lastIndex]) : baseQuery;
+      if (snapshot.docs.isEmpty) {
+        _messages = [];
+        _messagesFirstIndexLoaded = -1;
+        notifyListeners();
+        return;
+      }
 
-      _messagesSubscription = tailQuery.snapshots().listen((snap) {
-        if (snap.docChanges.isEmpty && snap.docs.isEmpty) {
-          return;
-        }
+      // Build messages list from Firestore docs
+      final firestoreMessages = <int, ChatMessage>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final idx = data['messageIndex'] as int?;
+        if (idx == null) continue;
 
-        // Apply incremental changes
-        for (final change in snap.docChanges) {
-          final data = change.doc.data();
-          if (data == null) continue;
-          final idx = data['messageIndex'] as int?;
-          if (idx == null) continue;
-
-          final newMsg = ChatMessage(
-            text: data['text'] ?? '',
-            isUser: data['isUser'] ?? false,
-            timestamp: (data['timestamp'] as Timestamp).toDate(),
-            isSystem: data['isSystem'] ?? false,
-            isVoice: data['isVoice'] ?? false,
-          );
-
-          // Ensure list size
-          if (_messages.length <= idx) {
-            _messages.length = idx + 1;
-          }
-
-          _messages[idx] = newMsg;
-        }
-
-        // Remove any pending user message that is not in Firestore tail
-        _messages.removeWhere(
-          (pending) =>
-              pending.isUser &&
-              pending.isVoice &&
-              !_messages.any(
-                (m) =>
-                    m.text == pending.text &&
-                    m.isUser == pending.isUser &&
-                    m.isVoice == pending.isVoice,
-              ),
+        firestoreMessages[idx] = ChatMessage(
+          text: data['text'] ?? '',
+          isUser: data['isUser'] ?? false,
+          timestamp: (data['timestamp'] as Timestamp).toDate(),
+          isSystem: data['isSystem'] ?? false,
+          isVoice: data['isVoice'] ?? false,
         );
+      }
 
+      // Convert map to list, preserving order by index
+      if (firestoreMessages.isNotEmpty) {
+        final maxIdx = firestoreMessages.keys.reduce((a, b) => a > b ? a : b);
+        final newMessages = <ChatMessage>[];
+        for (int i = 0; i <= maxIdx; i++) {
+          if (firestoreMessages.containsKey(i)) {
+            newMessages.add(firestoreMessages[i]!);
+          }
+        }
+
+        // Always update when Firestore snapshot changes
+        // This ensures voice messages appear immediately
+        _messages = newMessages;
+        _messagesFirstIndexLoaded = 0;
+        _logger.info('Messages updated from Firestore: ${_messages.length} messages');
         notifyListeners();
         _autoScrollCallback?.call();
-      });
+      }
+    }, onError: (error) {
+      _logger.severe('Firestore messages listener error: $error');
     });
   }
 

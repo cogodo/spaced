@@ -199,7 +199,19 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
             raise HTTPException(status_code=400, detail="No messages provided")
 
         # Extract the user's message (last message should be from user)
-        user_message = messages[-1].get("content", "")
+        # Handle both string content and list content (OpenAI multimodal format)
+        raw_content = messages[-1].get("content", "")
+        if isinstance(raw_content, list):
+            # Extract text from list format: [{"type": "text", "text": "..."}] or just ["text"]
+            text_parts = []
+            for item in raw_content:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                elif isinstance(item, dict) and item.get("type") == "text":
+                    text_parts.append(item.get("text", ""))
+            user_message = " ".join(text_parts)
+        else:
+            user_message = str(raw_content)
         logger.info(f"User message: '{user_message[:100]}...'")
 
         # Extract chat_id from the system message
@@ -271,6 +283,52 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
             )
 
         logger.info(f"Found session: {chat_id}, topic={session.topicId}, state={session.state}")
+
+        # Check if session is already completed - don't process further to avoid duplicate messages
+        if session.state == SessionState.COMPLETED or session.isCompleted:
+            logger.info(f"Session {chat_id} already completed, returning early")
+            if stream:
+                import json
+
+                from fastapi.responses import StreamingResponse
+
+                async def completed_stream():
+                    msg = "This session has already been completed. You can start a new session to continue learning!"
+                    chunk = {
+                        "id": f"voice-{chat_id}",
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now().timestamp()),
+                        "model": "backend-voice",
+                        "choices": [
+                            {"index": 0, "delta": {"role": "assistant", "content": msg}, "finish_reason": "stop"}
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    completed_stream(),
+                    media_type="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                )
+            else:
+                return {
+                    "id": f"voice-{chat_id}",
+                    "object": "chat.completion",
+                    "created": int(datetime.now().timestamp()),
+                    "model": "backend-voice",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": "This session has already been completed. You can start a new session to continue learning!",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                }
 
         if stream:
             # TRUE STREAMING: Stream sentences as they're generated from the LLM

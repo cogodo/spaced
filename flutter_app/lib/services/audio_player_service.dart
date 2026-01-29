@@ -23,6 +23,7 @@ class LiveKitVoiceService {
   // Event callbacks
   void Function(String transcript)? onTranscriptReceived;
   void Function(String response)? onAgentResponse;
+  void Function(String chunk)? onAgentResponseChunk; // Streaming chunks
   void Function()? onConnected;
   void Function()? onDisconnected;
   void Function(String error)? onError;
@@ -219,7 +220,14 @@ class LiveKitVoiceService {
           if (messageType == 'transcript' && text != null) {
             onTranscriptReceived?.call(text);
           } else if (messageType == 'agent_response' && text != null) {
+            // Full response received (after streaming is complete)
             onAgentResponse?.call(text);
+          } else if (messageType == 'agent_response_chunk' && text != null) {
+            // Streaming chunk received
+            debugPrint(
+              '[LiveKitVoiceService] Received response chunk: "$text"',
+            );
+            onAgentResponseChunk?.call(text);
           } else if (messageType == 'final_transcript' && text != null) {
             debugPrint(
               '[LiveKitVoiceService] Received final transcript: "$text"',
@@ -437,11 +445,16 @@ class LiveKitVoiceService {
     }
   }
 
-  /// Disconnect from the room
+  /// Disconnect from the room and end the voice session
   Future<void> disconnect() async {
     try {
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
+
+      // Call backend to delete the room (this will disconnect the voice agent)
+      if (_currentRoomName != null) {
+        await _endVoiceSession(_currentRoomName!);
+      }
 
       // The room must be disconnected before the listener is disposed.
       // This ensures all disconnection events are received properly.
@@ -460,6 +473,42 @@ class LiveKitVoiceService {
       debugPrint('[LiveKitVoiceService] Disconnected from room');
     } catch (e) {
       debugPrint('[LiveKitVoiceService] Error disconnecting: $e');
+    }
+  }
+
+  /// Call backend to end the voice session (deletes the LiveKit room)
+  Future<void> _endVoiceSession(String roomName) async {
+    try {
+      debugPrint('[LiveKitVoiceService] Ending voice session for room: $roomName');
+
+      final url = '$_baseUrl/api/v1/voice/end-session';
+      final requestBody = {'room_name': roomName};
+
+      final response = await _makeAuthenticatedRequest(
+        (headers) => http
+            .post(
+              Uri.parse(url),
+              headers: headers,
+              body: convert.json.encode(requestBody),
+            )
+            .timeout(
+              const Duration(seconds: 5),
+              onTimeout: () {
+                throw TimeoutException('End session timed out');
+              },
+            ),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('[LiveKitVoiceService] Voice session ended successfully');
+      } else {
+        debugPrint(
+          '[LiveKitVoiceService] Failed to end voice session: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('[LiveKitVoiceService] Error ending voice session: $e');
+      // Don't rethrow - we still want to disconnect locally even if backend call fails
     }
   }
 
