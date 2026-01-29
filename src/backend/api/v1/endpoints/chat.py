@@ -272,50 +272,57 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
 
         logger.info(f"Found session: {chat_id}, topic={session.topicId}, state={session.state}")
 
-        # Process the conversation turn
-        logger.info(f"Calling process_turn with chat_id={chat_id}, user_uid={user_uid}")
-        try:
-            user_message = user_message  # already extracted
-            bot_response = await conversation_service.process_turn(
-                chat_id=chat_id, user_uid=user_uid, user_input=user_message
-            )
-            logger.info(f"Got response from conversation service: '{bot_response[:100]}...'")
-            _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
-        except Exception as e:
-            logger.error(f"Failed to process conversation turn: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Conversation processing error: {str(e)}")
-
-        # Calculate token usage (rough estimation)
-        prompt_tokens = len(user_message.split())
-        completion_tokens = len(bot_response.split())
-        total_tokens = prompt_tokens + completion_tokens
-
-        logger.info(f"Token usage: prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}")
-
         if stream:
-            logger.info("Generating streaming response...")
-            # Return streaming response (Server-Sent Events format)
+            # TRUE STREAMING: Stream sentences as they're generated from the LLM
+            logger.info("Starting true streaming response...")
             import json
 
             from fastapi.responses import StreamingResponse
 
-            async def generate_stream():
-                logger.info("Starting stream generation...")
-                try:
-                    # First chunk with content
-                    chunk = {
-                        "id": f"voice-{chat_id}",
-                        "object": "chat.completion.chunk",
-                        "created": int(datetime.now().timestamp()),
-                        "model": "backend-voice",
-                        "choices": [
-                            {"index": 0, "delta": {"role": "assistant", "content": bot_response}, "finish_reason": None}
-                        ],
-                    }
-                    logger.info("Yielding first chunk...")
-                    yield f"data: {json.dumps(chunk)}\n\n"
+            async def generate_true_stream():
+                """Stream sentences as they arrive from the LLM for low-latency TTS."""
+                logger.info("Starting true stream generation...")
+                full_response = ""
+                chunk_count = 0
 
-                    # Final chunk with finish_reason
+                try:
+                    async for text_chunk, result in conversation_service.process_turn_streaming(
+                        chat_id=chat_id, user_uid=user_uid, user_input=user_message
+                    ):
+                        if text_chunk:
+                            full_response += text_chunk
+                            chunk_count += 1
+
+                            # Send each sentence as an SSE chunk
+                            chunk = {
+                                "id": f"voice-{chat_id}",
+                                "object": "chat.completion.chunk",
+                                "created": int(datetime.now().timestamp()),
+                                "model": "backend-voice",
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"role": "assistant", "content": text_chunk},
+                                        "finish_reason": None,
+                                    }
+                                ],
+                            }
+                            logger.debug(f"Yielding chunk {chunk_count}: '{text_chunk[:50]}...'")
+                            yield f"data: {json.dumps(chunk)}\n\n"
+
+                        if result is not None:
+                            # Final result received - write messages to Firestore
+                            logger.info(f"Stream complete after {chunk_count} chunks, writing to Firestore")
+                            _write_user_and_bot_messages(
+                                session_service, chat_id, user_uid, user_message, result.full_response
+                            )
+
+                    # Calculate token usage
+                    prompt_tokens = len(user_message.split())
+                    completion_tokens = len(full_response.split())
+                    total_tokens = prompt_tokens + completion_tokens
+
+                    # Send final chunk with finish_reason
                     final_chunk = {
                         "id": f"voice-{chat_id}",
                         "object": "chat.completion.chunk",
@@ -324,7 +331,6 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                     }
 
-                    # Include usage if requested
                     if stream_options.get("include_usage"):
                         final_chunk["usage"] = {
                             "prompt_tokens": prompt_tokens,
@@ -332,18 +338,60 @@ async def openai_compatible_chat_completions(request: Request, current_user: dic
                             "total_tokens": total_tokens,
                         }
 
-                    logger.info("Yielding final chunk...")
+                    logger.info(f"Yielding final chunk, total response: {len(full_response)} chars")
                     yield f"data: {json.dumps(final_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
-                    logger.info("Stream generation completed")
-                except Exception as e:
-                    logger.error(f"Error in stream generation: {e}", exc_info=True)
-                    raise
+                    logger.info("True stream generation completed successfully")
 
-            return StreamingResponse(generate_stream(), media_type="text/plain", headers={"Cache-Control": "no-cache"})
+                except Exception as e:
+                    logger.error(f"Error in true stream generation: {e}", exc_info=True)
+                    # Send error as a chunk
+                    error_chunk = {
+                        "id": f"voice-{chat_id}",
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now().timestamp()),
+                        "model": "backend-voice",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"role": "assistant", "content": "I encountered an error. Please try again."},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(error_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_true_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                },
+            )
         else:
+            # Non-streaming: process the full turn
+            logger.info(f"Calling process_turn (non-streaming) with chat_id={chat_id}, user_uid={user_uid}")
+            try:
+                bot_response = await conversation_service.process_turn(
+                    chat_id=chat_id, user_uid=user_uid, user_input=user_message
+                )
+                logger.info(f"Got response from conversation service: '{bot_response[:100]}...'")
+                _write_user_and_bot_messages(session_service, chat_id, user_uid, user_message, bot_response)
+            except Exception as e:
+                logger.error(f"Failed to process conversation turn: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Conversation processing error: {str(e)}")
+
+            # Calculate token usage
+            prompt_tokens = len(user_message.split())
+            completion_tokens = len(bot_response.split())
+            total_tokens = prompt_tokens + completion_tokens
+
+            logger.info(f"Token usage: prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}")
             logger.info("Generating non-streaming response...")
-            # Return non-streaming response
+
             return {
                 "id": f"voice-{chat_id}",
                 "object": "chat.completion",

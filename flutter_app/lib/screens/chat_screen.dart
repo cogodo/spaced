@@ -519,6 +519,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             }
                             return _buildMessageBubble(
                               chatProvider.messages[index],
+                              index: index,
+                              isStreaming: index == chatProvider.streamingMessageIndex,
                             );
                           },
                         ),
@@ -630,8 +632,16 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message) {
-    return ChatBubble(message: message, formatTimestamp: _formatTimestamp);
+  Widget _buildMessageBubble(
+    ChatMessage message, {
+    required int index,
+    bool isStreaming = false,
+  }) {
+    return ChatBubble(
+      message: message,
+      formatTimestamp: _formatTimestamp,
+      isStreaming: isStreaming,
+    );
   }
 
   Widget _buildActionButtons() {

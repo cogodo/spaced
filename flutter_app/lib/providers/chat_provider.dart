@@ -68,6 +68,7 @@ class ChatProvider extends ChangeNotifier {
   bool _isProcessingAnswer = false;
   bool _isStartingSession = false;
   String? _currentGeneratingTopic; // Track the topic being generated
+  int? _streamingMessageIndex; // Track which message is currently streaming
 
   // Auto-scroll callback (set by chat screen)
   VoidCallback? _autoScrollCallback;
@@ -131,6 +132,7 @@ class ChatProvider extends ChangeNotifier {
   bool get isProcessingAnswer => _isProcessingAnswer;
   bool get isStartingSession => _isStartingSession;
   String? get currentGeneratingTopic => _currentGeneratingTopic;
+  int? get streamingMessageIndex => _streamingMessageIndex;
 
   // Backend URL getter for voice service
   String get backendUrl => _api.baseUrl;
@@ -592,7 +594,7 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Send a message in the current session
+  /// Send a message in the current session (with streaming for reactive UX)
   Future<void> sendMessage(String text) async {
     if (_currentSessionId == null) return;
 
@@ -630,16 +632,45 @@ class ChatProvider extends ChangeNotifier {
     );
 
     try {
-      final botResponse = await _api.handleTurn(_currentSessionId!, text);
-      _addAIMessage(botResponse);
+      // Use streaming for reactive UX - text appears as it's generated
+      String fullResponse = '';
+
+      await for (final chunk in _api.handleTurnStreaming(_currentSessionId!, text)) {
+        fullResponse += chunk;
+
+        if (_streamingMessageIndex == null) {
+          // Add initial AI message that we'll update as chunks arrive
+          _messages.add(ChatMessage(
+            text: fullResponse,
+            isUser: false,
+            timestamp: DateTime.now(),
+            isVoice: false,
+          ));
+          _streamingMessageIndex = _messages.length - 1;
+        } else {
+          // Update the existing message with accumulated text
+          _messages[_streamingMessageIndex!] = ChatMessage(
+            text: fullResponse,
+            isUser: false,
+            timestamp: _messages[_streamingMessageIndex!].timestamp,
+            isVoice: false,
+          );
+        }
+
+        notifyListeners();
+        _autoScrollCallback?.call();
+      }
+
+      // Clear streaming index when done
+      _streamingMessageIndex = null;
 
       // Check if the response indicates session completion
-      if (botResponse.contains("Session completed!") ||
-          botResponse.contains("session has already been completed") ||
-          botResponse.contains("Session ended!") ||
-          botResponse.contains("run out of questions") ||
-          botResponse.contains("completed all the questions") ||
-          botResponse.contains("Here's your summary:")) {
+      if (fullResponse.contains("Session completed!") ||
+          fullResponse.contains("session has already been completed") ||
+          fullResponse.contains("Session ended!") ||
+          fullResponse.contains("run out of questions") ||
+          fullResponse.contains("completed all the questions") ||
+          fullResponse.contains("Here's your summary:")) {
         _sessionState = SessionState.completed;
         if (_currentSession != null) {
           _currentSession = _currentSession!.copyWith(
@@ -651,15 +682,14 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      // Save the updated session state to Firebase after each turn
+      // Save the updated session state to Firebase after streaming completes
       if (_currentSession != null && _userId != null) {
-        // The `copyWith` is important to update the `updatedAt` timestamp
+        _updateCurrentSession();
         final sessionToSave = _currentSession!.copyWith(
           messages: _messages,
           updatedAt: DateTime.now(),
         );
-        _currentSession =
-            sessionToSave; // Ensure provider has the latest version
+        _currentSession = sessionToSave;
         await _sessionService.saveSession(_userId!, sessionToSave);
       }
     } catch (e) {
