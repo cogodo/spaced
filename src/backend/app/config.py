@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Anthropic Configuration
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
     anthropic_model: str = Field("claude-sonnet-4-20250514", env="ANTHROPIC_MODEL")
-    anthropic_fast_model: str = Field("claude-3-5-haiku-20241022", env="ANTHROPIC_FAST_MODEL")
+    anthropic_fast_model: str = Field("claude-3-5-haiku-latest", env="ANTHROPIC_FAST_MODEL")
     anthropic_request_timeout_seconds: int = Field(30, env="ANTHROPIC_REQUEST_TIMEOUT_SECONDS")
     anthropic_max_retries: int = Field(2, env="ANTHROPIC_MAX_RETRIES")
     use_anthropic: bool = Field(True, env="USE_ANTHROPIC")
