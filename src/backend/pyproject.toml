@@ -21,6 +21,9 @@ dependencies = [
     "anthropic>=0.40.0,<1.0.0",
     "openai>=1.0.0,<2.0.0",
 
+    # LiveKit API (for room management - voice agent is separate)
+    "livekit-api>=0.7.0",
+
     # Utils
     "tenacity",
     "requests",
