@@ -60,9 +60,16 @@ class Settings(BaseSettings):
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
 
-    # CORS settings
-    cors_origins: List[str] = Field(
-        default=[
+    # CORS settings - raw string from env, parsed below
+    cors_origins_raw: str = Field(
+        default="",
+        alias="CORS_ORIGINS",
+    )
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string, JSON array, or use defaults."""
+        default_origins = [
             "https://getspaced.app",
             "https://www.getspaced.app",
             "https://app.getspaced.app",
@@ -72,9 +79,24 @@ class Settings(BaseSettings):
             "http://127.0.0.1:3000",
             "http://localhost:8080",
             "http://127.0.0.1:8080",
-        ],
-        env="CORS_ORIGINS",
-    )
+        ]
+
+        if not self.cors_origins_raw:
+            return default_origins
+
+        raw = self.cors_origins_raw.strip()
+        if raw.startswith("["):
+            # JSON array
+            import json
+
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return default_origins
+
+        # Comma-separated string
+        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return origins if origins else default_origins
 
     @property
     def is_development(self) -> bool:
