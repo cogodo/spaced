@@ -28,24 +28,34 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    # Configure CORS
-    if settings.is_development:
-        allow_origins = [
-            "http://localhost",
-            "http://localhost:3000",
-            "http://localhost:8080",
-            "https://localhost:8080",
-            "http://127.0.0.1:8080",
-            "https://127.0.0.1:8080",
-        ]
-    else:
-        # In production, settings.cors_origins is already a list
-        allow_origins = settings.cors_origins if settings.cors_origins else []
+    # Configure CORS - always include production origins
+    allow_origins = [
+        # Production
+        "https://getspaced.app",
+        "https://www.getspaced.app",
+        "https://app.getspaced.app",
+        "https://staging.getspaced.app",
+        # Development
+        "http://localhost",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "https://localhost:8080",
+        "http://127.0.0.1:8080",
+        "https://127.0.0.1:8080",
+    ]
+
+    # Add any custom origins from settings
+    if settings.cors_origins:
+        for origin in settings.cors_origins:
+            if origin not in allow_origins:
+                allow_origins.append(origin)
+
+    print(f"CORS allowed origins: {allow_origins}")
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$" if settings.is_development else None,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
