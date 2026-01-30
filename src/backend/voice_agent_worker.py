@@ -6,12 +6,13 @@ Uses the llm_node to route speech through your custom backend API.
 Usage:
     pip install -e ".[voice]"
     python voice_agent_worker.py dev
+
+Note: LiveKit agents have a built-in health check server on port 8081.
+Configure Railway/container health checks to use that port.
 """
 
 import json
 import os
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, AsyncIterable
 
 import aiohttp
@@ -21,37 +22,6 @@ from livekit.plugins import cartesia, deepgram, openai, silero
 
 load_dotenv()
 
-
-# --- Simple Health Check Server for Railway ---
-class HealthHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP handler for health checks."""
-
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"status": "healthy", "service": "voice-agent"}')
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, format, *args):
-        # Suppress default logging to avoid noise
-        pass
-
-
-def start_health_server():
-    """Start a background health check server for Railway."""
-    port = int(os.getenv("PORT", "8080"))
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    print(f"Health check server running on port {port}")
-    server.serve_forever()
-
-
-# Start health server in background thread
-health_thread = threading.Thread(target=start_health_server, daemon=True)
-health_thread.start()
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")

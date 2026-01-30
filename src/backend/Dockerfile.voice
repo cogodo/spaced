@@ -18,9 +18,8 @@ RUN pip install --no-cache-dir -e ".[voice]"
 # Copy application code
 COPY . .
 
-# Health check port for Railway
-ENV PORT=8080
-EXPOSE 8080
+# LiveKit agents have built-in health check on port 8081
+EXPOSE 8081
 
-# Voice agent with health server for Railway
+# Voice agent worker
 CMD ["python", "voice_agent_worker.py", "start"]
