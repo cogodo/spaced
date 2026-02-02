@@ -726,10 +726,17 @@ class ChatProvider extends ChangeNotifier {
     try {
       _logger.info('Creating voice room for chat session: $_currentSessionId');
 
+      // Get auth token to pass to voice agent for backend API calls
+      final user = FirebaseAuth.instance.currentUser;
+      final authToken = await user?.getIdToken() ?? '';
+
       final response = await http.post(
         Uri.parse('${_api.baseUrl}/api/v1/voice/create-room'),
         headers: await _getAuthHeaders(),
-        body: jsonEncode({'chat_id': _currentSessionId!}),
+        body: jsonEncode({
+          'chat_id': _currentSessionId!,
+          'auth_token': authToken,
+        }),
       );
 
       if (response.statusCode == 200) {
