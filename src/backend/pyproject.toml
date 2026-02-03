@@ -30,6 +30,12 @@ dependencies = [
     "fsrs",
     "httpx",
     "psutil",
+
+    # Document parsing
+    "pymupdf>=1.24",
+    "python-pptx>=0.6",
+    "beautifulsoup4>=4.12",
+    "aiofiles>=24.1",
 ]
 
 [project.optional-dependencies]

@@ -1,4 +1,5 @@
+from .document_repository import DocumentRepository
 from .question_repository import QuestionRepository
 from .topic_repository import TopicRepository
 
-__all__ = ["QuestionRepository", "TopicRepository"]
+__all__ = ["QuestionRepository", "TopicRepository", "DocumentRepository"]

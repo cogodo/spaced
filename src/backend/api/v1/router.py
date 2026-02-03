@@ -4,7 +4,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from api.v1.endpoints import chat, questions, topics, voice
+from api.v1.endpoints import chat, documents, questions, topics, voice
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +28,7 @@ async def api_root():
             "chat_completions": "/chat/completions",
             "topics": "/topics",
             "questions": "/topics/{topic_id}/questions",
+            "documents": "/documents",
             "voice": "/voice",
         },
     }
@@ -66,4 +67,5 @@ async def transcribe(audio: UploadFile = File(...)):
 api_router.include_router(topics.router, prefix="/topics", tags=["topics"])
 api_router.include_router(questions.router, tags=["questions"])
 api_router.include_router(chat.router, tags=["chat"])
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])

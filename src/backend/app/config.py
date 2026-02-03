@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # Deepgram API Key for STT (alternative to OpenAI Whisper)
     deepgram_api_key: Optional[str] = Field(None, env="DEEPGRAM_API_KEY")
 
+    # Document Storage
+    document_storage_path: str = Field("/var/spaced/documents", env="DOCUMENT_STORAGE_PATH")
+
+    # MorphLLM API Key for WarpGrep agentic search
+    morph_api_key: Optional[str] = Field(None, env="MORPH_API_KEY")
+
     # Cache Configuration
     topic_cache_ttl_seconds: int = Field(300, env="TOPIC_CACHE_TTL_SECONDS")
 
