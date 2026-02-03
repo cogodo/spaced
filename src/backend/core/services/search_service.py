@@ -20,20 +20,24 @@ class SearchService:
     """
     Service for searching user documents.
 
-    Supports two modes:
-    1. Simple grep-based search (default/fallback)
-    2. MorphLLM WarpGrep agentic search (when API key configured)
+    Uses keyword-based grep search which is fast and effective for document content.
+
+    Note: WarpGrep integration is available but requires a tool-call loop for
+    proper multi-step search. For document content search, grep-based search
+    is more appropriate and efficient.
     """
 
     def __init__(self):
         self.storage = get_document_storage()
         self.morph_api_key = os.getenv("MORPH_API_KEY")
-        self.use_warpgrep = bool(self.morph_api_key)
+        # WarpGrep requires tool-call loop; use grep-based search by default
+        # Set USE_WARPGREP=true to enable experimental WarpGrep support
+        self.use_warpgrep = os.getenv("USE_WARPGREP", "").lower() == "true" and bool(self.morph_api_key)
 
         if self.use_warpgrep:
-            logger.info("WarpGrep enabled for document search")
+            logger.info("WarpGrep enabled for document search (experimental)")
         else:
-            logger.info("Using simple grep-based search (MORPH_API_KEY not set)")
+            logger.info("Using grep-based search for documents")
 
     async def search_documents(
         self,
